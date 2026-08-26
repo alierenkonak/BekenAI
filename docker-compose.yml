@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-beken}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +19,8 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.15.4
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     healthcheck:
@@ -33,4 +33,3 @@ services:
 volumes:
   postgres_data:
   qdrant_storage:
-

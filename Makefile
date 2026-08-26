@@ -1,7 +1,7 @@
 .PHONY: setup infra-up infra-down frontend-dev backend-dev test lint build validate
 
 setup:
-	npm --prefix frontend install
+	npm --prefix frontend ci
 	python3 -m venv .venv
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e "./backend[dev]"
@@ -30,4 +30,3 @@ build:
 
 validate: lint test build
 	docker compose config --quiet
-

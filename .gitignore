@@ -2,11 +2,12 @@
 .env
 .env.*
 !.env.example
-**/.env
-**/.env.*
-!**/.env.example
 *.pem
 *.key
+secrets/
+credentials/
+*_credentials.json
+*_service_account.json
 
 # Python
 __pycache__/
@@ -19,15 +20,23 @@ __pycache__/
 htmlcov/
 .venv/
 venv/
+*.sqlite
+*.sqlite3
+*.db
 
 # Node / Next.js
 node_modules/
 .next/
+.vinext/
+.wrangler/
+.turbo/
 out/
 dist/
 coverage/
 *.tsbuildinfo
+next-env.d.ts
 npm-debug.log*
+*.log
 
 # Corpus, indexes, models and uploads
 data/
@@ -39,14 +48,18 @@ models/
 *.faiss
 *.onnx
 *.safetensors
+*.ckpt
+*.gguf
+*.pt
+*.pth
 
 # Local services
 postgres_data/
 qdrant_storage/
+.supabase/
 
 # IDE / OS
 .DS_Store
 .idea/
 .vscode/
 *.swp
-
