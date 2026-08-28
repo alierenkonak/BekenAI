@@ -4,6 +4,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
+from beken_ingestion.config import IngestionSettings
 from beken_ingestion.database import CorpusRepository
 from beken_ingestion.models import RawDocument
 from beken_ingestion.normalization import stable_hash
@@ -16,8 +17,12 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _database_url() -> str:
+    return IngestionSettings().database_url
+
+
 def test_repeated_import_is_idempotent_and_chunks_trace_to_document(tmp_path: Path) -> None:
-    database_url = os.environ["DATABASE_URL"]
+    database_url = _database_url()
     repository = CorpusRepository(database_url)
     pipeline = IngestionPipeline(repository, FilesystemRawStorage(tmp_path))
     raw = RawDocument(
@@ -59,7 +64,7 @@ def test_repeated_import_is_idempotent_and_chunks_trace_to_document(tmp_path: Pa
 
 
 def test_corpus_versions_pin_parses_and_failed_repin_rolls_back(tmp_path: Path) -> None:
-    database_url = os.environ["DATABASE_URL"]
+    database_url = _database_url()
     repository = CorpusRepository(database_url)
     pipeline = IngestionPipeline(repository, FilesystemRawStorage(tmp_path))
     first_version = "integration-parser-v1"

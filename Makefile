@@ -1,4 +1,4 @@
-.PHONY: setup infra-up infra-down frontend-dev backend-dev ingestion-help test lint build validate
+.PHONY: setup infra-up infra-down frontend-dev backend-dev ingestion-help db-test test lint build validate
 
 setup:
 	npm --prefix frontend ci
@@ -21,6 +21,10 @@ backend-dev:
 
 ingestion-help:
 	.venv/bin/python -m beken_ingestion --help
+
+db-test:
+	docker compose up -d --wait postgres
+	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest ingestion/tests/test_database_integration.py
 
 test:
 	.venv/bin/pytest backend/tests ingestion/tests
