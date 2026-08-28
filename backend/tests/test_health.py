@@ -1,14 +1,22 @@
-from fastapi.testclient import TestClient
+import httpx
+import pytest
 
 from app.core import health
 from app.core.health import DependencyHealth
 from app.main import app
 
-client = TestClient(app)
+
+def api_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://testserver",
+    )
 
 
-def test_liveness() -> None:
-    response = client.get("/health/live")
+@pytest.mark.asyncio
+async def test_liveness() -> None:
+    async with api_client() as client:
+        response = await client.get("/health/live")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -18,14 +26,20 @@ def test_liveness() -> None:
     }
 
 
-def test_readiness_when_dependencies_are_ready(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_readiness_when_dependencies_are_ready(monkeypatch) -> None:
     async def ready_dependency(_settings):
         return DependencyHealth(status="ready")
 
+    async def corpus_count(_settings):
+        return 0
+
     monkeypatch.setattr(health, "check_postgres", ready_dependency)
     monkeypatch.setattr(health, "check_qdrant", ready_dependency)
+    monkeypatch.setattr(health, "count_corpus_documents", corpus_count)
 
-    response = client.get("/health/ready")
+    async with api_client() as client:
+        response = await client.get("/health/ready")
 
     assert response.status_code == 200
     payload = response.json()
@@ -35,7 +49,8 @@ def test_readiness_when_dependencies_are_ready(monkeypatch) -> None:
     assert payload["dependencies"]["qdrant"]["status"] == "ready"
 
 
-def test_readiness_returns_503_when_dependency_is_unavailable(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_readiness_returns_503_when_dependency_is_unavailable(monkeypatch) -> None:
     async def unavailable_postgres(_settings):
         return DependencyHealth(status="unavailable", detail="connection refused")
 
@@ -45,7 +60,8 @@ def test_readiness_returns_503_when_dependency_is_unavailable(monkeypatch) -> No
     monkeypatch.setattr(health, "check_postgres", unavailable_postgres)
     monkeypatch.setattr(health, "check_qdrant", ready_qdrant)
 
-    response = client.get("/health/ready")
+    async with api_client() as client:
+        response = await client.get("/health/ready")
 
     assert response.status_code == 503
     payload = response.json()

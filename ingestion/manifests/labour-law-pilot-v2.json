@@ -1,0 +1,92 @@
+{
+  "version": "labour-law-pilot-v2",
+  "predecessor": "labour-law-pilot-v1",
+  "parser_version": "2026.08.2",
+  "description": "Sürümlü hukuki birim ve değişiklik olayları içeren bireysel iş hukuku pilot corpus'u.",
+  "sources": [
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-4857-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4857.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4857 sayılı İş Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["4857"]
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-7036-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.7036.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "7036 sayılı İş Mahkemeleri Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["7036"]
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-1475-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.1475.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "1475 sayılı İş Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["1475"],
+        "domain_metadata": {"pilot_focus": "article_14"}
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6098-service-contract-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6098.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6098 sayılı Türk Borçlar Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["6098"],
+        "domain_metadata": {"pilot_focus": "service_contract"}
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6100-procedure-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6100.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6100 sayılı Hukuk Muhakemeleri Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["6100"],
+        "domain_metadata": {"pilot_focus": "labour_procedure"}
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6325-mediation-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6325.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6325 sayılı Hukuk Uyuşmazlıklarında Arabuluculuk Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": ["6325"]
+      }
+    }
+  ],
+  "decision_queries": ["işe iade", "geçerli fesih", "performans düşüklüğü"],
+  "decision_target_minimum": 50,
+  "decision_target_maximum": 100
+}

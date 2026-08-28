@@ -57,6 +57,8 @@ models/
 postgres_data/
 qdrant_storage/
 .supabase/
+supabase/.temp/
+supabase/.branches/
 
 # IDE / OS
 .DS_Store

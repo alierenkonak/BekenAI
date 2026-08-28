@@ -35,12 +35,18 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: pip install -e "./backend[dev]"
-      - run: ruff check backend
-      - run: pytest backend/tests
+      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]"
+      - run: ruff check backend ingestion
+      - run: pytest backend/tests ingestion/tests
 
   compose:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker compose config --quiet
+      - run: docker compose up -d --wait postgres
+      - name: Validate corpus migrations
+        run: |
+          for migration in supabase/migrations/*.sql; do
+            docker compose exec -T postgres psql -v ON_ERROR_STOP=1 -U beken -d beken < "$migration"
+          done

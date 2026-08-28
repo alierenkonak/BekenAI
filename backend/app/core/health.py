@@ -30,6 +30,22 @@ async def check_postgres(settings: Settings) -> DependencyHealth:
         return DependencyHealth(status="unavailable", detail=type(exc).__name__)
 
 
+async def count_corpus_documents(settings: Settings) -> int:
+    connection = await psycopg.AsyncConnection.connect(
+        settings.database_url,
+        connect_timeout=max(1, int(settings.dependency_timeout_seconds)),
+    )
+    async with connection:
+        async with connection.cursor() as cursor:
+            await cursor.execute("select to_regclass('legal.documents')")
+            relation = await cursor.fetchone()
+            if not relation or relation[0] is None:
+                return 0
+            await cursor.execute("select count(*) from legal.documents")
+            row = await cursor.fetchone()
+            return int(row[0]) if row else 0
+
+
 async def check_qdrant(settings: Settings) -> DependencyHealth:
     headers = {"api-key": settings.qdrant_api_key} if settings.qdrant_api_key else None
     try:
@@ -52,8 +68,9 @@ async def readiness(settings: Settings) -> dict:
         "qdrant": asdict(qdrant),
     }
     is_ready = all(item["status"] == "ready" for item in dependencies.values())
+    corpus_documents = await count_corpus_documents(settings) if postgres.status == "ready" else 0
     return {
         "status": "ready" if is_ready else "not_ready",
-        "corpus_documents": 0,
+        "corpus_documents": corpus_documents,
         "dependencies": dependencies,
     }
