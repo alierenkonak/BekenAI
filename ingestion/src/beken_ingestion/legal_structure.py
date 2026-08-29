@@ -11,15 +11,20 @@ from beken_ingestion.normalization import normalized_identifier, stable_hash
 
 _ARTICLE = re.compile(
     r"(?im)^(?P<prefix>EK\s+GEÇİCİ|GEÇİCİ|EK|MÜKERRER)?\s*"
-    r"MADDE\s+(?P<label>\d+(?:[ \t]+\d+)?(?:/[A-ZÇĞİÖŞÜ])?)"
+    r"M[ \t]*ADDE[ \t]*(?:\n[ \t]*)?"
+    r"(?P<label>(?:\d+|[lIıİ]\d*?)(?:[ \t]+\d+)?(?:/[A-ZÇĞİÖŞÜ])?)"
     r"(?:"
     r"[ \t]+İLA[ \t]+(?P<range_end_ila>\d+(?:/[A-ZÇĞİÖŞÜ])?)"
     r"(?:[ \t]*[-–—][ \t]*|[ \t]*(?=\n|$)|[ \t]+(?=[A-ZÇĞİÖŞÜ]))"
     r"|[ \t]*[-–—][ \t]*(?P<range_end_dash>\d+(?:/[A-ZÇĞİÖŞÜ])?)"
-    r"[ \t]*[-–—][ \t]*"
-    r"|[ \t]*[-–—][ \t]*|[ \t]+(?=[A-ZÇĞİÖŞÜ])|[ \t]*(?=\n|$)|"
+    r"(?:[ \t]*[-–—][ \t]*|[ \t]*(?=\())"
+    r"|[ \t]*\.?[ \t]*[-–—][ \t]*|[ \t]+(?=[A-ZÇĞİÖŞÜ])|[ \t]*(?=\n|$)|"
     r"[ \t]*(?=\((?:MÜLGA|EK|DEĞİŞİK|İPTAL)\b)"
     r")"
+)
+_UNNUMBERED_ARTICLE = re.compile(
+    r"(?im)^(?P<prefix>EK\s+GEÇİCİ|GEÇİCİ|EK)\s+MADDE"
+    r"[ \t]*[-–—][ \t]*"
 )
 _HEADING = re.compile(
     r"(?im)^(?P<label>(?:[A-ZÇĞİÖŞÜİ]+|[IVXLCDM]+|\d+)\s+)"
@@ -30,10 +35,18 @@ _ANNEX = re.compile(
     r"(?:CETVEL|LİSTE)|\d+\s+SAYILI\s+TARİFE))\b.*$"
 )
 _SUPPLEMENT = re.compile(
-    r"(?im)^\s*(?:\d{1,2}/\d{1,2}/\d{4}\s+TARİHLİ\s+ve\s+)?"
-    r"(?P<law_number>\d{4})\s+SAYILI\s+(?:ANA\s+)?KANUNA\s+"
-    r"(?P<kind>İŞLENEMEYEN\s+HÜKÜMLER|EK\s+VE\s+DEĞİŞİKLİK\s+GETİREN\s+MEVZUATIN)"
+    r"(?im)^\s*[^\n]{0,100}?(?P<law_number>\d{3,4})\s+SAYILI\s+"
+    r"(?:ANA\s+)?KANUNA\s+"
+    r"(?P<kind>İŞLENEMEYEN\s+(?:GEÇİCİ\s+MADDELER|"
+    r"KANUN\s+HÜKMÜNDE\s+KARARNAME\s+HÜKÜMLERİ?|"
+    r"KANUN\s+HÜKÜMLERİ?|HÜKÜMLERİ?)|"
+    r"EK\s+VE\s+DEĞİŞİKLİK\s+GETİREN\s+MEVZUATIN)"
     r"[^\n]*$"
+)
+_TERMINAL_REFERENCE = re.compile(
+    r"(?im)^\s*(?P<law_number>\d{3,4})\s+SAYILI\s+KANUNDA\s+"
+    r"(?P<kind>EK\s+VE\s+DEĞİŞİKLİK\s+YAPAN\s+MEVZUATIN)\s+"
+    r"[^\n]*(?:\n[^\n]*)?\bLİSTE\s*$"
 )
 _PARAGRAPH = re.compile(r"(?m)^\s*\((?P<label>\d+)\)\s+")
 _ITEM = re.compile(r"(?m)^\s*(?P<label>[a-zçğıöşü])\)\s+")
@@ -119,6 +132,7 @@ class _Marker:
 
 def _canonical_article_label(value: str) -> tuple[str, bool]:
     canonical = re.sub(r"[ \t]+", "", value)
+    canonical = re.sub(r"^[lIıİ](?=\d|$)", "1", canonical)
     return canonical, canonical != value
 
 
@@ -199,7 +213,12 @@ def _heading_before(text: str, offset: int) -> str | None:
 
 def _primary_markers(text: str) -> list[_Marker]:
     markers: list[_Marker] = []
-    supplement = _SUPPLEMENT.search(text)
+    supplement_candidates = [
+        match
+        for pattern in (_SUPPLEMENT, _TERMINAL_REFERENCE)
+        if (match := pattern.search(text)) is not None
+    ]
+    supplement = min(supplement_candidates, key=lambda match: match.start(), default=None)
     core_end = supplement.start() if supplement else len(text)
     for match in _HEADING.finditer(text):
         if match.start() >= core_end:
@@ -226,13 +245,14 @@ def _primary_markers(text: str) -> list[_Marker]:
         if number_repaired:
             metadata["source_label"] = match.group("label")
             metadata["number_repaired"] = True
-        if range_end:
+        represented_range = _range_labels(label, range_end) if range_end else []
+        if range_end and represented_range:
             display_label = f"{label}-{range_end}"
             metadata.update(
                 {
                     "range_start": label,
                     "range_end": range_end,
-                    "represented_article_labels": _range_labels(label, range_end),
+                    "represented_article_labels": represented_range,
                 }
             )
         markers.append(
@@ -243,6 +263,20 @@ def _primary_markers(text: str) -> list[_Marker]:
                 display_label,
                 _heading_before(text, match.start()),
                 metadata,
+            )
+        )
+    for match in _UNNUMBERED_ARTICLE.finditer(text):
+        if match.start() >= core_end:
+            continue
+        prefix = normalized_identifier(match.group("prefix") or "")
+        markers.append(
+            _Marker(
+                match.start(),
+                match.end(),
+                _ARTICLE_TYPES[prefix],
+                None,
+                _heading_before(text, match.start()),
+                {"unnumbered_article": True},
             )
         )
     for match in _ANNEX.finditer(text):

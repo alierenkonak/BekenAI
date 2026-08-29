@@ -5,6 +5,7 @@ import httpx
 import pytest
 
 from beken_ingestion.adapters import (
+    LocalFileAdapter,
     MevzuatAdapter,
     SourceDocumentFailure,
     YargitayAdapter,
@@ -118,6 +119,33 @@ def test_pilot_manifest_has_required_sources_and_decision_target() -> None:
         for source in v3_manifest["sources"]
     )
 
+    v4_path = Path(__file__).parents[1] / "manifests/labour-law-pilot-v4.json"
+    v4_manifest = json.loads(v4_path.read_text())
+    assert v4_manifest["predecessor"] == "labour-law-pilot-v3"
+    assert v4_manifest["parser_version"] == "2026.08.4"
+    assert len(v4_manifest["local_sources"]) == 83
+    assert v4_manifest["quality_gates"] == {
+        "document_count": 95,
+        "legislation_count": 46,
+        "decision_count": 49,
+    }
+    assert all(
+        not Path(source["input_path"]).is_absolute()
+        and not source["metadata"]["source_url"].startswith("file:")
+        for source in v4_manifest["local_sources"]
+    )
+    assert all(
+        source["metadata"]["domain_metadata"].get("article_expectations")
+        for source in v4_manifest["local_sources"]
+        if source["metadata"]["source_kind"] == "legislation"
+    )
+    assert all(
+        source["metadata"]["domain_metadata"].get("court_metadata_requirements")
+        == "complete"
+        for source in v4_manifest["local_sources"]
+        if source["metadata"]["source_kind"] == "court_decision"
+    )
+
 
 def test_manual_directory_fallback_is_available() -> None:
     args = build_parser().parse_args(
@@ -133,6 +161,37 @@ def test_manual_directory_fallback_is_available() -> None:
 
     assert args.command == "import-directory"
     assert args.corpus_version == "labour-law-pilot-v1"
+
+
+def test_local_manifest_command_is_dry_run_by_default() -> None:
+    args = build_parser().parse_args(
+        [
+            "import-local-manifest",
+            "ingestion/manifests/labour-law-pilot-v4.json",
+            "--input-root",
+            "/tmp/intake",
+        ]
+    )
+
+    assert args.command == "import-local-manifest"
+    assert args.execute is False
+
+
+def test_local_file_adapter_does_not_persist_local_path_when_source_url_is_supplied(
+    tmp_path: Path,
+) -> None:
+    document = tmp_path / "decision.txt"
+    document.write_text("Karar metni")
+
+    raw = LocalFileAdapter().fetch(
+        document,
+        {
+            "source_document_id": "decision-1",
+            "source_url": "https://karararama.yargitay.gov.tr/",
+        },
+    )
+
+    assert raw.source_url == "https://karararama.yargitay.gov.tr/"
 
 
 def test_reparse_command_requires_distinct_source_and_target_inputs() -> None:
@@ -177,7 +236,7 @@ def test_reparse_uses_target_manifest_metadata_without_losing_existing_values() 
 
 def test_current_manifest_requires_article_expectations_for_every_legislation_source() -> None:
     manifest = {
-        "parser_version": "2026.08.3",
+        "parser_version": "2026.08.4",
         "sources": [
             {
                 "source_document_id": "law-without-expectations",

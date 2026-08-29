@@ -29,8 +29,19 @@ _ARTICLE_UNIT_TYPES = {
 }
 _ARTICLE_LIKE_HEADING = re.compile(
     r"(?im)^\s*(?P<header>(?:EK\s+GEÇİCİ|GEÇİCİ|EK|MÜKERRER)?\s*"
-    r"MADDE(?:[ \t]+(?:\d|[-–—])|[ \t]*$)[^\n]*)$"
+    r"M[ \t]*ADDE(?:[ \t]*(?:\d|[lIıİ](?:\d|\b)|[-–—])|[ \t]*$)[^\n]*)$"
 )
+_COURT_NUMBER = r"[0-9]{4}/(?:\([0-9]+\))?[0-9]+(?:-[0-9]+)?"
+_COURT_EXPORT_CREATED = re.compile(
+    r"(?im)^.*?kullanıcısı tarafından\s+\d{4}-\d{2}-\d{2}\s+"
+    r"\d{2}:\d{2}:\d{2}\s+tarihinde oluşturuldu\.\s*$"
+)
+_COURT_EXPORT_ANONYMIZATION = re.compile(
+    r"(?ims)^Yargıtay İçtihat Merkezinde yayımlanan kararlardaki kişisel veriler\s+"
+    r"[\"“]Yargıtay İçtihat Merkezi Kararlarındaki Kişisel Verilerin Anonim\s+"
+    r"Hale Getirilmesine Dair Yönerge[\"”]\s+uyarınca anonimleştirilmiştir\.\s*$"
+)
+_COURT_EXPORT_PAGE_COUNTER = re.compile(r"(?m)^\s*\d+\s*/\s*\d+\s*$")
 
 
 class _VisibleTextExtractor(HTMLParser):
@@ -108,12 +119,26 @@ def extract_pages(raw: RawDocument) -> tuple[list[TextPage], str]:
     raise ExtractionError(f"Unsupported media type: {raw.media_type}")
 
 
-def _join_pages(pages: list[TextPage]) -> tuple[str, list[tuple[int, int, int | None]]]:
+def _clean_court_export_page(text: str) -> tuple[str, bool]:
+    cleaned = _COURT_EXPORT_CREATED.sub("", text)
+    cleaned = _COURT_EXPORT_ANONYMIZATION.sub("", cleaned)
+    cleaned = _COURT_EXPORT_PAGE_COUNTER.sub("", cleaned)
+    return cleaned, cleaned != text
+
+
+def _join_pages(
+    pages: list[TextPage], *, clean_court_export: bool = False
+) -> tuple[str, list[tuple[int, int, int | None]], int]:
     output: list[str] = []
     spans: list[tuple[int, int, int | None]] = []
     cursor = 0
+    cleaned_page_count = 0
     for page in pages:
-        normalized = normalize_legal_text(page.text)
+        page_text = page.text
+        if clean_court_export:
+            page_text, changed = _clean_court_export_page(page_text)
+            cleaned_page_count += int(changed)
+        normalized = normalize_legal_text(page_text)
         if not normalized:
             continue
         if output:
@@ -123,7 +148,7 @@ def _join_pages(pages: list[TextPage]) -> tuple[str, list[tuple[int, int, int | 
         output.append(normalized)
         cursor += len(normalized)
         spans.append((start, cursor, page.page_number))
-    return "".join(output), spans
+    return "".join(output), spans, cleaned_page_count
 
 
 def _first_match(patterns: tuple[str, ...], text: str) -> str | None:
@@ -153,27 +178,90 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
+def _court_header(text: str) -> str:
+    decision_marker = re.search(r"(?im)^\s*KARAR\s*$", text)
+    start = decision_marker.end() if decision_marker else 0
+    return text[start : start + 6_000]
+
+
+def _court_chamber(header: str) -> str | None:
+    for line in header.splitlines():
+        identifier = normalized_identifier(line).replace("-", "")
+        chamber_match = re.fullmatch(r"(?P<number>\d{1,2})hukukdairesi", identifier)
+        if chamber_match:
+            return f"{int(chamber_match.group('number'))}. Hukuk Dairesi"
+        if identifier == "hukukgenelkurulu":
+            return "Hukuk Genel Kurulu"
+    return None
+
+
 def _court_metadata(text: str, supplied: dict[str, Any]) -> dict[str, Any]:
-    chamber = supplied.get("chamber") or _first_match(
-        (r"((?:\d+\.?\s*)?Hukuk Dairesi)", r"(Hukuk Genel Kurulu)"), text
+    header = _court_header(text)
+    chamber = _court_chamber(header) or _first_match(
+        (r"((?:\d+\.?\s*)?Hukuk Dairesi)", r"(Hukuk Genel Kurulu)"), header
     )
-    case_number = supplied.get("case_number") or _first_match(
-        (r"(?:Esas|E\.)\s*(?:No\.?\s*)?[:：]?\s*([0-9]{4}/[0-9]+)",), text
+    case_number = _first_match(
+        (rf"(?:Esas|E\.)\s*(?:No\.?\s*)?[:：]?\s*({_COURT_NUMBER})",), header
     )
-    decision_number = supplied.get("decision_number") or _first_match(
-        (r"(?:Karar|K\.)\s*(?:No\.?\s*)?[:：]?\s*([0-9]{4}/[0-9]+)",), text
+    decision_number = _first_match(
+        (rf"(?:Karar|K\.)\s*(?:No\.?\s*)?[:：]?\s*({_COURT_NUMBER})",), header
     )
-    decision_date = supplied.get("document_date") or _first_match(
-        (r"(?:Karar Tarihi|Tarih)\s*[:：]?\s*([0-9]{2}[./][0-9]{2}[./][0-9]{4})",),
+    outcome_dates = re.findall(
+        r"(?is)(\d{1,2}[./]\d{1,2}[./]\d{4})\s*"
+        r"(?:tarihinde|gününde)"
+        r"(?:(?!\d{1,2}[./]\d{1,2}[./]\d{4}).){0,260}?"
+        r"\bkarar\s+verildi\b",
         text,
+    )
+    decision_date = outcome_dates[-1] if outcome_dates else _first_match(
+        (
+            r"(?:Karar Tarihi|Tarih)\s*[:：]?\s*"
+            r"([0-9]{1,2}[./][0-9]{1,2}[./][0-9]{4})",
+        ),
+        header,
     )
     return {
         "authority": supplied.get("authority") or "Yargıtay",
-        "chamber": chamber,
-        "case_number": case_number,
-        "decision_number": decision_number,
-        "document_date": _parse_date(decision_date),
+        "chamber": chamber or supplied.get("chamber"),
+        "case_number": case_number or supplied.get("case_number"),
+        "decision_number": decision_number or supplied.get("decision_number"),
+        "document_date": _parse_date(decision_date) or _parse_date(
+            supplied.get("document_date")
+        ),
+        "extracted_chamber": chamber,
+        "extracted_case_number": case_number,
+        "extracted_decision_number": decision_number,
     }
+
+
+def _normalized_court_value(value: object) -> str:
+    return re.sub(r"\s+", "", str(value or "")).casefold()
+
+
+def _validate_court_metadata(court: dict[str, Any], supplied: dict[str, Any]) -> None:
+    comparisons = {
+        "chamber": court.get("extracted_chamber"),
+        "case_number": court.get("extracted_case_number"),
+        "decision_number": court.get("extracted_decision_number"),
+    }
+    for field, extracted in comparisons.items():
+        expected = supplied.get(field)
+        if expected and extracted and _normalized_court_value(expected) != _normalized_court_value(
+            extracted
+        ):
+            raise ExtractionError(
+                "Court metadata mismatch for "
+                f"{field}: expected={expected!r}, extracted={extracted!r}"
+            )
+    requirements = supplied.get("domain_metadata", {}).get("court_metadata_requirements")
+    if requirements == "complete":
+        missing = [
+            field
+            for field in ("chamber", "case_number", "decision_number", "document_date")
+            if not court.get(field)
+        ]
+        if missing:
+            raise ExtractionError(f"Incomplete court metadata: {missing}")
 
 
 def _related_legislation(text: str, supplied: dict[str, Any]) -> tuple[str, ...]:
@@ -204,6 +292,7 @@ def _validate_legislation_structure(
     text: str,
     legal_units: tuple[LegalUnit, ...],
     chunks: tuple[DocumentChunk, ...],
+    expectations: dict[str, Any] | None = None,
 ) -> None:
     supplement_starts = [
         unit.char_start
@@ -218,6 +307,7 @@ def _validate_legislation_structure(
         match.group("header").strip()
         for match in _ARTICLE_LIKE_HEADING.finditer(text, 0, core_end)
         if match.start("header") not in recognized_article_starts
+        and match.group("header").casefold().count("madde") == 1
     ]
     if unrecognized_headings:
         raise ExtractionError(
@@ -229,7 +319,15 @@ def _validate_legislation_structure(
         for unit in legal_units
         if unit.unit_type in _ARTICLE_UNIT_TYPES and unit.label
     ]
-    duplicates = [identity for identity, count in Counter(identities).items() if count > 1]
+    allowed_duplicates = {
+        str(value)
+        for value in (expectations or {}).get("allowed_duplicate_labels", [])
+    }
+    duplicates = [
+        identity
+        for identity, count in Counter(identities).items()
+        if count > 1 and f"{identity[0]}:{identity[1]}" not in allowed_duplicates
+    ]
     if duplicates:
         raise ExtractionError(f"Duplicate article identities: {duplicates[:5]}")
 
@@ -269,17 +367,21 @@ def _validate_legislation_structure(
 
 
 def parse_document(raw: RawDocument) -> ParsedDocument:
-    pages, extraction_method = extract_pages(raw)
-    text, page_spans = _join_pages(pages)
-    if len(text) < 40:
-        raise ExtractionError("Document contains too little extractable text")
-
     supplied = raw.metadata
     source_kind = str(supplied.get("source_kind", "court_decision"))
     if source_kind not in {"legislation", "court_decision"}:
         raise ExtractionError(f"Unsupported source kind: {source_kind}")
+    pages, extraction_method = extract_pages(raw)
+    text, page_spans, cleaned_page_count = _join_pages(
+        pages,
+        clean_court_export=source_kind == "court_decision",
+    )
+    if len(text) < 40:
+        raise ExtractionError("Document contains too little extractable text")
 
     court = _court_metadata(text, supplied) if source_kind == "court_decision" else {}
+    if source_kind == "court_decision":
+        _validate_court_metadata(court, supplied)
     canonical_hash = stable_hash(text)
     has_complete_court_metadata = all(
         court.get(field) for field in ("authority", "chamber", "case_number", "decision_number")
@@ -294,9 +396,18 @@ def parse_document(raw: RawDocument) -> ParsedDocument:
     }
     title = str(supplied.get("title") or "").strip()
     if not title and source_kind == "court_decision":
-        title = " ".join(
-            part for part in (metadata.get("chamber"), metadata.get("decision_number")) if part
+        authority = str(metadata.get("authority") or "").strip()
+        chamber = str(metadata.get("chamber") or "").strip()
+        heading = (
+            chamber
+            if authority and chamber.casefold().startswith(authority.casefold())
+            else " ".join(part for part in (authority, chamber) if part)
         )
+        references = [
+            f"E. {metadata['case_number']}" if metadata.get("case_number") else "",
+            f"K. {metadata['decision_number']}" if metadata.get("decision_number") else "",
+        ]
+        title = ", ".join(part for part in (heading, *references) if part)
     title = title or raw.source_document_id or "Başlıksız hukuk belgesi"
     legal_units, provision_events = (
         parse_legal_structure(text, page_spans, extraction_method, confidence)
@@ -304,6 +415,12 @@ def parse_document(raw: RawDocument) -> ParsedDocument:
         else ((), ())
     )
     parse_metadata: dict[str, Any] = {}
+    if cleaned_page_count:
+        parse_metadata["text_cleanup"] = {
+            "method": "yargitay_export_footer_v1",
+            "cleaned_page_count": cleaned_page_count,
+            "raw_artifact_modified": False,
+        }
     expectations = supplied.get("domain_metadata", {}).get("article_expectations")
     if source_kind == "legislation" and isinstance(expectations, dict):
         article_audit = audit_article_structure(legal_units, expectations)
@@ -327,7 +444,7 @@ def parse_document(raw: RawDocument) -> ParsedDocument:
     if not chunks:
         raise ExtractionError("Document did not produce any chunks")
     if source_kind == "legislation":
-        _validate_legislation_structure(text, legal_units, chunks)
+        _validate_legislation_structure(text, legal_units, chunks, expectations)
 
     document_date = _parse_date(supplied.get("document_date")) or court.get("document_date")
 

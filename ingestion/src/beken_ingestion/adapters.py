@@ -230,7 +230,7 @@ class LocalFileAdapter:
         return RawDocument(
             source_name=str(metadata.get("source_name") or "manual"),
             source_document_id=str(metadata.get("source_document_id") or resolved.stem),
-            source_url=resolved.as_uri(),
+            source_url=str(metadata.get("source_url") or resolved.as_uri()),
             media_type=media_type,
             content=resolved.read_bytes(),
             metadata=metadata,

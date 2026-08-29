@@ -82,6 +82,7 @@ def test_court_decision_variants_receive_the_same_legal_fingerprint() -> None:
 
     assert first.fingerprint == second.fingerprint
     assert first.fingerprint.startswith("court:yargitay:9-hukuk-dairesi")
+    assert first.title == "Yargıtay 9. Hukuk Dairesi, E. 2024/100, K. 2025/200"
     assert {chunk.section_type for chunk in first.chunks} >= {"gerekçe", "hüküm"}
 
 
@@ -148,7 +149,7 @@ def test_legislation_parser_preserves_hierarchy_special_articles_and_events() ->
     parsed = parse_document(raw)
     unit_types = {unit.unit_type for unit in parsed.legal_units}
 
-    assert parsed.parser_version == "2026.08.3"
+    assert parsed.parser_version == "2026.08.4"
     assert {
         "chapter",
         "article",
@@ -331,7 +332,7 @@ def test_article_quality_gate_rejects_missing_or_duplicate_core_labels() -> None
         parse_document(raw)
 
 
-def test_unrecognized_article_like_heading_fails_instead_of_silent_fallback() -> None:
+def test_unnumbered_temporary_article_is_preserved() -> None:
     raw = RawDocument(
         source_name="mevzuat",
         source_document_id="unsupported-heading",
@@ -344,5 +345,128 @@ def test_unrecognized_article_like_heading_fails_instead_of_silent_fallback() ->
         metadata={"source_kind": "legislation", "document_type": "law"},
     )
 
-    with pytest.raises(ExtractionError, match="Unrecognized article-like heading"):
-        parse_document(raw)
+    parsed = parse_document(raw)
+
+    temporary = next(
+        unit for unit in parsed.legal_units if unit.unit_type == "temporary_article"
+    )
+    assert temporary.label is None
+    assert temporary.metadata["unnumbered_article"] is True
+    assert "Numarasız başlık" in temporary.text
+
+
+def test_dotted_article_and_supplement_heading_are_recognized() -> None:
+    raw = RawDocument(
+        source_name="mevzuat",
+        source_document_id="dotted-and-supplement",
+        source_url="https://www.mevzuat.gov.tr/example.txt",
+        media_type="text/plain",
+        content=(
+            "MADDE 1. - Birinci hüküm burada yer alır.\n"
+            "31/5/2006 TARİHLİ VE 5510 SAYILI KANUNA İŞLENEMEYEN\n"
+            "GEÇİCİ MADDELER\n"
+            "GEÇİCİ MADDE 1 – Ek metin kayıpsız saklanır."
+        ).encode(),
+        metadata={
+            "source_kind": "legislation",
+            "document_type": "law",
+            "domain_metadata": {
+                "article_expectations": {
+                    "required_numeric_start": 1,
+                    "required_numeric_end": 1,
+                    "required_labels": [],
+                }
+            },
+        },
+    )
+
+    parsed = parse_document(raw)
+
+    assert [
+        unit.label for unit in parsed.legal_units if unit.unit_type == "article"
+    ] == ["1"]
+    supplement = next(
+        unit for unit in parsed.legal_units if unit.metadata.get("supplement_type")
+    )
+    assert "GEÇİCİ MADDE 1" in supplement.text
+
+
+def test_declared_duplicate_temporary_articles_remain_distinct() -> None:
+    raw = RawDocument(
+        source_name="mevzuat",
+        source_document_id="duplicate-temporary",
+        source_url="https://www.mevzuat.gov.tr/example.txt",
+        media_type="text/plain",
+        content=(
+            "MADDE 1- Ana hüküm.\n"
+            "GEÇİCİ MADDE 79- (Ek: 5/12/2019-7194/48 md.) Birinci hüküm.\n"
+            "GEÇİCİ MADDE 79- (Ek: 6/12/2019-7196/62 md.) İkinci hüküm."
+        ).encode(),
+        metadata={
+            "source_kind": "legislation",
+            "document_type": "law",
+            "domain_metadata": {
+                "article_expectations": {
+                    "required_numeric_start": 1,
+                    "required_numeric_end": 1,
+                    "required_labels": [],
+                    "allowed_duplicate_labels": ["temporary_article:79"],
+                }
+            },
+        },
+    )
+
+    parsed = parse_document(raw)
+    temporary = [
+        unit
+        for unit in parsed.legal_units
+        if unit.unit_type == "temporary_article" and unit.label == "79"
+    ]
+
+    assert len(temporary) == 2
+    assert temporary[0].unit_key != temporary[1].unit_key
+    assert temporary[1].metadata["repeated_label_occurrence"] == 2
+    assert temporary[1].review_status == "needs_review"
+
+
+def test_yargitay_export_metadata_and_footers_are_cleaned() -> None:
+    raw = RawDocument(
+        source_name="yargitay",
+        source_document_id="manual-2022-1264",
+        source_url="https://karararama.yargitay.gov.tr/",
+        media_type="text/plain",
+        content=(
+            "HUKUKİ KAVRAMLAR\nSigortalılık\nKARAR\n"
+            "ESAS NO : 2022/10-520\nKARAR NO : 2022/1264\n"
+            "T.C.\nY A R G I T A Y\nH U K U K  G E N E L  K U R U L U\n"
+            "I. YARGILAMA SÜRECİ\nDavacı İstemi:\nTalep açıklaması.\n"
+            "II. UYUŞMAZLIK\nUyuşmazlık açıklaması.\n"
+            "III. GEREKÇE\nGerekçe açıklaması.\n"
+            "IV. SONUÇ:\n05.10.2022 tarihinde oy birliğiyle karar verildi.\n"
+            "ALİ EREN KONAK kullanıcısı tarafından 2026-08-29 03:33:49 tarihinde oluşturuldu.\n"
+            "Yargıtay İçtihat Merkezinde yayımlanan kararlardaki kişisel veriler "
+            "\"Yargıtay İçtihat Merkezi Kararlarındaki Kişisel Verilerin Anonim\n"
+            "Hale Getirilmesine Dair Yönerge\" uyarınca anonimleştirilmiştir.\n1/1"
+        ).encode(),
+        metadata={
+            "source_kind": "court_decision",
+            "document_type": "court_decision",
+            "authority": "Yargıtay",
+            "chamber": "Hukuk Genel Kurulu",
+            "decision_number": "2022/1264",
+            "domain_metadata": {"court_metadata_requirements": "complete"},
+        },
+    )
+
+    parsed = parse_document(raw)
+    all_text = "\n".join(chunk.text for chunk in parsed.chunks)
+
+    assert parsed.chamber == "Hukuk Genel Kurulu"
+    assert parsed.case_number == "2022/10-520"
+    assert parsed.decision_number == "2022/1264"
+    assert parsed.document_date == date(2022, 10, 5)
+    assert "ALİ EREN KONAK" not in all_text
+    assert "anonimleştirilmiştir" not in all_text
+    assert {"yargılama_süreci", "uyuşmazlık", "gerekçe", "sonuç"} <= {
+        chunk.section_type for chunk in parsed.chunks
+    }

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 from psycopg.rows import dict_row
@@ -271,118 +271,126 @@ class CorpusRepository:
             ).fetchone()
             parse_id = parse_row["id"]
 
-            unit_ids: dict[str, UUID] = {}
-            for unit in parsed.legal_units:
-                parent_id = unit_ids.get(unit.parent_key) if unit.parent_key else None
-                row = cursor.execute(
-                    """
-                    insert into legal.legal_units (
-                      parse_id, parent_unit_id, unit_index, unit_key, unit_path,
-                      unit_type, label, heading, text, page_number, char_start, char_end,
-                      content_hash, extraction_method, confidence, review_status, metadata
-                    ) values (
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                      %s, %s, %s, %s, %s
-                    ) returning id
-                    """,
-                    (
-                        parse_id,
-                        parent_id,
-                        unit.unit_index,
-                        unit.unit_key,
-                        list(unit.unit_path),
-                        unit.unit_type,
-                        unit.label,
-                        unit.heading,
-                        unit.text,
-                        unit.page_number,
-                        unit.char_start,
-                        unit.char_end,
-                        unit.content_hash,
-                        unit.extraction_method,
-                        unit.confidence,
-                        unit.review_status,
-                        Jsonb(unit.metadata),
-                    ),
-                ).fetchone()
-                unit_ids[unit.unit_key] = row["id"]
-
-            for chunk in parsed.chunks:
-                chunk_row = cursor.execute(
-                    """
-                    insert into legal.document_chunks (
-                      document_id, parse_id, chunk_index, section_type, text, page_number,
-                      char_start, char_end, content_hash, extraction_method, confidence, metadata
-                    ) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    returning id
-                    """,
-                    (
-                        document_id,
-                        parse_id,
-                        chunk.chunk_index,
-                        chunk.section_type,
-                        chunk.text,
-                        chunk.page_number,
-                        chunk.char_start,
-                        chunk.char_end,
-                        chunk.content_hash,
-                        chunk.extraction_method,
-                        chunk.confidence,
-                        Jsonb(chunk.metadata),
-                    ),
-                ).fetchone()
-                relations = [
-                    (chunk_row["id"], unit_ids[key], parse_id, "primary", order)
-                    for order, key in enumerate(chunk.unit_keys)
-                    if key in unit_ids
-                ]
-                if relations:
-                    cursor.executemany(
-                        """
-                        insert into legal.chunk_legal_units (
-                          chunk_id, legal_unit_id, parse_id, relation_type, unit_order
-                        ) values (%s, %s, %s, %s, %s)
-                        """,
-                        relations,
+            unit_ids = {unit.unit_key: uuid4() for unit in parsed.legal_units}
+            with cursor.copy(
+                """
+                copy legal.legal_units (
+                  id, parse_id, parent_unit_id, unit_index, unit_key, unit_path,
+                  unit_type, label, heading, text, page_number, char_start, char_end,
+                  content_hash, extraction_method, confidence, review_status, metadata
+                ) from stdin
+                """
+            ) as copy:
+                for unit in parsed.legal_units:
+                    copy.write_row(
+                        (
+                            unit_ids[unit.unit_key],
+                            parse_id,
+                            unit_ids.get(unit.parent_key) if unit.parent_key else None,
+                            unit.unit_index,
+                            unit.unit_key,
+                            list(unit.unit_path),
+                            unit.unit_type,
+                            unit.label,
+                            unit.heading,
+                            unit.text,
+                            unit.page_number,
+                            unit.char_start,
+                            unit.char_end,
+                            unit.content_hash,
+                            unit.extraction_method,
+                            unit.confidence,
+                            unit.review_status,
+                            Jsonb(unit.metadata),
+                        )
                     )
 
-            for event in parsed.provision_events:
-                cursor.execute(
-                    """
-                    insert into legal.provision_events (
-                      parse_id, legal_unit_id, event_index, event_type, target_type,
-                      authority, source_law_number, source_law_article, case_number,
-                      decision_number, event_date, official_gazette_date,
-                      official_gazette_number, effective_from, target_char_start,
-                      target_char_end, raw_annotation, confidence, review_status, metadata
-                    ) values (
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            chunk_ids = {chunk.chunk_index: uuid4() for chunk in parsed.chunks}
+            with cursor.copy(
+                """
+                copy legal.document_chunks (
+                  id, document_id, parse_id, chunk_index, section_type, text,
+                  page_number, char_start, char_end, content_hash,
+                  extraction_method, confidence, metadata
+                ) from stdin
+                """
+            ) as copy:
+                for chunk in parsed.chunks:
+                    copy.write_row(
+                        (
+                            chunk_ids[chunk.chunk_index],
+                            document_id,
+                            parse_id,
+                            chunk.chunk_index,
+                            chunk.section_type,
+                            chunk.text,
+                            chunk.page_number,
+                            chunk.char_start,
+                            chunk.char_end,
+                            chunk.content_hash,
+                            chunk.extraction_method,
+                            chunk.confidence,
+                            Jsonb(chunk.metadata),
+                        )
                     )
-                    """,
-                    (
-                        parse_id,
-                        unit_ids.get(event.legal_unit_key),
-                        event.event_index,
-                        event.event_type,
-                        event.target_type,
-                        event.authority,
-                        event.source_law_number,
-                        event.source_law_article,
-                        event.case_number,
-                        event.decision_number,
-                        event.event_date,
-                        event.official_gazette_date,
-                        event.official_gazette_number,
-                        event.effective_from,
-                        event.target_char_start,
-                        event.target_char_end,
-                        event.raw_annotation,
-                        event.confidence,
-                        event.review_status,
-                        Jsonb(event.metadata),
-                    ),
-                )
+
+            with cursor.copy(
+                """
+                copy legal.chunk_legal_units (
+                  chunk_id, legal_unit_id, parse_id, relation_type, unit_order
+                ) from stdin
+                """
+            ) as copy:
+                for chunk in parsed.chunks:
+                    for order, key in enumerate(chunk.unit_keys):
+                        if key in unit_ids:
+                            copy.write_row(
+                                (
+                                    chunk_ids[chunk.chunk_index],
+                                    unit_ids[key],
+                                    parse_id,
+                                    "primary",
+                                    order,
+                                )
+                            )
+
+            with cursor.copy(
+                """
+                copy legal.provision_events (
+                  id, parse_id, legal_unit_id, event_index, event_type, target_type,
+                  authority, source_law_number, source_law_article, case_number,
+                  decision_number, event_date, official_gazette_date,
+                  official_gazette_number, effective_from, target_char_start,
+                  target_char_end, raw_annotation, confidence, review_status, metadata
+                ) from stdin
+                """
+            ) as copy:
+                for event in parsed.provision_events:
+                    copy.write_row(
+                        (
+                            uuid4(),
+                            parse_id,
+                            unit_ids.get(event.legal_unit_key),
+                            event.event_index,
+                            event.event_type,
+                            event.target_type,
+                            event.authority,
+                            event.source_law_number,
+                            event.source_law_article,
+                            event.case_number,
+                            event.decision_number,
+                            event.event_date,
+                            event.official_gazette_date,
+                            event.official_gazette_number,
+                            event.effective_from,
+                            event.target_char_start,
+                            event.target_char_end,
+                            event.raw_annotation,
+                            event.confidence,
+                            event.review_status,
+                            Jsonb(event.metadata),
+                        )
+                    )
 
             cursor.execute(
                 """
@@ -476,6 +484,140 @@ class CorpusRepository:
                 (corpus_version,),
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def artifact_storage_path(self, content_hash: str) -> str | None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            row = cursor.execute(
+                """
+                select storage_path
+                from legal.document_artifacts
+                where content_hash = %s
+                """,
+                (content_hash,),
+            ).fetchone()
+            return str(row["storage_path"]) if row else None
+
+    def all_artifacts(self) -> list[dict[str, Any]]:
+        with self._connect() as connection, connection.cursor() as cursor:
+            rows = cursor.execute(
+                """
+                select
+                  a.id as artifact_id, a.storage_path, a.media_type, a.content_hash,
+                  a.byte_length, d.source_name, d.source_document_id, d.source_kind,
+                  d.document_type, d.title, d.authority, d.chamber, d.case_number,
+                  d.decision_number
+                from legal.document_artifacts a
+                join legal.documents d on d.id = a.document_id
+                order by d.source_name, d.source_document_id, a.id
+                """
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def corpus_quality_summary(
+        self, corpus_version: str, parser_version: str
+    ) -> dict[str, Any]:
+        with self._connect() as connection, connection.cursor() as cursor:
+            row = cursor.execute(
+                """
+                select
+                  count(*) as document_count,
+                  count(*) filter (where d.source_kind = 'legislation') as legislation_count,
+                  count(*) filter (where d.source_kind = 'court_decision') as decision_count,
+                  count(*) filter (where p.status = 'ready') as ready_parse_count,
+                  count(*) filter (where p.parser_version = %s) as current_parser_count,
+                  count(*) filter (
+                    where d.source_kind = 'court_decision'
+                      and (d.chamber is null or d.case_number is null
+                        or d.decision_number is null or d.document_date is null)
+                  ) as incomplete_decision_metadata_count,
+                  coalesce(sum((
+                    select count(*) from legal.document_chunks c where c.parse_id = p.id
+                  )), 0) as chunk_count,
+                  coalesce(sum((
+                    select count(*) from legal.legal_units u where u.parse_id = p.id
+                  )), 0) as legal_unit_count,
+                  coalesce(sum((
+                    select count(*) from legal.provision_events e where e.parse_id = p.id
+                  )), 0) as provision_event_count
+                from legal.corpus_version_documents cvd
+                join legal.documents d on d.id = cvd.document_id
+                join legal.document_parses p on p.id = cvd.parse_id
+                where cvd.corpus_version = %s
+                """,
+                (parser_version, corpus_version),
+            ).fetchone()
+            footer_leaks = cursor.execute(
+                """
+                select count(*) as count
+                from legal.corpus_version_documents cvd
+                join legal.documents d on d.id = cvd.document_id
+                join legal.document_chunks c on c.parse_id = cvd.parse_id
+                where cvd.corpus_version = %s
+                  and d.source_kind = 'court_decision'
+                  and (
+                    c.text ilike '%%kullanıcısı tarafından%%tarihinde oluşturuldu%%'
+                    or c.text ilike '%%anonimleştirilmiştir%%'
+                  )
+                """,
+                (corpus_version,),
+            ).fetchone()
+            unlinked_units = cursor.execute(
+                """
+                select count(*) as count
+                from legal.corpus_version_documents cvd
+                join legal.documents d on d.id = cvd.document_id
+                join legal.legal_units u on u.parse_id = cvd.parse_id
+                left join legal.chunk_legal_units clu on clu.legal_unit_id = u.id
+                where cvd.corpus_version = %s
+                  and d.source_kind = 'legislation'
+                  and clu.legal_unit_id is null
+                """,
+                (corpus_version,),
+            ).fetchone()
+            return {
+                **dict(row),
+                "footer_leak_count": int(footer_leaks["count"]),
+                "unlinked_legal_unit_count": int(unlinked_units["count"]),
+            }
+
+    def publish_corpus(self, version: str, predecessors: list[str]) -> None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            updated = cursor.execute(
+                """
+                update legal.corpus_versions
+                set status = 'ready', published_at = coalesce(published_at, now())
+                where version = %s
+                returning version
+                """,
+                (version,),
+            ).fetchone()
+            if not updated:
+                raise ValueError(f"Unknown corpus version: {version}")
+            if predecessors:
+                cursor.execute(
+                    """
+                    update legal.corpus_versions
+                    set status = 'retired'
+                    where version = any(%s) and version <> %s
+                    """,
+                    (predecessors, version),
+                )
+
+    def update_artifact_storage_path(
+        self, artifact_id: str, old_path: str, new_path: str
+    ) -> None:
+        with self._connect() as connection, connection.cursor() as cursor:
+            updated = cursor.execute(
+                """
+                update legal.document_artifacts
+                set storage_path = %s
+                where id = %s and storage_path = %s
+                returning id
+                """,
+                (new_path, UUID(artifact_id), old_path),
+            ).fetchone()
+            if not updated:
+                raise ValueError("Artifact storage path changed concurrently")
 
     def document_count(self) -> int:
         with self._connect() as connection, connection.cursor() as cursor:

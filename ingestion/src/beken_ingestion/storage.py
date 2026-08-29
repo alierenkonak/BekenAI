@@ -20,6 +20,9 @@ class RawStorage(Protocol):
     def get(self, object_path: str) -> bytes:
         """Read an immutable object through the configured private access path."""
 
+    def move(self, source_path: str, destination_path: str) -> None:
+        """Move an immutable object to a new path without changing its bytes."""
+
 
 def validate_object_path(object_path: str) -> PurePosixPath:
     path = PurePosixPath(object_path)
@@ -50,6 +53,18 @@ class FilesystemRawStorage:
         if not source.is_relative_to(self.root):
             raise ValueError("Storage path escapes configured root")
         return source.read_bytes()
+
+    def move(self, source_path: str, destination_path: str) -> None:
+        safe_source = validate_object_path(source_path)
+        safe_destination = validate_object_path(destination_path)
+        source = (self.root / Path(*safe_source.parts)).resolve()
+        destination = (self.root / Path(*safe_destination.parts)).resolve()
+        if not source.is_relative_to(self.root) or not destination.is_relative_to(self.root):
+            raise ValueError("Storage path escapes configured root")
+        if destination.exists():
+            raise FileExistsError(f"Storage destination already exists: {destination_path}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        source.replace(destination)
 
 
 class SupabaseRawStorage:
@@ -138,3 +153,16 @@ class SupabaseRawStorage:
         )
         response.raise_for_status()
         return response.content
+
+    def move(self, source_path: str, destination_path: str) -> None:
+        safe_source = validate_object_path(source_path)
+        safe_destination = validate_object_path(destination_path)
+        response = self._client.post(
+            "/object/move",
+            json={
+                "bucketId": self.bucket,
+                "sourceKey": str(safe_source),
+                "destinationKey": str(safe_destination),
+            },
+        )
+        response.raise_for_status()

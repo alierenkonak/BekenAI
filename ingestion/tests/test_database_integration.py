@@ -58,6 +58,19 @@ def test_repeated_import_is_idempotent_and_chunks_trace_to_document(tmp_path: Pa
                 (first.document_id,),
             )
             assert cursor.fetchone()[0] == first.chunk_count
+            catalog_row = cursor.execute(
+                """
+                select display_name, legal_identifier, document_category
+                from legal.document_catalog
+                where document_id = %s
+                """,
+                (first.document_id,),
+            ).fetchone()
+            assert catalog_row == (
+                "Yargıtay 9. Hukuk Dairesi, E. 2099/1, K. 2099/2",
+                "E. 2099/1 / K. 2099/2",
+                "İçtihat Kararı",
+            )
     finally:
         with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
             cursor.execute("delete from legal.documents where id = %s", (first.document_id,))

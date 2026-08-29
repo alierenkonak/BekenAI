@@ -20,6 +20,10 @@ def test_filesystem_storage_is_immutable(tmp_path: Path) -> None:
     assert (tmp_path / "global/test/ab/hash.txt").read_bytes() == b"first"
     assert storage.get("global/test/ab/hash.txt") == b"first"
 
+    storage.move("global/test/ab/hash.txt", "global/test/readable--hash.txt")
+    assert storage.get("global/test/readable--hash.txt") == b"first"
+    assert not (tmp_path / "global/test/ab/hash.txt").exists()
+
 
 @pytest.mark.parametrize("path", ["../secret", "/absolute", "global/../../secret"])
 def test_storage_rejects_unsafe_paths(path: str) -> None:
@@ -94,5 +98,30 @@ def test_supabase_private_download_uses_authenticated_path() -> None:
     )
     try:
         assert storage.get("global/doc.pdf") == b"private"
+    finally:
+        storage.close()
+
+
+def test_supabase_move_uses_validated_object_paths() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/storage/v1/object/move"
+        assert json.loads(request.content) == {
+            "bucketId": "legal-raw",
+            "sourceKey": "global/mevzuat/hash.pdf",
+            "destinationKey": "global/mevzuat/4857-is-kanunu--hash.pdf",
+        }
+        return httpx.Response(200, json={"message": "Successfully moved"}, request=request)
+
+    storage = SupabaseRawStorage(
+        "https://project.supabase.co",
+        "test-secret-key",
+        "legal-raw",
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        storage.move(
+            "global/mevzuat/hash.pdf",
+            "global/mevzuat/4857-is-kanunu--hash.pdf",
+        )
     finally:
         storage.close()

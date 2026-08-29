@@ -1,0 +1,2440 @@
+{
+  "version": "labour-law-pilot-v4",
+  "predecessor": "labour-law-pilot-v3",
+  "inherit_all_from": "labour-law-pilot-v3",
+  "parser_version": "2026.08.4",
+  "description": "83 yerel resmî PDF, tam Yargıtay metadata doğrulaması ve genişletilmiş mevzuat yapı parserı içeren Türk İş Hukuku pilot corpusu.",
+  "sources": [
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-4857-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4857.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4857 sayılı İş Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "4857"
+        ],
+        "domain_metadata": {
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 122,
+            "required_labels": []
+          },
+          "corpus_role": "core"
+        }
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-7036-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.7036.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "7036 sayılı İş Mahkemeleri Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "7036"
+        ],
+        "domain_metadata": {
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 39,
+            "required_labels": []
+          },
+          "corpus_role": "core"
+        }
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-1475-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.1475.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "1475 sayılı İş Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "1475"
+        ],
+        "domain_metadata": {
+          "pilot_focus": "article_14",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 112,
+            "required_labels": []
+          },
+          "corpus_role": "core"
+        }
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6098-service-contract-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6098.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6098 sayılı Türk Borçlar Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6098"
+        ],
+        "domain_metadata": {
+          "pilot_focus": "service_contract",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 649,
+            "required_labels": []
+          },
+          "corpus_role": "supplemental"
+        }
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6100-procedure-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6100.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6100 sayılı Hukuk Muhakemeleri Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6100"
+        ],
+        "domain_metadata": {
+          "pilot_focus": "labour_procedure",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 452,
+            "required_labels": [
+              "183/A",
+              "305/A"
+            ]
+          },
+          "corpus_role": "supplemental"
+        }
+      }
+    },
+    {
+      "adapter": "mevzuat",
+      "source_document_id": "law-6325-mediation-current",
+      "url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6325.pdf",
+      "metadata": {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6325 sayılı Hukuk Uyuşmazlıklarında Arabuluculuk Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6325"
+        ],
+        "domain_metadata": {
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 38,
+            "required_labels": [
+              "17/A",
+              "17/B",
+              "18/A",
+              "18/B"
+            ]
+          },
+          "corpus_role": "core"
+        }
+      }
+    }
+  ],
+  "local_sources": [
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.3.5953.pdf",
+      "source_document_id": "law-5953-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.3.5953.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "5953 sayılı Basın Mesleğinde Çalışanlarla Çalıştıranlar Arasındaki Münasebetlerin Tanzimi Hakkında Kanun",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "5953"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 32,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.3.5953.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.3.815.pdf",
+      "source_document_id": "law-815-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.3.815.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "815 sayılı Türkiye Sahillerinde Nakliyatı Bahriye (Kabotaj) ve Limanlarla Kara Suları Dahilinde İcrayı Sanat ve Ticaret Hakkında Kanun",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "815"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 7,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.3.815.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.1475.pdf",
+      "source_document_id": "law-1475-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.1475.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "1475 sayılı İş Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "1475"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 112,
+            "required_labels": [
+              "13/E"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.1475.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.2429.pdf",
+      "source_document_id": "law-2429-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2429.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "2429 sayılı Ulusal Bayram ve Genel Tatiller Hakkında Kanun",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "2429"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 7,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.2429.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.2527.pdf",
+      "source_document_id": "law-2527-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2527.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "2527 sayılı Türk Soylu Yabancıların Türkiye'de Meslek ve Sanatlarını Serbestçe Yapabilmelerine, Kamu, Özel Kuruluş veya İşyerlerinde Çalıştırılabilmelerine İlişkin Kanun",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "2527"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 10,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.2527.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.3308.pdf",
+      "source_document_id": "law-3308-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.3308.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "3308 sayılı Mesleki Eğitim Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "3308"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 46,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.3308.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.4447.pdf",
+      "source_document_id": "law-4447-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4447.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4447 sayılı İşsizlik Sigortası Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "4447"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 64,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.4447.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.4688.pdf",
+      "source_document_id": "law-4688-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4688.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4688 sayılı Kamu Görevlileri Sendikaları ve Toplu Sözleşme Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "4688"
+        ],
+        "domain_metadata": {
+          "corpus_role": "future_domain",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 46,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.4688.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.4721.pdf",
+      "source_document_id": "law-4721-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4721.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4721 sayılı Türk Medeni Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "4721"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 1030,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.4721.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.4904.pdf",
+      "source_document_id": "law-4904-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4904.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "4904 sayılı Türkiye İş Kurumu ile İlgili Bazı Düzenlemeler Hakkında Kanun",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "4904"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 35,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.4904.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.5237.pdf",
+      "source_document_id": "law-5237-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5237.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "5237 sayılı Türk Ceza Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "5237"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 345,
+            "required_labels": [
+              "123/A",
+              "217/A",
+              "245/A"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.5237.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.5510.pdf",
+      "source_document_id": "law-5510-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5510.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "5510 sayılı Sosyal Sigortalar ve Genel Sağlık Sigortası Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "5510"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 109,
+            "required_labels": [],
+            "allowed_duplicate_labels": [
+              "temporary_article:79"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.5510.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6331.pdf",
+      "source_document_id": "law-6331-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6331.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6331 sayılı İş Sağlığı ve Güvenliği Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6331"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 39,
+            "required_labels": [
+              "24/A",
+              "25/A"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6331.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6356.pdf",
+      "source_document_id": "law-6356-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6356.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6356 sayılı Sendikalar ve Toplu İş Sözleşmesi Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6356"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 83,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6356.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6458.pdf",
+      "source_document_id": "law-6458-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6458.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6458 sayılı Yabancılar ve Uluslararası Koruma Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6458"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 126,
+            "required_labels": [
+              "57/A",
+              "60/A",
+              "121/A"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6458.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.657.pdf",
+      "source_document_id": "law-657-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.657.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "657 sayılı Devlet Memurları Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "657"
+        ],
+        "domain_metadata": {
+          "corpus_role": "future_domain",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 239,
+            "required_labels": [
+              "61/A"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.657.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6698.pdf",
+      "source_document_id": "law-6698-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6698.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6698 sayılı Kişisel Verilerin Korunması Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6698"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 33,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6698.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6701.pdf",
+      "source_document_id": "law-6701-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6701.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6701 sayılı Türkiye İnsan Hakları ve Eşitlik Kurumu Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6701"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 30,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6701.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6735.pdf",
+      "source_document_id": "law-6735-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6735.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6735 sayılı Uluslararası İşgücü Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6735"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 29,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6735.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.6769.pdf",
+      "source_document_id": "law-6769-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6769.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "6769 sayılı Sınai Mülkiyet Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "6769"
+        ],
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 193,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.6769.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "kanun/1.5.7036.pdf",
+      "source_document_id": "law-7036-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.7036.pdf",
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "7036 sayılı İş Mahkemeleri Kanunu",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [
+          "7036"
+        ],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 39,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "1.5.7036.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/7.5.12605.pdf",
+      "source_document_id": "regulation-ucret-prim-ikramiye-ve-bu-nitelikteki-her-turlu-istihkakin-bankalar-araciligiyla-odenmesine-dair-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/7.5.12605.pdf",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Ücret, Prim, İkramiye ve Bu Nitelikteki Her Türlü İstihkakın Bankalar Aracılığıyla Ödenmesine Dair Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 18,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "7.5.12605.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/7.5.19241.pdf",
+      "source_document_id": "regulation-engelli-ve-eski-hukumlu-calistirmayan-isverenlerden-tahsil-edilen-idari-para-cezalarini-kullanmaya-yetkili-komisyona-dair-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/7.5.19241.pdf",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Engelli ve Eski Hükümlü Çalıştırmayan İşverenlerden Tahsil Edilen İdari Para Cezalarını Kullanmaya Yetkili Komisyona Dair Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 19,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "7.5.19241.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/7.5.5454.pdf",
+      "source_document_id": "regulation-asgari-ucret-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/7.5.5454.pdf",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Asgari Ücret Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 19,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "7.5.5454.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/7.5.6252.pdf",
+      "source_document_id": "regulation-postalar-halinde-isci-calistirilarak-yurutulen-islerde-calismalara-iliskin-ozel-usul-ve-esaslar-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/7.5.6252.pdf",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Postalar Halinde İşçi Çalıştırılarak Yürütülen İşlerde Çalışmalara İlişkin Özel Usul ve Esaslar Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 14,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "7.5.6252.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-10.pdf",
+      "source_document_id": "regulation-hazirlama-tamamlama-ve-temizleme-isleri-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Hazırlama, Tamamlama ve Temizleme İşleri Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 17,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-10.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-11.pdf",
+      "source_document_id": "regulation-sanayi-ticaret-tarim-ve-orman-islerinden-sayilan-islere-iliskin-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Sanayi, Ticaret, Tarım ve Orman İşlerinden Sayılan İşlere İlişkin Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 8,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-11.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-12.pdf",
+      "source_document_id": "regulation-alt-isverenlik-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Alt İşverenlik Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 15,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-12.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-13.pdf",
+      "source_document_id": "regulation-kadin-calisanlarin-gece-postalarinda-calistirilma-kosullari-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Kadın Çalışanların Gece Postalarında Çalıştırılma Koşulları Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 14,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-13.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-14.pdf",
+      "source_document_id": "regulation-kamu-ihale-kanununa-gore-ihale-edilen-personel-calistirilmasina-dayali-hizmet-alimlari-kapsaminda-istihdam-edilen-iscilerin-kidem-tazminatlarinin-odenmesi-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Kamu İhale Kanununa Göre İhale Edilen Personel Çalıştırılmasına Dayalı Hizmet Alımları Kapsamında İstihdam Edilen İşçilerin Kıdem Tazminatlarının Ödenmesi Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 15,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-14.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-15.pdf",
+      "source_document_id": "regulation-korumali-isyerlerinde-calisan-engellilerin-ucretlerine-karsilik-isverene-yapilacak-odeme-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Korumalı İşyerlerinde Çalışan Engellilerin Ücretlerine Karşılık İşverene Yapılacak Ödeme Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 9,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-15.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-16.pdf",
+      "source_document_id": "regulation-analik-izni-veya-ucretsiz-izin-sonrasi-yapilacak-kismi-sureli-calismalar-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Analık İzni veya Ücretsiz İzin Sonrası Yapılacak Kısmi Süreli Çalışmalar Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 19,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-16.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-17.pdf",
+      "source_document_id": "regulation-uzaktan-calisma-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Uzaktan Çalışma Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 16,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-17.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-2.pdf",
+      "source_document_id": "regulation-yillik-ucretli-izin-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Yıllık Ücretli İzin Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 23,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-2.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-3.pdf",
+      "source_document_id": "regulation-konut-kapicilari-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Konut Kapıcıları Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 15,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-3.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-4.pdf",
+      "source_document_id": "regulation-isci-ucretlerinden-ceza-olarak-kesilen-paralari-kullanmaya-yetkili-kurulun-tesekkulu-ve-calisma-esaslari-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "İşçi Ücretlerinden Ceza Olarak Kesilen Paraları Kullanmaya Yetkili Kurulun Teşekkülü ve Çalışma Esasları Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 14,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-4.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-5.pdf",
+      "source_document_id": "regulation-calisma-hayatina-iliskin-uclu-danisma-kurulunun-calisma-usul-ve-esaslari-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Çalışma Hayatına İlişkin Üçlü Danışma Kurulunun Çalışma Usul ve Esasları Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 12,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-5.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-6.pdf",
+      "source_document_id": "regulation-is-kanununa-iliskin-fazla-calisma-ve-fazla-surelerle-calisma-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "İş Kanununa İlişkin Fazla Çalışma ve Fazla Sürelerle Çalışma Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 12,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-6.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-7.pdf",
+      "source_document_id": "regulation-cocuk-ve-genc-iscilerin-calistirilma-usul-ve-esaslari-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Çocuk ve Genç İşçilerin Çalıştırılma Usul ve Esasları Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 18,
+            "required_labels": [
+              "5/A"
+            ]
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-7.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-8.pdf",
+      "source_document_id": "regulation-haftalik-is-gunlerine-bolunemeyen-calisma-sureleri-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Haftalık İş Günlerine Bölünemeyen Çalışma Süreleri Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 18,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-8.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf-9.pdf",
+      "source_document_id": "regulation-is-kanununa-iliskin-calisma-sureleri-yonetmeligi-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "İş Kanununa İlişkin Çalışma Süreleri Yönetmeliği",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 13,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf-9.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yonetmelık/GeneratePdf.pdf",
+      "source_document_id": "regulation-yuzdelerden-toplanan-paralarin-iscilere-dagitilmasi-hakkinda-yonetmelik-current",
+      "metadata": {
+        "source_name": "mevzuat",
+        "source_url": "https://www.mevzuat.gov.tr/",
+        "source_kind": "legislation",
+        "document_type": "regulation",
+        "domain": "labour_law",
+        "title": "Yüzdelerden Toplanan Paraların İşçilere Dağıtılması Hakkında Yönetmelik",
+        "authority": "Türkiye Cumhuriyeti",
+        "related_legislation": [],
+        "domain_metadata": {
+          "corpus_role": "core",
+          "article_expectations": {
+            "required_numeric_start": 1,
+            "required_numeric_end": 16,
+            "required_labels": []
+          },
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "GeneratePdf.pdf"
+          }
+        }
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2022-11518.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2022-10426-2022-11518",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2022/11518",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2022-11518.pdf"
+          }
+        },
+        "case_number": "2022/10426",
+        "document_date": "2022-09-29",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2022/10426, K. 2022/11518"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2022-15752.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2022-12490-2022-15752",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2022/15752",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2022-15752.pdf"
+          }
+        },
+        "case_number": "2022/12490",
+        "document_date": "2022-12-08",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2022/12490, K. 2022/15752"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2022-16939.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2022-13959-2022-16939",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2022/16939",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2022-16939.pdf"
+          }
+        },
+        "case_number": "2022/13959",
+        "document_date": "2022-12-29",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2022/13959, K. 2022/16939"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2022-504.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2021-12661-2022-504",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2022/504",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2022-504.pdf"
+          }
+        },
+        "case_number": "2021/12661",
+        "document_date": "2022-01-17",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2021/12661, K. 2022/504"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2022-5817.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2022-328-2022-5817",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2022/5817",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2022-5817.pdf"
+          }
+        },
+        "case_number": "2022/328",
+        "document_date": "2022-04-18",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2022/328, K. 2022/5817"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2023-13515.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2023-14022-2023-13515",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2023/13515",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2023-13515.pdf"
+          }
+        },
+        "case_number": "2023/14022",
+        "document_date": "2023-12-26",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2023/14022, K. 2023/13515"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2023-1670.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2022-14391-2023-1670",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2023/1670",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2023-1670.pdf"
+          }
+        },
+        "case_number": "2022/14391",
+        "document_date": "2023-02-23",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2022/14391, K. 2023/1670"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2025-2038.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2024-11541-2025-2038",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2025/2038",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2025-2038.pdf"
+          }
+        },
+        "case_number": "2024/11541",
+        "document_date": "2025-02-17",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2024/11541, K. 2025/2038"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2025-6396.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2024-16015-2025-6396",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2025/6396",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2025-6396.pdf"
+          }
+        },
+        "case_number": "2024/16015",
+        "document_date": "2025-04-22",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2024/16015, K. 2025/6396"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/10. Hukuk Dairesi 2025-8321.pdf",
+      "source_document_id": "decision-yargitay-10-hukuk-dairesi-2025-3647-2025-8321",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "10. Hukuk Dairesi",
+        "decision_number": "2025/8321",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "10. Hukuk Dairesi 2025-8321.pdf"
+          }
+        },
+        "case_number": "2025/3647",
+        "document_date": "2025-05-15",
+        "title": "Yargıtay 10. Hukuk Dairesi, E. 2025/3647, K. 2025/8321"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-11813.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-11726-2022-11813",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/11813",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-11813.pdf"
+          }
+        },
+        "case_number": "2022/11726",
+        "document_date": "2022-10-11",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/11726, K. 2022/11813"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-12674.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-10185-2022-12674",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/12674",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-12674.pdf"
+          }
+        },
+        "case_number": "2022/10185",
+        "document_date": "2022-10-17",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/10185, K. 2022/12674"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-14451.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-13005-2022-14451",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/14451",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-14451.pdf"
+          }
+        },
+        "case_number": "2022/13005",
+        "document_date": "2022-11-07",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/13005, K. 2022/14451"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-14980.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-13588-2022-14980",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/14980",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-14980.pdf"
+          }
+        },
+        "case_number": "2022/13588",
+        "document_date": "2022-11-22",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/13588, K. 2022/14980"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-15969.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-15710-2022-15969",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/15969",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-15969.pdf"
+          }
+        },
+        "case_number": "2022/15710",
+        "document_date": "2022-12-05",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/15710, K. 2022/15969"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-5867.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-5012-2022-5867",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/5867",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-5867.pdf"
+          }
+        },
+        "case_number": "2022/5012",
+        "document_date": "2022-05-11",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/5012, K. 2022/5867"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-6388.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-5243-2022-6388",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/6388",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-6388.pdf"
+          }
+        },
+        "case_number": "2022/5243",
+        "document_date": "2022-05-23",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/5243, K. 2022/6388"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2022-9929.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-8792-2022-9929",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2022/9929",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2022-9929.pdf"
+          }
+        },
+        "case_number": "2022/8792",
+        "document_date": "2022-09-20",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/8792, K. 2022/9929"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-107.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-16017-2023-107",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/107",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-107.pdf"
+          }
+        },
+        "case_number": "2022/16017",
+        "document_date": "2023-01-10",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/16017, K. 2023/107"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-1191.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-438-2023-1191",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/1191",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-1191.pdf"
+          }
+        },
+        "case_number": "2023/438",
+        "document_date": "2023-01-23",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/438, K. 2023/1191"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-1608.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-577-2023-1608",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/1608",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-1608.pdf"
+          }
+        },
+        "case_number": "2023/577",
+        "document_date": "2023-02-07",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/577, K. 2023/1608"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-1633.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-10602-2023-1633",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/1633",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-1633.pdf"
+          }
+        },
+        "case_number": "2022/10602",
+        "document_date": "2023-02-07",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/10602, K. 2023/1633"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-16991.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-17050-2023-16991",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/16991",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-16991.pdf"
+          }
+        },
+        "case_number": "2023/17050",
+        "document_date": "2023-11-08",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/17050, K. 2023/16991"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-189.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2022-18773-2023-189",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/189",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-189.pdf"
+          }
+        },
+        "case_number": "2022/18773",
+        "document_date": "2023-01-12",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2022/18773, K. 2023/189"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-2707.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-2283-2023-2707",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/2707",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-2707.pdf"
+          }
+        },
+        "case_number": "2023/2283",
+        "document_date": "2023-02-21",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/2283, K. 2023/2707"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-3579.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-3338-2023-3579",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/3579",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-3579.pdf"
+          }
+        },
+        "case_number": "2023/3338",
+        "document_date": "2023-03-13",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/3338, K. 2023/3579"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2023-5088.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2023-5840-2023-5088",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2023/5088",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2023-5088.pdf"
+          }
+        },
+        "case_number": "2023/5840",
+        "document_date": "2023-04-06",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2023/5840, K. 2023/5088"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2025-6378.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2025-4449-2025-6378",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2025/6378",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2025-6378.pdf"
+          }
+        },
+        "case_number": "2025/4449",
+        "document_date": "2025-09-15",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2025/4449, K. 2025/6378"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/9. Hukuk Dairesi 2025-7050.pdf",
+      "source_document_id": "decision-yargitay-9-hukuk-dairesi-2025-6193-2025-7050",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "9. Hukuk Dairesi",
+        "decision_number": "2025/7050",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "9. Hukuk Dairesi 2025-7050.pdf"
+          }
+        },
+        "case_number": "2025/6193",
+        "document_date": "2025-09-29",
+        "title": "Yargıtay 9. Hukuk Dairesi, E. 2025/6193, K. 2025/7050"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2022-1264.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-10-520-2022-1264",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2022/1264",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2022-1264.pdf"
+          }
+        },
+        "case_number": "2022/10-520",
+        "document_date": "2022-10-05",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/10-520, K. 2022/1264"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-1044.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-9-1222-2023-1044",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/1044",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-1044.pdf"
+          }
+        },
+        "case_number": "2022/9-1222",
+        "document_date": "2023-11-01",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/9-1222, K. 2023/1044"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-240.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2023-9-186-2023-240",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/240",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-240.pdf"
+          }
+        },
+        "case_number": "2023/9-186",
+        "document_date": "2023-03-22",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2023/9-186, K. 2023/240"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-365.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-9-1012-2023-365",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/365",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-365.pdf"
+          }
+        },
+        "case_number": "2022/9-1012",
+        "document_date": "2023-04-26",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/9-1012, K. 2023/365"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-40.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-10-793-2023-40",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/40",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-40.pdf"
+          }
+        },
+        "case_number": "2022/10-793",
+        "document_date": "2023-02-08",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/10-793, K. 2023/40"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-420.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2023-10-153-2023-420",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/420",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-420.pdf"
+          }
+        },
+        "case_number": "2023/10-153",
+        "document_date": "2023-05-03",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2023/10-153, K. 2023/420"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-82.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-10-138-2023-82",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/82",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-82.pdf"
+          }
+        },
+        "case_number": "2022/10-138",
+        "document_date": "2023-02-15",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/10-138, K. 2023/82"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-86.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-9-303-2023-86",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/86",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-86.pdf"
+          }
+        },
+        "case_number": "2022/9-303",
+        "document_date": "2023-02-15",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/9-303, K. 2023/86"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-888.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-9-1277-2023-888",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/888",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-888.pdf"
+          }
+        },
+        "case_number": "2022/9-1277",
+        "document_date": "2023-10-04",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/9-1277, K. 2023/888"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2023-983.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2022-9-1193-2023-983",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2023/983",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2023-983.pdf"
+          }
+        },
+        "case_number": "2022/9-1193",
+        "document_date": "2023-10-18",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2022/9-1193, K. 2023/983"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2024-360.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2023-9-996-2024-360",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2024/360",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2024-360.pdf"
+          }
+        },
+        "case_number": "2023/9-996",
+        "document_date": "2024-07-03",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2023/9-996, K. 2024/360"
+      }
+    },
+    {
+      "adapter": "local_file",
+      "input_path": "yargıtay ıctıhat kararı/Hukuk Genel Kurulu 2025-503.pdf",
+      "source_document_id": "decision-yargitay-hukuk-genel-kurulu-2024-10-238-2025-503",
+      "metadata": {
+        "source_name": "yargitay",
+        "source_url": "https://karararama.yargitay.gov.tr/",
+        "source_kind": "court_decision",
+        "document_type": "court_decision",
+        "domain": "labour_law",
+        "authority": "Yargıtay",
+        "chamber": "Hukuk Genel Kurulu",
+        "decision_number": "2025/503",
+        "domain_metadata": {
+          "corpus_role": "core",
+          "court_metadata_requirements": "complete",
+          "acquisition": {
+            "method": "manual_official_export",
+            "source_file_name": "Hukuk Genel Kurulu 2025-503.pdf"
+          }
+        },
+        "case_number": "2024/10-238",
+        "document_date": "2025-09-10",
+        "title": "Yargıtay Hukuk Genel Kurulu, E. 2024/10-238, K. 2025/503"
+      }
+    }
+  ],
+  "decision_queries": [
+    "işe iade",
+    "geçerli fesih",
+    "performans düşüklüğü"
+  ],
+  "decision_target_minimum": 49,
+  "decision_target_maximum": 100,
+  "quality_gates": {
+    "document_count": 95,
+    "legislation_count": 46,
+    "decision_count": 49
+  },
+  "retire_on_publish": [
+    "labour-law-pilot-v1",
+    "labour-law-pilot-v2",
+    "labour-law-pilot-v3"
+  ]
+}
+

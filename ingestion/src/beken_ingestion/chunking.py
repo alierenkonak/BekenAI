@@ -6,12 +6,28 @@ from dataclasses import dataclass
 from beken_ingestion.models import DocumentChunk, LegalUnit
 from beken_ingestion.normalization import stable_hash
 
-PARSER_VERSION = "2026.08.3"
+PARSER_VERSION = "2026.08.4"
 
 _DECISION_SECTION = re.compile(
-    r"(?im)^(?P<header>İDDİA|DAVACI(?:NIN)? İSTEMİ|SAVUNMA|DAVALI(?:NIN)? CEVABI|"
-    r"GEREKÇE|HUKUKİ DEĞERLENDİRME|SONUÇ|HÜKÜM)\s*:?[ \t]*$"
+    r"(?im)^\s*(?:(?P<roman>[IVXLCDM]+)\s*[.)]\s*)?"
+    r"(?P<header>HUKUKİ KAVRAMLAR|HUKUKİ KONULAR|ANAHTAR KELİMELER|ÖZET|"
+    r"İDDİA|DAVA|DAVACI(?:NIN)? İSTEMİ|SAVUNMA|CEVAP|DAVALI(?:NIN)? CEVABI|"
+    r"YARGILAMA SÜRECİ|UYUŞMAZLIK|İLK DERECE MAHKEMESİ KARARI|"
+    r"BÖLGE ADLİYE MAHKEMESİ KARARI|İSTİNAF|ÖZEL DAİRE BOZMA KARARI|"
+    r"BOZMA VE BOZMADAN SONRAKİ YARGILAMA SÜRECİ|DİRENME KARARI|TEMYİZ|"
+    r"GEREKÇE|HUKUKİ DEĞERLENDİRME|SONUÇ|HÜKÜM|KARAR)\s*:?[ \t]*$"
 )
+_DECISION_SECTION_KINDS = {
+    "davacının istemi": "davacı_istemi",
+    "davacı istemi": "davacı_istemi",
+    "davalının cevabı": "davalı_cevabı",
+    "davalı cevabı": "davalı_cevabı",
+    "hukuki değerlendirme": "gerekçe",
+}
+
+
+def _turkish_lower(value: str) -> str:
+    return value.translate(str.maketrans({"I": "ı", "İ": "i"})).lower()
 _PRIMARY_LEGISLATION_TYPES = {
     "metadata",
     "book",
@@ -63,7 +79,8 @@ def _structured_sections(text: str, source_kind: str) -> list[Section]:
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
         label = match.group("header")
-        kind = label.casefold().replace(" ", "_")
+        normalized = _turkish_lower(label)
+        kind = _DECISION_SECTION_KINDS.get(normalized, normalized.replace(" ", "_"))
         sections.append(Section(kind, match.start(), end, label))
     return sections
 
