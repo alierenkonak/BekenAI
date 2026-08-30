@@ -14,10 +14,14 @@ from beken_ingestion.chunking import PARSER_VERSION, build_chunks
 from beken_ingestion.legal_structure import audit_article_structure, parse_legal_structure
 from beken_ingestion.models import DocumentChunk, LegalUnit, ParsedDocument, RawDocument, TextPage
 from beken_ingestion.normalization import normalize_legal_text, normalized_identifier, stable_hash
+from beken_ingestion.parser_registry import ParserRegistry, UnsupportedDocumentType
 
 
 class ExtractionError(ValueError):
     """Raised when a document cannot yield reliable text."""
+
+
+PARSER_REGISTRY = ParserRegistry()
 
 
 _ARTICLE_UNIT_TYPES = {
@@ -366,22 +370,19 @@ def _validate_legislation_structure(
         )
 
 
-def parse_document(raw: RawDocument) -> ParsedDocument:
+def _build_parsed_document(
+    *,
+    raw: RawDocument,
+    source_kind: str,
+    document_type: str,
+    domain: str,
+    text: str,
+    page_spans: list[tuple[int, int, int | None]],
+    extraction_method: str,
+    cleaned_page_count: int,
+    court: dict[str, Any],
+) -> ParsedDocument:
     supplied = raw.metadata
-    source_kind = str(supplied.get("source_kind", "court_decision"))
-    if source_kind not in {"legislation", "court_decision"}:
-        raise ExtractionError(f"Unsupported source kind: {source_kind}")
-    pages, extraction_method = extract_pages(raw)
-    text, page_spans, cleaned_page_count = _join_pages(
-        pages,
-        clean_court_export=source_kind == "court_decision",
-    )
-    if len(text) < 40:
-        raise ExtractionError("Document contains too little extractable text")
-
-    court = _court_metadata(text, supplied) if source_kind == "court_decision" else {}
-    if source_kind == "court_decision":
-        _validate_court_metadata(court, supplied)
     canonical_hash = stable_hash(text)
     has_complete_court_metadata = all(
         court.get(field) for field in ("authority", "chamber", "case_number", "decision_number")
@@ -453,8 +454,8 @@ def parse_document(raw: RawDocument) -> ParsedDocument:
         source_name=raw.source_name,
         source_document_id=raw.source_document_id,
         source_kind=source_kind,
-        document_type=str(supplied.get("document_type") or source_kind),
-        domain=str(supplied.get("domain") or "labour_law"),
+        document_type=document_type,
+        domain=domain,
         title=title,
         authority=metadata.get("authority"),
         chamber=metadata.get("chamber"),
@@ -475,3 +476,95 @@ def parse_document(raw: RawDocument) -> ParsedDocument:
         provision_events=provision_events,
         chunks=chunks,
     )
+
+
+@PARSER_REGISTRY.register("legislation", "law")
+def _parse_law(
+    raw: RawDocument,
+    pages: list[TextPage],
+    extraction_method: str,
+    domain: str,
+) -> ParsedDocument:
+    text, page_spans, cleaned_page_count = _join_pages(pages)
+    if len(text) < 40:
+        raise ExtractionError("Document contains too little extractable text")
+    return _build_parsed_document(
+        raw=raw,
+        source_kind="legislation",
+        document_type="law",
+        domain=domain,
+        text=text,
+        page_spans=page_spans,
+        extraction_method=extraction_method,
+        cleaned_page_count=cleaned_page_count,
+        court={},
+    )
+
+
+@PARSER_REGISTRY.register("legislation", "regulation")
+def _parse_regulation(
+    raw: RawDocument,
+    pages: list[TextPage],
+    extraction_method: str,
+    domain: str,
+) -> ParsedDocument:
+    text, page_spans, cleaned_page_count = _join_pages(pages)
+    if len(text) < 40:
+        raise ExtractionError("Document contains too little extractable text")
+    return _build_parsed_document(
+        raw=raw,
+        source_kind="legislation",
+        document_type="regulation",
+        domain=domain,
+        text=text,
+        page_spans=page_spans,
+        extraction_method=extraction_method,
+        cleaned_page_count=cleaned_page_count,
+        court={},
+    )
+
+
+@PARSER_REGISTRY.register("court_decision", "court_decision")
+def _parse_court_decision(
+    raw: RawDocument,
+    pages: list[TextPage],
+    extraction_method: str,
+    domain: str,
+) -> ParsedDocument:
+    text, page_spans, cleaned_page_count = _join_pages(
+        pages, clean_court_export=True
+    )
+    if len(text) < 40:
+        raise ExtractionError("Document contains too little extractable text")
+    court = _court_metadata(text, raw.metadata)
+    _validate_court_metadata(court, raw.metadata)
+    return _build_parsed_document(
+        raw=raw,
+        source_kind="court_decision",
+        document_type="court_decision",
+        domain=domain,
+        text=text,
+        page_spans=page_spans,
+        extraction_method=extraction_method,
+        cleaned_page_count=cleaned_page_count,
+        court=court,
+    )
+
+
+def parse_document(raw: RawDocument) -> ParsedDocument:
+    supplied = raw.metadata
+    source_kind = str(supplied.get("source_kind") or "").strip()
+    document_type = str(supplied.get("document_type") or "").strip()
+    domain = str(supplied.get("domain") or "").strip()
+    if not source_kind or not document_type:
+        raise ExtractionError(
+            "unsupported_document_type: source_kind and document_type are required"
+        )
+    if not domain:
+        raise ExtractionError("document_domain_required: domain must be explicit")
+    try:
+        parser = PARSER_REGISTRY.resolve(source_kind, document_type)
+    except UnsupportedDocumentType as exc:
+        raise ExtractionError(str(exc)) from exc
+    pages, extraction_method = extract_pages(raw)
+    return parser(raw, pages, extraction_method, domain)

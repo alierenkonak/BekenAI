@@ -1,0 +1,34 @@
+{
+  "multilingual-e5-base": {
+    "model_id": "intfloat/multilingual-e5-base",
+    "revision": "d128750597153bb5987e10b1c3493a34e5a4502a",
+    "dimensions": 768,
+    "max_tokens": 512,
+    "backend": "torch",
+    "safe_artifact": "model.safetensors",
+    "query_prefix": "query: ",
+    "passage_prefix": "passage: "
+  },
+  "bge-m3": {
+    "model_id": "BAAI/bge-m3",
+    "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+    "dimensions": 1024,
+    "max_tokens": 8192,
+    "backend": "onnx",
+    "safe_artifact": "onnx/model.onnx",
+    "query_prefix": "",
+    "passage_prefix": ""
+  },
+  "mmarco-minilm": {
+    "model_id": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd652930e4ba29e8149678df786c240d8825",
+    "backend": "torch",
+    "safe_artifact": "model.safetensors"
+  },
+  "bge-reranker-v2-m3": {
+    "model_id": "BAAI/bge-reranker-v2-m3",
+    "revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
+    "backend": "torch",
+    "safe_artifact": "model.safetensors"
+  }
+}

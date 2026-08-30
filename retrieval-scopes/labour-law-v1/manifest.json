@@ -1,0 +1,72 @@
+{
+  "version": "labour-law-v1",
+  "domain": "labour_law",
+  "corpus_version": "labour-law-pilot-v4",
+  "review_status": "reviewed",
+  "context_builder_version": "legal-context-v1",
+  "description": "İş hukuku core belgelerinin tamamı ve tamamlayıcı mevzuatın iş hukukuyla ilişkili hükümleri için taslak retrieval kapsamı.",
+  "roles": {
+    "core": {"include": true, "mode": "full_document"},
+    "supplemental": {"include": true, "mode": "provision_allowlist"},
+    "future_domain": {"include": false, "mode": "excluded"}
+  },
+  "supplemental_allowlist": [
+    {
+      "legislation_number": "6098",
+      "title": "Türk Borçlar Kanunu",
+      "articles": ["49-76", "112-126", "132-161", "393-469"],
+      "reason": "İşveren sorumluluğu, borca aykırılık, zamanaşımı ve hizmet sözleşmesi hükümleri"
+    },
+    {
+      "legislation_number": "6100",
+      "title": "Hukuk Muhakemeleri Kanunu",
+      "articles": ["24-45", "106-113", "118-186", "187-293", "316-322", "341-373", "389-406"],
+      "reason": "Görev/yetki, dava türleri, ispat, basit yargılama, kanun yolları ve geçici koruma"
+    },
+    {
+      "legislation_number": "815",
+      "title": "Kabotaj Kanunu",
+      "articles": ["*"],
+      "reason": "Kısa kanunun çalışma hakkıyla bağlantılı hükümleri"
+    },
+    {
+      "legislation_number": "4721",
+      "title": "Türk Medeni Kanunu",
+      "articles": ["2", "4", "6", "23-25"],
+      "reason": "Dürüstlük kuralı, takdir, ispat ve kişilik hakları"
+    },
+    {
+      "legislation_number": "5237",
+      "title": "Türk Ceza Kanunu",
+      "articles": ["85-89", "105", "117-119", "123", "125", "132-140", "155", "257"],
+      "reason": "İş kazası, taciz, çalışma özgürlüğü, özel hayat ve güveni kötüye kullanma bağlantıları"
+    },
+    {
+      "legislation_number": "6458",
+      "title": "Yabancılar ve Uluslararası Koruma Kanunu",
+      "articles": ["27", "41", "54"],
+      "reason": "Yabancıların çalışma ve ikamet statüsüyle doğrudan bağlantılı hükümler"
+    },
+    {
+      "legislation_number": "6698",
+      "title": "Kişisel Verilerin Korunması Kanunu",
+      "articles": ["4-12", "18"],
+      "reason": "İşverenin çalışan verisi işleme, aydınlatma ve güvenlik yükümlülükleri"
+    },
+    {
+      "legislation_number": "6769",
+      "title": "Sınai Mülkiyet Kanunu",
+      "articles": ["113-122"],
+      "reason": "Çalışan buluşları ve hizmet buluşları"
+    }
+  ],
+  "model_candidates": ["multilingual-e5-base", "bge-m3"],
+  "reranker_candidates": ["mmarco-minilm", "bge-reranker-v2-m3"],
+  "quality_gate": {
+    "recall_at_10": 0.8,
+    "hybrid_rerank_ndcg_delta": 0.02,
+    "warm_p95_seconds": 3.0,
+    "peak_process_memory_gb": 6.0,
+    "embedding_tie_delta": 0.01
+  }
+}

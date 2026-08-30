@@ -264,6 +264,7 @@ def import_yargitay(args: argparse.Namespace, settings: IngestionSettings) -> in
         ) as adapter:
             for item, next_checkpoint in adapter.search(
                 args.query,
+                domain=args.domain,
                 page_size=args.page_size,
                 start_page=start_page,
                 max_documents=args.max_documents,
@@ -721,6 +722,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     yargitay = subparsers.add_parser("import-yargitay")
     yargitay.add_argument("query")
+    yargitay.add_argument("--domain", required=True)
     yargitay.add_argument("--corpus-version", default="labour-law-pilot-v1")
     yargitay.add_argument("--page-size", type=int, default=10)
     yargitay.add_argument("--max-documents", type=int, default=100)

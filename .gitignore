@@ -44,6 +44,8 @@ corpus/
 raw_data/
 uploads/
 indexes/
+retrieval_data/
+benchmark_reports/
 models/
 *.faiss
 *.onnx
@@ -52,6 +54,11 @@ models/
 *.gguf
 *.pt
 *.pth
+
+# Local evaluation UI and generated review files (keep canonical queries/manifests)
+/evals/reviewer/
+/evals/**/queries.*.pending.jsonl
+*.review-progress.jsonl
 
 # Local services
 postgres_data/

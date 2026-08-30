@@ -79,7 +79,7 @@ def test_yargitay_skips_one_failed_document_and_continues() -> None:
         max_attempts=1,
         transport=httpx.MockTransport(handler),
     ) as adapter:
-        results = list(adapter.search("işe iade", max_documents=2))
+        results = list(adapter.search("işe iade", domain="labour_law", max_documents=2))
 
     assert isinstance(results[0][0], SourceDocumentFailure)
     assert results[0][0].source_document_id == "bad"

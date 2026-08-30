@@ -144,10 +144,13 @@ class YargitayAdapter(OfficialHttpAdapter):
         self,
         query: str,
         *,
+        domain: str,
         page_size: int = 10,
         start_page: int = 1,
         max_documents: int = 100,
     ) -> Iterator[tuple[RawDocument | SourceDocumentFailure, dict[str, Any]]]:
+        if not domain.strip():
+            raise ValueError("Yargıtay import requires an explicit domain")
         self.request("GET", f"{self.base_url}/")
         form = {"arananKelime": query}
         initial = self.request("POST", f"{self.base_url}/arama", json={"data": form})
@@ -200,7 +203,7 @@ class YargitayAdapter(OfficialHttpAdapter):
                         metadata={
                             "source_kind": "court_decision",
                             "document_type": "court_decision",
-                            "domain": "labour_law",
+                            "domain": domain,
                             "authority": "Yargıtay",
                             "chamber": row.get("daire"),
                             "case_number": row.get("esasNo"),
