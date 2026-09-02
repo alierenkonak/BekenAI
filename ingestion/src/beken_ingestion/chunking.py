@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from beken_ingestion.models import DocumentChunk, LegalUnit
 from beken_ingestion.normalization import stable_hash
 
-PARSER_VERSION = "2026.08.4"
+PARSER_VERSION = "2026.09.1"
 
 _DECISION_SECTION = re.compile(
     r"(?im)^\s*(?:(?P<roman>[IVXLCDM]+)\s*[.)]\s*)?"
@@ -148,7 +148,10 @@ def _breadcrumb(
     for ancestor in reversed(chain):
         if ancestor.unit_type == "metadata":
             continue
-        if ancestor.unit_type in {"book", "part", "chapter", "section"} and ancestor.heading:
+        doctrine_label = ancestor.metadata.get("breadcrumb_label")
+        if isinstance(doctrine_label, str) and doctrine_label:
+            value = doctrine_label
+        elif ancestor.unit_type in {"book", "part", "chapter", "section"} and ancestor.heading:
             value = ancestor.heading
         else:
             display = _TYPE_LABELS.get(ancestor.unit_type)
@@ -174,6 +177,17 @@ def build_chunks(
             Section(unit.unit_type, unit.char_start, unit.char_end, unit.label)
             for unit in legal_units
             if unit.unit_type in _PRIMARY_LEGISLATION_TYPES
+        ]
+    elif source_kind == "doctrine" and legal_units:
+        ordered = sorted(legal_units, key=lambda unit: (unit.char_start, unit.unit_index))
+        sections = [
+            Section(
+                unit.unit_type,
+                unit.char_start,
+                ordered[index + 1].char_start if index + 1 < len(ordered) else len(text),
+                unit.label,
+            )
+            for index, unit in enumerate(ordered)
         ]
     else:
         sections = _structured_sections(text, source_kind) or _fallback_sections(text)
@@ -212,6 +226,13 @@ def build_chunks(
             metadata["breadcrumb"] = breadcrumb
         if most_specific and most_specific.unit_type == "annex":
             metadata["table_parse_status"] = "unparsed"
+        if most_specific:
+            metadata["retrieval_eligible"] = bool(
+                most_specific.metadata.get("retrieval_eligible", True)
+            )
+        end_page = _page_for_offset(page_spans, max(start, end - 1))
+        if end_page is not None:
+            metadata["page_end"] = end_page
         chunks.append(
             DocumentChunk(
                 chunk_index=len(chunks),

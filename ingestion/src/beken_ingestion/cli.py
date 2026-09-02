@@ -150,6 +150,10 @@ def _merge_reparse_metadata(
             "document_type",
             "domain",
             "title",
+            "author",
+            "publication_year",
+            "citation_text",
+            "rights_basis",
             "authority",
             "chamber",
             "case_number",
@@ -264,6 +268,7 @@ def import_yargitay(args: argparse.Namespace, settings: IngestionSettings) -> in
         ) as adapter:
             for item, next_checkpoint in adapter.search(
                 args.query,
+                domain=args.domain,
                 page_size=args.page_size,
                 start_page=start_page,
                 max_documents=args.max_documents,
@@ -393,7 +398,7 @@ def import_directory(args: argparse.Namespace, settings: IngestionSettings) -> i
                     str(exc),
                     retryable=False,
                     attempt=1,
-                    source_url=path.resolve().as_uri(),
+                    source_url=None,
                     source_document_id=path.stem,
                 )
                 repository.checkpoint_run(
@@ -721,6 +726,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     yargitay = subparsers.add_parser("import-yargitay")
     yargitay.add_argument("query")
+    yargitay.add_argument("--domain", required=True)
     yargitay.add_argument("--corpus-version", default="labour-law-pilot-v1")
     yargitay.add_argument("--page-size", type=int, default=10)
     yargitay.add_argument("--max-documents", type=int, default=100)

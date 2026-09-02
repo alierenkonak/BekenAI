@@ -1,0 +1,49 @@
+{
+  "version": "labour-law-doctrine-v1",
+  "parser_version": "2026.09.1",
+  "description": "İzinli 2026 tarihli iş hukuku ders notunu ayrı doktrin/yardımcı kaynak kanalında sunan sürümlü corpus.",
+  "local_sources": [
+    {
+      "adapter": "local_file",
+      "input_path": "İş Hukuku Ders Notu 2026.pdf",
+      "source_document_id": "course-note-ragip-karakus-is-hukuku-2026",
+      "metadata": {
+        "source_name": "ragip-karakus",
+        "source_url": "https://www.ragipkarakus.com/ishukukunot",
+        "source_kind": "doctrine",
+        "document_type": "course_note",
+        "domain": "labour_law",
+        "title": "İş Hukuku Ders Notu (2026)",
+        "author": "Ragıp Karakuş",
+        "publication_year": 2026,
+        "citation_text": "Ragıp Karakuş, İş Hukuku Ders Notu, 2026.",
+        "rights_basis": "user_attested_full_use_permission_2026-09-01",
+        "content_page_start": 11,
+        "domain_metadata": {
+          "corpus_role": "supplemental",
+          "source_group": "doctrine_auxiliary",
+          "binding_authority": false,
+          "acquisition": {
+            "method": "manual_authorized_copy",
+            "source_file_name": "İş Hukuku Ders Notu 2026.pdf"
+          },
+          "permission_scope": {
+            "storage": true,
+            "text_extraction": true,
+            "chunking": true,
+            "embedding": true,
+            "retrieval_display": true,
+            "answer_generation": true,
+            "attested_by": "project_owner",
+            "attested_at": "2026-09-01"
+          }
+        }
+      }
+    }
+  ],
+  "quality_gates": {
+    "document_count": 1,
+    "legislation_count": 0,
+    "decision_count": 0
+  }
+}

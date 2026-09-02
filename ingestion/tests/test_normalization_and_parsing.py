@@ -28,6 +28,7 @@ def test_legislation_is_chunked_by_article_with_exact_offsets() -> None:
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "title": "4857 sayılı İş Kanunu",
             "related_legislation": ["4857"],
         },
@@ -47,6 +48,7 @@ def test_court_decision_variants_receive_the_same_legal_fingerprint() -> None:
     metadata = {
         "source_kind": "court_decision",
         "document_type": "court_decision",
+            "domain": "labour_law",
         "authority": "Yargıtay",
         "chamber": "9. Hukuk Dairesi",
         "case_number": "2024/100",
@@ -96,7 +98,11 @@ def test_parser_uses_deterministic_paragraph_fallback() -> None:
             "Birinci paragraf yeterli uzunlukta bir hukuki açıklama içerir.\n\n"
             "İkinci paragraf da veri kaybetmeden ayrı bir pasaj olarak korunur."
         ).encode(),
-        metadata={"source_kind": "court_decision", "document_type": "court_decision"},
+        metadata={
+            "source_kind": "court_decision",
+            "document_type": "court_decision",
+            "domain": "labour_law",
+        },
     )
 
     parsed = parse_document(raw)
@@ -106,6 +112,34 @@ def test_parser_uses_deterministic_paragraph_fallback() -> None:
         "Birinci paragraf yeterli uzunlukta bir hukuki açıklama içerir."
         "İkinci paragraf da veri kaybetmeden ayrı bir pasaj olarak korunur."
     ).replace(" ", "")
+
+
+def test_parser_rejects_missing_domain_and_unsupported_type() -> None:
+    common = {
+        "source_name": "manual",
+        "source_document_id": "explicit-contract",
+        "source_url": "file:///tmp/explicit-contract.txt",
+        "media_type": "text/plain",
+        "content": b"Bu belge guvenilir parsing icin yeterli uzunlukta bir metin icerir.",
+    }
+    with pytest.raises(ExtractionError, match="document_domain_required"):
+        parse_document(
+            RawDocument(
+                **common,
+                metadata={"source_kind": "legislation", "document_type": "law"},
+            )
+        )
+    with pytest.raises(ExtractionError, match="unsupported_document_type"):
+        parse_document(
+            RawDocument(
+                **common,
+                metadata={
+                    "source_kind": "administrative_decision",
+                    "document_type": "private_ruling",
+                    "domain": "tax_law",
+                },
+            )
+        )
 
 
 def test_legislation_parser_preserves_hierarchy_special_articles_and_events() -> None:
@@ -142,6 +176,7 @@ def test_legislation_parser_preserves_hierarchy_special_articles_and_events() ->
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "title": "Test Kanunu",
         },
     )
@@ -149,7 +184,7 @@ def test_legislation_parser_preserves_hierarchy_special_articles_and_events() ->
     parsed = parse_document(raw)
     unit_types = {unit.unit_type for unit in parsed.legal_units}
 
-    assert parsed.parser_version == "2026.08.4"
+    assert parsed.parser_version == "2026.09.1"
     assert {
         "chapter",
         "article",
@@ -209,7 +244,7 @@ def test_numbered_lines_are_not_subitems_without_an_item_parent() -> None:
             "1) Bu satır bent üst bağlamı olmadan yazılmıştır.\n"
             "13/2/2011 tarihinde yürürlüğe girer."
         ).encode(),
-        metadata={"source_kind": "legislation", "document_type": "law"},
+        metadata={"source_kind": "legislation", "document_type": "law", "domain": "labour_law"},
     )
 
     parsed = parse_document(raw)
@@ -234,6 +269,7 @@ def test_split_article_numbers_and_article_ranges_are_canonicalized() -> None:
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "domain_metadata": {
                 "article_expectations": {
                     "required_numeric_start": 221,
@@ -280,6 +316,7 @@ def test_terminal_supplement_is_preserved_without_creating_false_articles() -> N
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "domain_metadata": {
                 "article_expectations": {
                     "required_numeric_start": 1,
@@ -318,6 +355,7 @@ def test_article_quality_gate_rejects_missing_or_duplicate_core_labels() -> None
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "domain_metadata": {
                 "article_expectations": {
                     "required_numeric_start": 1,
@@ -342,7 +380,7 @@ def test_unnumbered_temporary_article_is_preserved() -> None:
             "MADDE 1- Birinci hüküm yeterli uzunlukta bir açıklama içerir.\n"
             "GEÇİCİ MADDE – Numarasız başlık sessizce atlanmamalıdır."
         ).encode(),
-        metadata={"source_kind": "legislation", "document_type": "law"},
+        metadata={"source_kind": "legislation", "document_type": "law", "domain": "labour_law"},
     )
 
     parsed = parse_document(raw)
@@ -370,6 +408,7 @@ def test_dotted_article_and_supplement_heading_are_recognized() -> None:
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "domain_metadata": {
                 "article_expectations": {
                     "required_numeric_start": 1,
@@ -405,6 +444,7 @@ def test_declared_duplicate_temporary_articles_remain_distinct() -> None:
         metadata={
             "source_kind": "legislation",
             "document_type": "law",
+            "domain": "labour_law",
             "domain_metadata": {
                 "article_expectations": {
                     "required_numeric_start": 1,
@@ -451,6 +491,7 @@ def test_yargitay_export_metadata_and_footers_are_cleaned() -> None:
         metadata={
             "source_kind": "court_decision",
             "document_type": "court_decision",
+            "domain": "labour_law",
             "authority": "Yargıtay",
             "chamber": "Hukuk Genel Kurulu",
             "decision_number": "2022/1264",
@@ -470,3 +511,82 @@ def test_yargitay_export_metadata_and_footers_are_cleaned() -> None:
     assert {"yargılama_süreci", "uyuşmazlık", "gerekçe", "sonuç"} <= {
         chunk.section_type for chunk in parsed.chunks
     }
+
+
+def test_doctrine_course_note_is_structured_and_excludes_bibliography() -> None:
+    body = (
+        "BİRİNCİ BÖLÜM\nBİREYSEL İŞ HUKUKU\n"
+        "§ 1. İŞ HUKUKUNA GİRİŞ\n"
+        "I. İŞ HUKUKUNUN KONUSU\n"
+        "A. İşçi Kavramı\n"
+        + "İşçi ile işveren arasındaki ilişkiyi açıklayan yardımcı kaynak metni. " * 12
+        + "\nB. İşveren Kavramı\n"
+        + "İşverenin yükümlülüklerini açıklayan yardımcı kaynak metni. " * 12
+        + "\nYARARLANILAN KAYNAKLAR\nÖrnek kaynakça kaydı."
+    )
+    raw = RawDocument(
+        source_name="authorized-author",
+        source_document_id="course-note-2026",
+        source_url="https://example.test/course-note",
+        media_type="text/plain",
+        content=body.encode(),
+        metadata={
+            "source_kind": "doctrine",
+            "document_type": "course_note",
+            "domain": "labour_law",
+            "title": "İş Hukuku Ders Notu (2026)",
+            "author": "Örnek Yazar",
+            "publication_year": 2026,
+            "citation_text": "Örnek Yazar, İş Hukuku Ders Notu, 2026.",
+            "rights_basis": "user_attested_permission",
+            "content_page_start": 1,
+        },
+    )
+
+    parsed = parse_document(raw)
+
+    assert parsed.source_kind == "doctrine"
+    assert parsed.author == "Örnek Yazar"
+    assert parsed.publication_year == 2026
+    assert {unit.unit_type for unit in parsed.legal_units} >= {
+        "chapter",
+        "section",
+        "part",
+        "paragraph",
+        "metadata",
+    }
+    bibliography = next(
+        unit for unit in parsed.legal_units if unit.label == "bibliography"
+    )
+    assert bibliography.metadata["retrieval_eligible"] is False
+    bibliography_chunks = [
+        chunk for chunk in parsed.chunks if bibliography.unit_key in chunk.unit_keys
+    ]
+    assert bibliography_chunks
+    assert all(
+        chunk.metadata["retrieval_eligible"] is False
+        for chunk in bibliography_chunks
+    )
+    assert all(len(chunk.text) <= 2_500 for chunk in parsed.chunks)
+
+
+def test_doctrine_requires_an_explicit_rights_basis() -> None:
+    raw = RawDocument(
+        source_name="manual",
+        source_document_id="course-note-without-rights",
+        source_url="https://example.test/course-note",
+        media_type="text/plain",
+        content=(
+            "BİRİNCİ BÖLÜM\nBİREYSEL İŞ HUKUKU\n§ 1. GİRİŞ\n"
+            + "Yeterli uzunlukta açıklama. " * 30
+        ).encode(),
+        metadata={
+            "source_kind": "doctrine",
+            "document_type": "course_note",
+            "domain": "labour_law",
+            "content_page_start": 1,
+        },
+    )
+
+    with pytest.raises(ExtractionError, match="rights_basis"):
+        parse_document(raw)

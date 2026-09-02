@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  HF_HUB_OFFLINE: "1"
+  HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
+
 jobs:
   frontend:
     runs-on: ubuntu-latest
@@ -35,9 +39,16 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]"
-      - run: ruff check backend ingestion
-      - run: pytest backend/tests ingestion/tests
+      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev,server]"
+      - name: Audit Python dependencies
+        run: |
+          pip-audit --local --progress-spinner off
+          # PyPI advisory matching ignores the official PyTorch "+cpu" local tag.
+          # Normalize only that tag so the pinned Oracle runtime cannot escape audit.
+          sed 's/+cpu//' deploy/oracle/constraints.txt > /tmp/bekenai-oracle-audit.txt
+          pip-audit --requirement /tmp/bekenai-oracle-audit.txt --no-deps --disable-pip --progress-spinner off
+      - run: ruff check backend ingestion retrieval
+      - run: pytest backend/tests ingestion/tests retrieval/tests
 
   compose:
     runs-on: ubuntu-latest
@@ -48,9 +59,9 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]"
+      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev]"
       - run: docker compose config --quiet
-      - run: docker compose up -d --wait postgres
+      - run: docker compose up -d --wait postgres qdrant
       - name: Validate corpus migrations
         run: |
           set -euo pipefail
@@ -61,7 +72,12 @@ jobs:
         env:
           BEKEN_RUN_DB_TESTS: "1"
           DATABASE_URL: postgresql://beken:local-development-only@localhost:5432/beken
-        run: pytest ingestion/tests/test_database_integration.py
+        run: pytest ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
+      - name: Run Qdrant integration test with fake encoder
+        env:
+          BEKEN_RUN_QDRANT_TESTS: "1"
+          QDRANT_URL: http://localhost:6333
+        run: pytest retrieval/tests/test_qdrant_integration.py
       - name: Stop test infrastructure
         if: always()
         run: docker compose down --volumes

@@ -1,0 +1,120 @@
+{"query_id":"L001","query":"İşveren hiçbir gerekçe göstermeden iş sözleşmemi feshedebilir mi?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:18-19"],"labels":[]}
+{"query_id":"L002","query":"Performans düşüklüğü geçerli fesih sebebi sayılır mı?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:18-19"],"labels":[]}
+{"query_id":"L003","query":"Savunmam alınmadan davranışım nedeniyle işten çıkarılabilir miyim?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:19"],"labels":[]}
+{"query_id":"L004","query":"Fesih bildiriminin yazılı yapılmaması ne sonuç doğurur?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:19"],"labels":[]}
+{"query_id":"L005","query":"İşyerinin küçülmesi geçerli fesih nedeni olabilir mi?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:18"],"labels":[]}
+{"query_id":"L006","query":"İşveren fesihte son çare ilkesine uymak zorunda mı?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L007","query":"Sık rapor almak işten çıkarılma sebebi midir?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:18,25"],"labels":[]}
+{"query_id":"L008","query":"İşçinin sosyal medya paylaşımı haklı fesih sebebi olabilir mi?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:25"],"labels":[]}
+{"query_id":"L009","query":"İşverenin güvenini kötüye kullanmak hangi şartlarda haklı fesih olur?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:25"],"labels":[]}
+{"query_id":"L010","query":"İşçi ücret ödenmediğinde sözleşmesini haklı nedenle feshedebilir mi?","split":"development","domains":["labour_law"],"topic":"fesih","expected_refs":["4857:24,34"],"labels":[]}
+{"query_id":"L011","query":"İşe iade davası açmak için işyerinde kaç işçi olmalı?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:18"],"labels":[]}
+{"query_id":"L012","query":"Altı aylık kıdem şartı hangi çalışanlarda aranmaz?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:18"],"labels":[]}
+{"query_id":"L013","query":"İşe iade için arabulucuya kaç gün içinde başvurmalıyım?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["7036:3","4857:20"],"labels":[]}
+{"query_id":"L014","query":"Arabuluculukta anlaşamazsak işe iade davası süresi nedir?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["7036:3","4857:20"],"labels":[]}
+{"query_id":"L015","query":"İşe iade kararından sonra işverene ne zaman başvurulur?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:21"],"labels":[]}
+{"query_id":"L016","query":"İşveren işe başlatmazsa kaç aylık tazminat öder?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:21"],"labels":[]}
+{"query_id":"L017","query":"Boşta geçen süre ücreti en fazla kaç aylıktır?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:21"],"labels":[]}
+{"query_id":"L018","query":"İşe iade davasında feshin geçerli olduğunu kim ispatlar?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:20"],"labels":[]}
+{"query_id":"L019","query":"İşletmesel kararla yapılan fesihte mahkeme hangi konuları inceler?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L020","query":"Belirli süreli çalışan işe iade talep edebilir mi?","split":"development","domains":["labour_law"],"topic":"işe_iade","expected_refs":["4857:11,18"],"labels":[]}
+{"query_id":"L021","query":"Kıdem tazminatına hak kazanmak için en az ne kadar çalışmak gerekir?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14"],"labels":[]}
+{"query_id":"L022","query":"İstifa eden işçi hangi durumlarda kıdem tazminatı alabilir?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14","4857:24"],"labels":[]}
+{"query_id":"L023","query":"Evlilik nedeniyle ayrılan kadın işçi kıdem tazminatı alır mı?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14"],"labels":[]}
+{"query_id":"L024","query":"Askerlik nedeniyle ayrılan işçiye kıdem tazminatı ödenir mi?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14"],"labels":[]}
+{"query_id":"L025","query":"Emeklilik için yaş dışındaki şartları tamamlayan işçi kıdem alabilir mi?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14"],"labels":[]}
+{"query_id":"L026","query":"Kıdem tazminatı hesabında hangi ödemeler giydirilmiş ücrete eklenir?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14","Yargıtay"],"labels":[]}
+{"query_id":"L027","query":"Kıdem tazminatı tavanı nasıl uygulanır?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["1475:14"],"labels":[]}
+{"query_id":"L028","query":"İhbar süresi işçinin kıdemine göre kaç haftadır?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["4857:17"],"labels":[]}
+{"query_id":"L029","query":"Haklı nedenle fesihte ihbar tazminatı ödenir mi?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["4857:17,24,25"],"labels":[]}
+{"query_id":"L030","query":"İhbar süresi bölünerek kullandırılabilir mi?","split":"development","domains":["labour_law"],"topic":"tazminat","expected_refs":["4857:17"],"labels":[]}
+{"query_id":"L031","query":"Fazla çalışma yaptığımı hangi delillerle ispatlayabilirim?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:41","Yargıtay"],"labels":[]}
+{"query_id":"L032","query":"İmzalı bordro fazla mesai alacağını engeller mi?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L033","query":"Fazla çalışma ücreti saat başına nasıl hesaplanır?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:41"],"labels":[]}
+{"query_id":"L034","query":"Haftalık 45 saatin altındaki sözleşmede fazla sürelerle çalışma nedir?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:41"],"labels":[]}
+{"query_id":"L035","query":"Fazla mesai için işçinin onayı gerekli midir?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:41"],"labels":[]}
+{"query_id":"L036","query":"Yıllık fazla çalışma sınırı kaç saattir?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:41"],"labels":[]}
+{"query_id":"L037","query":"Ulusal bayramda çalışan işçiye kaç günlük ücret ödenir?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:47"],"labels":[]}
+{"query_id":"L038","query":"Hafta tatilinde çalışan işçinin ücreti nasıl hesaplanır?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:46"],"labels":[]}
+{"query_id":"L039","query":"Ücret en geç ne kadar sürede bir ödenmelidir?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:32"],"labels":[]}
+{"query_id":"L040","query":"Ücreti yirmi gün geciken işçi çalışmaktan kaçınabilir mi?","split":"development","domains":["labour_law"],"topic":"ücret","expected_refs":["4857:34"],"labels":[]}
+{"query_id":"L041","query":"Yıllık ücretli izne hak kazanmak için kaç yıl çalışmak gerekir?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:53"],"labels":[]}
+{"query_id":"L042","query":"Bir yıldan beş yıla kadar çalışan işçinin yıllık izni kaç gündür?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:53"],"labels":[]}
+{"query_id":"L043","query":"18 yaşından küçük işçinin yıllık izni en az kaç gün olmalı?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:53"],"labels":[]}
+{"query_id":"L044","query":"Yıllık izin bölünerek kullandırılabilir mi?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:56"],"labels":[]}
+{"query_id":"L045","query":"İşveren yıllık izin tarihini tek başına belirleyebilir mi?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:56","Yönetmelik"],"labels":[]}
+{"query_id":"L046","query":"Kullanılmayan yıllık izin ücreti ne zaman ödenir?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:59"],"labels":[]}
+{"query_id":"L047","query":"Yıllık izinde başka işte çalışmanın sonucu nedir?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:58"],"labels":[]}
+{"query_id":"L048","query":"Deneme süresindeki günler yıllık izin kıdemine dahil mi?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:54"],"labels":[]}
+{"query_id":"L049","query":"Mevsimlik işçiler yıllık izin hakkından yararlanır mı?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["4857:53"],"labels":[]}
+{"query_id":"L050","query":"Yıllık izin kullandığımı işveren mi ispatlar?","split":"development","domains":["labour_law"],"topic":"izin","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L051","query":"Aynı işi yapan kadın ve erkek işçilere farklı ücret verilebilir mi?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:5"],"labels":[]}
+{"query_id":"L052","query":"Hamilelik nedeniyle işten çıkarma ayrımcılık sayılır mı?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:5,18,74"],"labels":[]}
+{"query_id":"L053","query":"Eşit davranmama tazminatı kaç aylık ücret olabilir?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:5"],"labels":[]}
+{"query_id":"L054","query":"Sendika üyeliği nedeniyle farklı işlem yapılırsa hangi tazminat istenir?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["6356:25"],"labels":[]}
+{"query_id":"L055","query":"İşyerinde mobbing olduğunu nasıl ispatlayabilirim?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["6098:417","Yargıtay"],"labels":[]}
+{"query_id":"L056","query":"İşveren çalışanların e-postalarını izleyebilir mi?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["6698:4-12"],"labels":[]}
+{"query_id":"L057","query":"Çalışanın sağlık verisi işveren tarafından hangi şartlarda işlenebilir?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["6698:6"],"labels":[]}
+{"query_id":"L058","query":"İş başvurusunda engellilik nedeniyle ayrımcılık yapılabilir mi?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:5,30"],"labels":[]}
+{"query_id":"L059","query":"Cinsel taciz işçi açısından haklı fesih sebebi midir?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:24"],"labels":[]}
+{"query_id":"L060","query":"İşverenin cinsel tacizi önlememesi hangi sorumlulukları doğurur?","split":"development","domains":["labour_law"],"topic":"eşitlik","expected_refs":["4857:24,25","6098:417"],"labels":[]}
+{"query_id":"L061","query":"Belirli süreli iş sözleşmesi hangi şartlarda yapılabilir?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:11"],"labels":[]}
+{"query_id":"L062","query":"Zincirleme belirli süreli sözleşme ne zaman belirsiz süreliye dönüşür?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:11"],"labels":[]}
+{"query_id":"L063","query":"Deneme süresi en fazla kaç ay olabilir?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:15"],"labels":[]}
+{"query_id":"L064","query":"Deneme süresinde fesihte ihbar tazminatı ödenir mi?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:15"],"labels":[]}
+{"query_id":"L065","query":"Kısmi süreli çalışan emsal işçiden farklı haklara sahip olabilir mi?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:13"],"labels":[]}
+{"query_id":"L066","query":"Çağrı üzerine çalışma sözleşmesinde süre belirlenmezse haftalık kaç saat sayılır?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:14"],"labels":[]}
+{"query_id":"L067","query":"Uzaktan çalışan işçiye ekipmanı kim sağlamalıdır?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:14","Uzaktan Çalışma Yönetmeliği"],"labels":[]}
+{"query_id":"L068","query":"İş sözleşmesi yazılı yapılmazsa geçersiz olur mu?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:8"],"labels":[]}
+{"query_id":"L069","query":"Geçici iş ilişkisi hangi hallerde kurulabilir?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:7"],"labels":[]}
+{"query_id":"L070","query":"İşçinin çalışma koşullarında esaslı değişiklik nasıl yapılır?","split":"development","domains":["labour_law"],"topic":"sözleşme","expected_refs":["4857:22"],"labels":[]}
+{"query_id":"L071","query":"Asıl işveren alt işveren işçisinin ücretinden sorumlu mudur?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:2"],"labels":[]}
+{"query_id":"L072","query":"Muvazaalı alt işverenlik ilişkisinin sonucu nedir?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:2"],"labels":[]}
+{"query_id":"L073","query":"Asıl işin bir bölümü alt işverene hangi şartlarda verilebilir?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:2"],"labels":[]}
+{"query_id":"L074","query":"İşyeri devrinde işçilerin sözleşmeleri kendiliğinden yeni işverene geçer mi?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:6"],"labels":[]}
+{"query_id":"L075","query":"İşyeri devrinden önce doğan alacaklardan eski işveren ne kadar sorumludur?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:6"],"labels":[]}
+{"query_id":"L076","query":"Sadece işyeri devri nedeniyle iş sözleşmesi feshedilebilir mi?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:6"],"labels":[]}
+{"query_id":"L077","query":"Organik bağ bulunan şirketler işçilik alacaklarından birlikte sorumlu olur mu?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L078","query":"Holding şirketi bağlı şirket işçisinin gerçek işvereni sayılabilir mi?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L079","query":"Geçici iş ilişkisinde iş kazasından kim sorumludur?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["4857:7","6331"],"labels":[]}
+{"query_id":"L080","query":"Alt işveren değişse de aynı işyerinde çalışma kıdem hesabını keser mi?","split":"holdout","domains":["labour_law"],"topic":"işverenlik","expected_refs":["Yargıtay","1475:14"],"labels":[]}
+{"query_id":"L081","query":"İşçilik alacağı davasından önce arabulucuya başvurmak zorunlu mu?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["7036:3"],"labels":[]}
+{"query_id":"L082","query":"Arabuluculuk son tutanağında yazmayan alacak için dava açılabilir mi?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["7036:3","Yargıtay"],"labels":[]}
+{"query_id":"L083","query":"Kıdem ve ihbar tazminatı zamanaşımı kaç yıldır?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["4857:Ek3","6098:146-147"],"labels":[]}
+{"query_id":"L084","query":"Fazla çalışma alacağında zamanaşımı ne zaman başlar?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["4857:Ek3","6098"],"labels":[]}
+{"query_id":"L085","query":"İş mahkemesinde basit yargılama usulü mü uygulanır?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["7036","6100:316-322"],"labels":[]}
+{"query_id":"L086","query":"İş mahkemesinde yetkili mahkeme nasıl belirlenir?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["7036:6"],"labels":[]}
+{"query_id":"L087","query":"İşçilik alacakları belirsiz alacak davasına konu olabilir mi?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["6100:107","Yargıtay"],"labels":[]}
+{"query_id":"L088","query":"Tanıkla ispatlanan fazla mesai alacağından hakkaniyet indirimi yapılır mı?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["Yargıtay"],"labels":[]}
+{"query_id":"L089","query":"İbraname hangi şartlarda geçerli olur?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["6098:420"],"labels":[]}
+{"query_id":"L090","query":"İşçinin imzaladığı boş kağıt işverence delil olarak kullanılabilir mi?","split":"holdout","domains":["labour_law"],"topic":"usul","expected_refs":["6100:187-211","Yargıtay"],"labels":[]}
+{"query_id":"L091","query":"İşveren iş sağlığı ve güvenliği için hangi genel yükümlülükleri taşır?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6331:4"],"labels":[]}
+{"query_id":"L092","query":"İşçi ciddi ve yakın tehlike halinde çalışmaktan kaçınabilir mi?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6331:13"],"labels":[]}
+{"query_id":"L093","query":"İş kazası işveren tarafından kaç gün içinde bildirilir?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6331:14","5510:13"],"labels":[]}
+{"query_id":"L094","query":"Risk değerlendirmesi yapmamanın işveren açısından sonucu nedir?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6331:10,26"],"labels":[]}
+{"query_id":"L095","query":"İş güvenliği uzmanı görevlendirmek işverenin sorumluluğunu kaldırır mı?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6331:4,8"],"labels":[]}
+{"query_id":"L096","query":"İş kazasında kaçınılmazlık indirimi nasıl değerlendirilir?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["5510:21","Yargıtay"],"labels":[]}
+{"query_id":"L097","query":"Meslek hastalığının tespiti için hangi şartlar aranır?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["5510:14"],"labels":[]}
+{"query_id":"L098","query":"İşverenin iş kazasındaki kusuru SGK rücu davasını nasıl etkiler?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["5510:21"],"labels":[]}
+{"query_id":"L099","query":"İş kazası nedeniyle maddi ve manevi tazminat birlikte istenebilir mi?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6098:49-56","6331"],"labels":[]}
+{"query_id":"L100","query":"İşçinin kendi ağır kusuru iş kazası tazminatını azaltır mı?","split":"holdout","domains":["labour_law"],"topic":"isg","expected_refs":["6098:51-52","5510"],"labels":[]}
+{"query_id":"L101","query":"Sigortasız çalıştırıldığım günleri nasıl tespit ettirebilirim?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:86"],"labels":[]}
+{"query_id":"L102","query":"Hizmet tespiti davası için hak düşürücü süre nedir?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:86"],"labels":[]}
+{"query_id":"L103","query":"İşe giriş bildirgesi verilmesi tek başına sigortalılığı kanıtlar mı?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510"],"labels":[]}
+{"query_id":"L104","query":"Prime esas kazanca hangi ödemeler dahil edilir?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:80"],"labels":[]}
+{"query_id":"L105","query":"İşveren SGK primlerini eksik bildirirse işçi ne yapabilir?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510"],"labels":[]}
+{"query_id":"L106","query":"Ev hizmetlerinde çalışanlar hangi şartlarda sigortalı olur?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:Ek9"],"labels":[]}
+{"query_id":"L107","query":"Stajyerler iş kazası sigortasından yararlanır mı?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:5"],"labels":[]}
+{"query_id":"L108","query":"Ücretsiz izindeki işçinin SGK bildirimi nasıl yapılır?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510"],"labels":[]}
+{"query_id":"L109","query":"İşverenin prim borcu işçinin emekliliğini engeller mi?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510"],"labels":[]}
+{"query_id":"L110","query":"Fiili hizmet süresi zammından hangi çalışanlar yararlanır?","split":"coverage_candidate","domains":["labour_law"],"topic":"sgk","expected_refs":["5510:40"],"labels":[]}
+{"query_id":"L111","query":"İşveren sendikaya üye olduğum için beni işten çıkarabilir mi?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:25"],"labels":[]}
+{"query_id":"L112","query":"Sendikal tazminat için iş güvencesi şartları aranır mı?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:25"],"labels":[]}
+{"query_id":"L113","query":"İşyeri sendika temsilcisinin iş sözleşmesi hangi şartlarda feshedilebilir?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:24"],"labels":[]}
+{"query_id":"L114","query":"Toplu iş sözleşmesinden kimler yararlanabilir?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:39"],"labels":[]}
+{"query_id":"L115","query":"Dayanışma aidatı ödeyen işçi toplu sözleşmeden ne zaman yararlanır?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:39"],"labels":[]}
+{"query_id":"L116","query":"Kanuni grev sırasında iş sözleşmesi sona erer mi?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356"],"labels":[]}
+{"query_id":"L117","query":"Grevde çalışmayan işçiye ücret ödenir mi?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356"],"labels":[]}
+{"query_id":"L118","query":"Yetki tespiti itirazı toplu görüşme sürecini durdurur mu?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356"],"labels":[]}
+{"query_id":"L119","query":"İşkolu tespiti hangi usulle yapılır?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356:5"],"labels":[]}
+{"query_id":"L120","query":"Toplu iş sözleşmesindeki ücret farkları için zamanaşımı ne kadardır?","split":"coverage_candidate","domains":["labour_law"],"topic":"toplu_is","expected_refs":["6356","4857:Ek3"],"labels":[]}

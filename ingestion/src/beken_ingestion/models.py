@@ -93,6 +93,10 @@ class ParsedDocument:
     document_type: str
     domain: str
     title: str
+    author: str | None
+    publication_year: int | None
+    citation_text: str | None
+    rights_basis: str | None
     authority: str | None
     chamber: str | None
     case_number: str | None

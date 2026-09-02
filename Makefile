@@ -1,4 +1,4 @@
-.PHONY: setup infra-up infra-down frontend-dev backend-dev ingestion-help db-test test lint build validate
+.PHONY: setup infra-up infra-down frontend-dev backend-dev ingestion-help retrieval-help db-test test lint build validate
 
 setup:
 	npm --prefix frontend ci
@@ -6,6 +6,7 @@ setup:
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e "./backend[dev]"
 	.venv/bin/pip install -e "./ingestion[dev]"
+	.venv/bin/pip install -e "./retrieval[dev,server]"
 
 infra-up:
 	docker compose up -d --wait
@@ -17,21 +18,24 @@ frontend-dev:
 	npm --prefix frontend run dev
 
 backend-dev:
-	.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 0.0.0.0 --port 8000
+	.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 
 ingestion-help:
 	.venv/bin/python -m beken_ingestion --help
 
+retrieval-help:
+	.venv/bin/python -m beken_retrieval --help
+
 db-test:
 	docker compose up -d --wait postgres
-	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest ingestion/tests/test_database_integration.py
+	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
 
 test:
-	.venv/bin/pytest backend/tests ingestion/tests
+	.venv/bin/pytest backend/tests ingestion/tests retrieval/tests
 
 lint:
 	npm --prefix frontend run lint
-	.venv/bin/ruff check backend ingestion
+	.venv/bin/ruff check backend ingestion retrieval
 
 build:
 	npm --prefix frontend run build

@@ -152,6 +152,7 @@ class CorpusRepository:
         corpus_version: str | None,
     ) -> IngestionOutcome:
         with self._connect() as connection, connection.cursor() as cursor:
+            self._validate_registries(cursor, parsed)
             artifact = cursor.execute(
                 """
                 select id, document_id from legal.document_artifacts where content_hash = %s
@@ -175,13 +176,14 @@ class CorpusRepository:
                     """
                     insert into legal.documents (
                       fingerprint, source_name, source_document_id, source_kind, document_type,
-                      domain, title, authority, chamber, case_number, decision_number,
+                      domain, title, author, publication_year, citation_text, rights_basis,
+                      authority, chamber, case_number, decision_number,
                       document_date, effective_from, effective_to, canonical_source_url,
                       canonical_content_hash, parser_version, extraction_method,
                       extraction_confidence, related_legislation, domain_metadata
                     ) values (
                       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) returning id
                     """,
                     (
@@ -192,6 +194,10 @@ class CorpusRepository:
                         parsed.document_type,
                         parsed.domain,
                         parsed.title,
+                        parsed.author,
+                        parsed.publication_year,
+                        parsed.citation_text,
+                        parsed.rights_basis,
                         parsed.authority,
                         parsed.chamber,
                         parsed.case_number,
@@ -209,6 +215,25 @@ class CorpusRepository:
                     ),
                 ).fetchone()
                 document_id = document["id"]
+
+            self._assign_document_domain(cursor, document_id, parsed)
+            cursor.execute(
+                """
+                update legal.documents
+                set author = coalesce(%s, author),
+                    publication_year = coalesce(%s, publication_year),
+                    citation_text = coalesce(%s, citation_text),
+                    rights_basis = coalesce(%s, rights_basis)
+                where id = %s
+                """,
+                (
+                    parsed.author,
+                    parsed.publication_year,
+                    parsed.citation_text,
+                    parsed.rights_basis,
+                    document_id,
+                ),
+            )
 
             if not artifact:
                 artifact = cursor.execute(
@@ -240,7 +265,11 @@ class CorpusRepository:
             if existing_parse:
                 if corpus_version:
                     self._pin_parse(
-                        cursor, corpus_version, document_id, existing_parse["id"]
+                        cursor,
+                        corpus_version,
+                        document_id,
+                        existing_parse["id"],
+                        parsed.domain,
                     )
                 return IngestionOutcome(
                     document_id=str(document_id),
@@ -413,7 +442,9 @@ class CorpusRepository:
                 update legal.documents
                 set current_parse_id = %s, parser_version = %s,
                     canonical_content_hash = %s, extraction_method = %s,
-                    extraction_confidence = %s, domain_metadata = %s, updated_at = %s
+                    extraction_confidence = %s,
+                    domain_metadata = case when domain = %s then %s else domain_metadata end,
+                    updated_at = %s
                 where id = %s
                 """,
                 (
@@ -422,13 +453,16 @@ class CorpusRepository:
                     parsed.canonical_content_hash,
                     parsed.extraction_method,
                     parsed.extraction_confidence,
+                    parsed.domain,
                     Jsonb(parsed.domain_metadata),
                     datetime.now(UTC),
                     document_id,
                 ),
             )
             if corpus_version:
-                self._pin_parse(cursor, corpus_version, document_id, parse_id)
+                self._pin_parse(
+                    cursor, corpus_version, document_id, parse_id, parsed.domain
+                )
             return IngestionOutcome(
                 document_id=str(document_id),
                 artifact_id=str(artifact["id"]),
@@ -439,9 +473,76 @@ class CorpusRepository:
             )
 
     @staticmethod
-    def _pin_parse(
-        cursor: psycopg.Cursor, corpus_version: str, document_id: UUID, parse_id: UUID
+    def _validate_registries(cursor: psycopg.Cursor, parsed: ParsedDocument) -> None:
+        registered_type = cursor.execute(
+            """
+            select 1
+            from legal.document_types
+            where code = %s and source_kind_code = %s
+            """,
+            (parsed.document_type, parsed.source_kind),
+        ).fetchone()
+        if not registered_type:
+            raise ValueError(
+                "Unregistered source/document type: "
+                f"{parsed.source_kind}/{parsed.document_type}"
+            )
+        registered_domain = cursor.execute(
+            "select 1 from legal.domains where code = %s",
+            (parsed.domain,),
+        ).fetchone()
+        if not registered_domain:
+            raise ValueError(f"Unregistered legal domain: {parsed.domain}")
+
+    @staticmethod
+    def _assign_document_domain(
+        cursor: psycopg.Cursor, document_id: UUID, parsed: ParsedDocument
     ) -> None:
+        role = str(parsed.domain_metadata.get("corpus_role") or "core")
+        if role not in {"core", "supplemental", "future_domain"}:
+            raise ValueError(f"Invalid domain corpus role: {role}")
+        metadata = dict(parsed.domain_metadata)
+        metadata.pop("corpus_role", None)
+        cursor.execute(
+            """
+            insert into legal.document_domains (
+              document_id, domain_code, role, metadata
+            ) values (%s, %s, %s, %s)
+            on conflict (document_id, domain_code) do update
+            set role = excluded.role,
+                metadata = excluded.metadata,
+                updated_at = now()
+            """,
+            (document_id, parsed.domain, role, Jsonb(metadata)),
+        )
+
+    @staticmethod
+    def _pin_parse(
+        cursor: psycopg.Cursor,
+        corpus_version: str,
+        document_id: UUID,
+        parse_id: UUID,
+        domain: str,
+    ) -> None:
+        cursor.execute(
+            """
+            insert into legal.corpus_version_domains (
+              corpus_version, domain_code, status
+            )
+            select
+              cv.version,
+              %s,
+              case cv.status
+                when 'ready' then 'ready'
+                when 'retired' then 'retired'
+                else 'draft'
+              end
+            from legal.corpus_versions cv
+            where cv.version = %s
+            on conflict (corpus_version, domain_code) do nothing
+            """,
+            (domain, corpus_version),
+        )
         existing = cursor.execute(
             """
             select parse_id from legal.corpus_version_documents
@@ -470,6 +571,7 @@ class CorpusRepository:
                 select
                   d.source_name, d.source_document_id, d.source_kind, d.document_type,
                   d.domain, d.title, d.authority, d.chamber, d.case_number,
+                  d.author, d.publication_year, d.citation_text, d.rights_basis,
                   d.decision_number, d.document_date, d.effective_from, d.effective_to,
                   d.related_legislation, d.domain_metadata,
                   a.source_url, a.storage_path, a.media_type, a.content_hash,
@@ -505,6 +607,7 @@ class CorpusRepository:
                   a.id as artifact_id, a.storage_path, a.media_type, a.content_hash,
                   a.byte_length, d.source_name, d.source_document_id, d.source_kind,
                   d.document_type, d.title, d.authority, d.chamber, d.case_number,
+                  d.author, d.publication_year,
                   d.decision_number
                 from legal.document_artifacts a
                 join legal.documents d on d.id = a.document_id

@@ -59,6 +59,7 @@ def readable_storage_path(
         "law": "kanun",
         "regulation": "yonetmelik",
         "court_decision": "yargitay",
+        "course_note": "doktrin/ders-notu",
     }.get(document_type, source)
     if source_kind == "court_decision":
         authority = str(metadata.get("authority") or "").strip()

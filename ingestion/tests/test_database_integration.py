@@ -37,6 +37,7 @@ def test_repeated_import_is_idempotent_and_chunks_trace_to_document(tmp_path: Pa
         metadata={
             "source_kind": "court_decision",
             "document_type": "court_decision",
+            "domain": "labour_law",
             "authority": "Yargıtay",
             "chamber": "9. Hukuk Dairesi",
             "case_number": "2099/1",
@@ -91,6 +92,7 @@ def test_corpus_versions_pin_parses_and_failed_repin_rolls_back(tmp_path: Path) 
     metadata = {
         "source_kind": "legislation",
         "document_type": "law",
+        "domain": "labour_law",
         "title": "Integration Test Kanunu",
     }
     first_raw = RawDocument(
@@ -150,3 +152,115 @@ def test_corpus_versions_pin_parses_and_failed_repin_rolls_back(tmp_path: Path) 
                 (first_version, second_version),
             )
             cursor.execute("delete from legal.documents where id = %s", (first.document_id,))
+
+
+def test_same_artifact_can_join_two_domains_without_duplication(tmp_path: Path) -> None:
+    database_url = _database_url()
+    repository = CorpusRepository(database_url)
+    pipeline = IngestionPipeline(repository, FilesystemRawStorage(tmp_path))
+    raw_content = b"MADDE 1 - Ortak kanun metni yeterli uzunlukta bir hukum icerir."
+    base_metadata = {
+        "source_kind": "legislation",
+        "document_type": "law",
+        "domain": "labour_law",
+        "title": "Ortak Integration Kanunu",
+        "domain_metadata": {"corpus_role": "supplemental"},
+    }
+    labour_raw = RawDocument(
+        source_name="manual",
+        source_document_id="integration-shared-law",
+        source_url="file:///integration-shared-law.txt",
+        media_type="text/plain",
+        content=raw_content,
+        metadata=base_metadata,
+    )
+    with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            insert into legal.domains (code, display_name, status)
+            values ('tax_law', 'Vergi Hukuku', 'experimental')
+            on conflict (code) do nothing
+            """
+        )
+
+    first = pipeline.ingest(labour_raw)
+    tax_raw = RawDocument(
+        source_name=labour_raw.source_name,
+        source_document_id=labour_raw.source_document_id,
+        source_url=labour_raw.source_url,
+        media_type=labour_raw.media_type,
+        content=labour_raw.content,
+        metadata={
+            **base_metadata,
+            "domain": "tax_law",
+            "domain_metadata": {"corpus_role": "core", "tax_topic": "fixture"},
+        },
+    )
+    second = pipeline.ingest(tax_raw)
+    try:
+        assert second.document_id == first.document_id
+        assert second.artifact_id == first.artifact_id
+        with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+            counts = cursor.execute(
+                """
+                select
+                  (select count(*) from legal.documents where id = %s),
+                  (select count(*) from legal.document_artifacts where document_id = %s),
+                  (select count(*) from legal.document_domains where document_id = %s)
+                """,
+                (first.document_id, first.document_id, first.document_id),
+            ).fetchone()
+            domains = cursor.execute(
+                """
+                select domain_code, role
+                from legal.document_domains
+                where document_id = %s
+                order by domain_code
+                """,
+                (first.document_id,),
+            ).fetchall()
+        assert counts == (1, 1, 2)
+        assert domains == [("labour_law", "supplemental"), ("tax_law", "core")]
+    finally:
+        with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+            cursor.execute("delete from legal.documents where id = %s", (first.document_id,))
+            cursor.execute("delete from legal.domains where code = 'tax_law'")
+
+
+def test_domain_registry_tables_are_private_and_rls_enabled() -> None:
+    database_url = _database_url()
+    table_names = (
+        "domains",
+        "source_kinds",
+        "document_types",
+        "legal_unit_types",
+        "document_domains",
+        "corpus_version_domains",
+        "retrieval_scopes",
+        "retrieval_indexes",
+    )
+    with psycopg.connect(database_url) as connection, connection.cursor() as cursor:
+        rows = cursor.execute(
+            """
+            select c.relname, c.relrowsecurity
+            from pg_class c
+            join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'legal' and c.relname = any(%s)
+            order by c.relname
+            """,
+            (list(table_names),),
+        ).fetchall()
+        public_grants = cursor.execute(
+            """
+            select count(*)
+            from information_schema.role_table_grants
+            where table_schema = 'legal'
+              and table_name = any(%s)
+              and grantee in ('PUBLIC', 'anon', 'authenticated')
+            """,
+            (list(table_names),),
+        ).fetchone()[0]
+
+    assert {row[0] for row in rows} == set(table_names)
+    assert all(row[1] for row in rows)
+    assert public_grants == 0

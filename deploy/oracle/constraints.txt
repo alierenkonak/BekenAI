@@ -1,0 +1,6 @@
+# Oracle ARM inference runtime. Install torch from the official CPU-only index
+# before resolving the remaining dependencies with this constraints file.
+torch==2.13.0+cpu
+onnxruntime==1.29.0
+sentence-transformers==5.7.0
+transformers==5.16.1
