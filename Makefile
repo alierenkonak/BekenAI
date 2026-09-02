@@ -6,7 +6,7 @@ setup:
 	.venv/bin/pip install --upgrade pip
 	.venv/bin/pip install -e "./backend[dev]"
 	.venv/bin/pip install -e "./ingestion[dev]"
-	.venv/bin/pip install -e "./retrieval[dev]"
+	.venv/bin/pip install -e "./retrieval[dev,server]"
 
 infra-up:
 	docker compose up -d --wait
@@ -18,7 +18,7 @@ frontend-dev:
 	npm --prefix frontend run dev
 
 backend-dev:
-	.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 0.0.0.0 --port 8000
+	.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 
 ingestion-help:
 	.venv/bin/python -m beken_ingestion --help

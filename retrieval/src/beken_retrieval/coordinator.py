@@ -25,10 +25,12 @@ class HybridDomainIndex:
     domain_code: str
     corpus_version: str
     index_version: str
+    channel: str = "primary"
     lexical: LexicalRetriever | None = None
     dense: DenseRetriever | None = None
     reranker: Reranker | None = None
-    hybrid_candidate_limit: int = 50
+    hybrid_candidate_limit: int = 25
+    rrf_k: int = 60
 
     def search(
         self,
@@ -53,7 +55,7 @@ class HybridDomainIndex:
         lexical = self.lexical.search(query, filters=filters, limit=candidate_limit)
         dense = self.dense.search(query, filters=filters, limit=candidate_limit)
         fused = reciprocal_rank_fusion(
-            (lexical, dense), limit=candidate_limit, score_key="hybrid_rrf"
+            (lexical, dense), limit=candidate_limit, k=self.rrf_k, score_key="hybrid_rrf"
         )
         if selected is SearchMode.HYBRID:
             return [hit.with_rank(rank) for rank, hit in enumerate(fused[:limit], start=1)]
@@ -64,13 +66,15 @@ class HybridDomainIndex:
 
 class InMemoryIndexRegistry:
     def __init__(self, indexes: tuple[HybridDomainIndex, ...] = ()) -> None:
-        self.indexes = {index.domain_code: index for index in indexes}
+        self.indexes = {(index.domain_code, index.channel): index for index in indexes}
 
-    def get(self, domain_code: str) -> HybridDomainIndex | None:
-        return self.indexes.get(domain_code)
+    def get(
+        self, domain_code: str, channel: str = "primary"
+    ) -> HybridDomainIndex | None:
+        return self.indexes.get((domain_code, channel))
 
-    def supported_domains(self) -> tuple[str, ...]:
-        return tuple(sorted(self.indexes))
+    def supported_domains(self, channel: str = "primary") -> tuple[str, ...]:
+        return tuple(sorted(domain for domain, lane in self.indexes if lane == channel))
 
 
 class DomainSearchCoordinator:
@@ -85,13 +89,16 @@ class DomainSearchCoordinator:
         mode: str,
         filters: SearchFilters,
         limit: int,
+        channel: str = "primary",
     ) -> list[SearchHit]:
-        requested = self.registry.supported_domains() if domains == ("all",) else domains
+        requested = (
+            self.registry.supported_domains(channel) if domains == ("all",) else domains
+        )
         if not requested:
             raise IndexNotReadyError("No supported retrieval domain is configured")
         indexes = []
         for domain in requested:
-            index = self.registry.get(domain)
+            index = self.registry.get(domain, channel)
             if index is None:
                 raise IndexNotReadyError(f"Index is not ready for domain {domain!r}")
             indexes.append(index)
@@ -104,7 +111,7 @@ class DomainSearchCoordinator:
                     query,
                     mode=mode,
                     filters=filters,
-                    limit=max(50, limit),
+                    limit=max(index.hybrid_candidate_limit, limit),
                 )
                 for index in indexes
             ]

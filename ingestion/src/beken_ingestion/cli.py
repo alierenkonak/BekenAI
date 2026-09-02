@@ -150,6 +150,10 @@ def _merge_reparse_metadata(
             "document_type",
             "domain",
             "title",
+            "author",
+            "publication_year",
+            "citation_text",
+            "rights_basis",
             "authority",
             "chamber",
             "case_number",
@@ -394,7 +398,7 @@ def import_directory(args: argparse.Namespace, settings: IngestionSettings) -> i
                     str(exc),
                     retryable=False,
                     attempt=1,
-                    source_url=path.resolve().as_uri(),
+                    source_url=None,
                     source_document_id=path.stem,
                 )
                 repository.checkpoint_run(

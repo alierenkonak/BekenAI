@@ -1,0 +1,19 @@
+{
+  "labour_law": {
+    "version": "labour-law-retrieval-v1",
+    "scope_version": "labour-law-v1",
+    "lexical_backend": "bm25s",
+    "dense_model": "bge-m3",
+    "fusion": "rrf",
+    "fusion_k": 60,
+    "reranker_model": "bge-reranker-v2-m3",
+    "hybrid_candidate_limit": 25,
+    "result_limit": 10,
+    "selection_status": "owner_accepted",
+    "quality_gate_status": "owner_accepted_with_latency_exception",
+    "channel_scopes": {
+      "primary": "labour-law-v1",
+      "doctrine": "labour-law-doctrine-v1"
+    }
+  }
+}

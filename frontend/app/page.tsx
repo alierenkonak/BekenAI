@@ -30,8 +30,13 @@ type SearchResult = {
   source_url: string | null;
   corpus_version: string;
   index_version: string;
+  source_channel: 'primary' | 'doctrine';
+  source_kind: string;
+  author: string | null;
+  publication_year: number | null;
+  citation_text: string | null;
 };
-type SearchPayload = { results: SearchResult[] };
+type SearchPayload = { results: SearchResult[]; doctrine_results: SearchResult[] };
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -40,6 +45,8 @@ export default function Home() {
   const [ready, setReady] = useState<ReadyPayload | null>(null);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [includeDoctrine, setIncludeDoctrine] = useState(false);
+  const [doctrineResults, setDoctrineResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
 
@@ -83,20 +90,28 @@ export default function Home() {
           domains: ['labour_law'],
           mode: 'hybrid_rerank',
           limit: 10,
+          include_doctrine: includeDoctrine,
           filters: { domain_roles: ['core', 'supplemental'] },
         }),
       });
       if (response.status === 503) {
         setResults([]);
+        setDoctrineResults([]);
         setSearchMessage('İş hukuku arama indeksi hazırlanıyor. BM25, vektör ve reranker kalite kapıları tamamlanınca arama açılacak.');
         return;
       }
       if (!response.ok) throw new Error('Search failed');
       const payload = (await response.json()) as SearchPayload;
       setResults(payload.results);
-      setSearchMessage(payload.results.length ? null : 'Bu sorgu için eşleşen kaynak pasajı bulunamadı.');
+      setDoctrineResults(payload.doctrine_results ?? []);
+      setSearchMessage(
+        payload.results.length || payload.doctrine_results?.length
+          ? null
+          : 'Bu sorgu için eşleşen kaynak pasajı bulunamadı.',
+      );
     } catch {
       setResults([]);
+      setDoctrineResults([]);
       setSearchMessage('Arama servisine şu anda ulaşılamıyor.');
     } finally {
       setSearching(false);
@@ -114,6 +129,20 @@ export default function Home() {
               <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#75817d]">Türk Hukuku Araştırması</p>
             </div>
           </div>
+          <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#d8e1dd] bg-[#f8faf9] px-4 py-3 text-sm text-[#34423e]">
+            <input
+              type="checkbox"
+              checked={includeDoctrine}
+              onChange={(event) => setIncludeDoctrine(event.target.checked)}
+              className="mt-0.5 size-4 accent-[#126248]"
+            />
+            <span>
+              <span className="block font-semibold">Doktrin/Yardımcı Kaynaklar</span>
+              <span className="mt-0.5 block text-xs leading-5 text-[#697570]">
+                Ders notu ve izinli yardımcı kaynakları, birincil kaynaklardan ayrı sonuçlarda gösterir.
+              </span>
+            </span>
+          </label>
           <span className="rounded-full border border-[#cfe1da] bg-[#edf7f3] px-3 py-1.5 text-xs font-semibold text-[#126248]">Aşama 2</span>
         </div>
       </header>
@@ -145,6 +174,28 @@ export default function Home() {
         <div className="mt-8 grid gap-7 lg:grid-cols-[1fr_290px]">
           <section className="space-y-4" aria-label="Arama sonuçları">
             {results.map((result) => <ResultCard key={result.chunk_id} result={result} />)}
+            {includeDoctrine && (
+              <div className="pt-5">
+                <div className="mb-4 border-t border-[#d9e2de] pt-6">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#755c20]">
+                    Doktrin/Yardımcı Kaynaklar
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#697570]">
+                    Bağlayıcı olmayan yardımcı kaynak sonuçları; ana kaynak sıralamasından ayrıdır.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  {doctrineResults.map((result) => (
+                    <ResultCard key={result.chunk_id} result={result} doctrine />
+                  ))}
+                  {!searching && doctrineResults.length === 0 && results.length > 0 && (
+                    <p className="rounded-xl bg-[#fbf8ef] px-4 py-3 text-sm text-[#6e5a2b]">
+                      Bu sorgu için yardımcı kaynak pasajı bulunamadı.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
           <aside className="h-fit rounded-2xl border border-[#d9e2de] bg-white p-5" aria-live="polite">
             <div className="flex items-center justify-between"><h2 className="font-serif text-xl">Sistem durumu</h2><StatusDot state={apiState} /></div>
@@ -162,11 +213,11 @@ export default function Home() {
   );
 }
 
-function ResultCard({ result }: { result: SearchResult }) {
+function ResultCard({ result, doctrine = false }: { result: SearchResult; doctrine?: boolean }) {
   const references = [result.case_number && `E. ${result.case_number}`, result.decision_number && `K. ${result.decision_number}`].filter(Boolean).join(' · ');
   return (
-    <article className="rounded-2xl border border-[#d9e2de] bg-white p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#137455]">#{result.rank} · {result.document_type}</p><h2 className="mt-2 font-serif text-xl leading-7">{result.title}</h2></div><span className="rounded-full bg-[#edf7f3] px-2.5 py-1 text-[10px] font-bold text-[#126248]">{result.score.toFixed(4)}</span></div>
+    <article className={`rounded-2xl border bg-white p-5 sm:p-6 ${doctrine ? 'border-[#e5dcc3]' : 'border-[#d9e2de]'}`}>
+      <div className="flex items-start justify-between gap-4"><div><p className={`text-[10px] font-bold uppercase tracking-[0.12em] ${doctrine ? 'text-[#755c20]' : 'text-[#137455]'}`}>#{result.rank} · {result.document_type}</p><h2 className="mt-2 font-serif text-xl leading-7">{result.title}</h2>{doctrine && (result.author || result.publication_year) && <p className="mt-1 text-xs text-[#756b53]">{[result.author, result.publication_year].filter(Boolean).join(' · ')}</p>}</div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${doctrine ? 'bg-[#fbf4df] text-[#755c20]' : 'bg-[#edf7f3] text-[#126248]'}`}>{result.score.toFixed(4)}</span></div>
       {(references || result.document_date) && <p className="mt-2 text-xs text-[#75817d]">{references}{references && result.document_date ? ' · ' : ''}{result.document_date}</p>}
       {result.breadcrumb.length > 0 && <p className="mt-4 text-xs font-medium text-[#6c7874]">{result.breadcrumb.join(' › ')}</p>}
       <p className="mt-3 whitespace-pre-wrap rounded-xl bg-[#f6f8f7] p-4 text-sm leading-6 text-[#34423e]">{result.exact_passage}</p>

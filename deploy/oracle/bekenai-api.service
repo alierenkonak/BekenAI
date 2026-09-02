@@ -1,0 +1,48 @@
+[Unit]
+Description=Beken.ai FastAPI search service
+After=network-online.target bekenai-qdrant.service bekenai-model-service.service
+Wants=network-online.target
+Requires=bekenai-qdrant.service bekenai-model-service.service
+ConditionPathExists=/opt/bekenai/current/retrieval_data/labour_law/active.json
+
+[Service]
+Type=simple
+User=bekenai
+Group=bekenai
+WorkingDirectory=/opt/bekenai/current
+EnvironmentFile=/etc/bekenai/api.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/opt/bekenai/current/retrieval/src
+Environment=TOKENIZERS_PARALLELISM=false
+ExecStart=/opt/bekenai/venv/bin/uvicorn app.main:app --app-dir /opt/bekenai/current/backend --host 127.0.0.1 --port 8000 --workers 1 --no-access-log --timeout-keep-alive 10
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=30
+KillSignal=SIGINT
+
+StateDirectory=bekenai-api
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

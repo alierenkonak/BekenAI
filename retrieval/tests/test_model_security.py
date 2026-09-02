@@ -69,7 +69,7 @@ def load(kind):
     if kind == "dense":
         return SentenceTransformerDenseEncoder(catalog.get("multilingual-e5-base"))
     if kind == "reranker":
-        return CrossEncoderReranker(catalog.get("mmarco-minilm"))
+        return CrossEncoderReranker(catalog.get("bge-reranker-v2-m3"))
     return OnnxDenseEncoder(catalog.get("bge-m3"))
 
 
@@ -80,14 +80,26 @@ def test_all_public_model_loaders_disable_implicit_credentials(provider_stubs):
     reranker = load("reranker")
     assert dense.dimensions == 768
     assert onnx.dimensions == 1024
-    assert reranker.model_key == "mmarco-minilm"
+    assert reranker.model_key == "bge-reranker-v2-m3"
     remote_calls = [(stage, kwargs) for stage, kwargs in calls if stage != "session"]
     assert {stage for stage, _ in remote_calls} == {"dense", "download", "tokenizer", "reranker"}
     for _, kwargs in remote_calls:
         assert kwargs["token"] is False
         assert len(kwargs["revision"]) == 40
     assert dict(calls)["dense"]["model_kwargs"]["use_safetensors"] is True
-    assert dict(calls)["reranker"]["automodel_args"]["use_safetensors"] is True
+    assert dict(calls)["reranker"]["model_kwargs"]["use_safetensors"] is True
+    assert sum(stage == "download" for stage, _ in calls) == 2
+
+
+def test_onnx_loader_rejects_unlisted_supporting_artifact(provider_stubs):
+    catalog = ModelCatalog.load(Path("retrieval/config/models.json"))
+    spec = catalog.get("bge-m3")
+    unsafe = spec.__class__(
+        **{**spec.__dict__, "supporting_artifacts": ("../model.pkl",)}
+    )
+
+    with pytest.raises(RuntimeError, match="Pinned public model could not be loaded"):
+        OnnxDenseEncoder(unsafe)
 
 
 @pytest.mark.parametrize("stage", ["dense", "reranker", "download", "tokenizer", "session"])

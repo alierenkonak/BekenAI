@@ -4,6 +4,14 @@
 !.env.example
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
 secrets/
 credentials/
 *_credentials.json
@@ -37,6 +45,10 @@ coverage/
 next-env.d.ts
 npm-debug.log*
 *.log
+
+# Framework-generated local agent hints
+/frontend/AGENTS.md
+/frontend/CLAUDE.md
 
 # Corpus, indexes, models and uploads
 data/

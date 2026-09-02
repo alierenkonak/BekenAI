@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+import numpy as np
+
 from beken_retrieval.model_catalog import ModelSpec
 from beken_retrieval.model_loading import safe_model_loading
 from beken_retrieval.models import SearchHit
@@ -24,18 +28,24 @@ class CrossEncoderReranker:
                 revision=spec.revision,
                 trust_remote_code=False,
                 token=False,
-                automodel_args={"use_safetensors": True},
+                model_kwargs={"use_safetensors": True},
             )
         self.model_key = spec.key
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        if not passages:
+            return []
+        scores = self.model.predict(
+            [(query, passage) for passage in passages],
+            batch_size=8,
+            show_progress_bar=False,
+        )
+        return np.asarray(scores).reshape(-1).astype(float).tolist()
 
     def rerank(self, query: str, hits: list[SearchHit], *, limit: int) -> list[SearchHit]:
         if not hits:
             return []
-        scores = self.model.predict(
-            [(query, hit.record.text) for hit in hits],
-            batch_size=8,
-            show_progress_bar=False,
-        )
+        scores = self.score(query, [hit.record.text for hit in hits])
         rescored = [
             SearchHit(
                 record=hit.record,

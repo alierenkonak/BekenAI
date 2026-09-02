@@ -39,7 +39,14 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install --upgrade pip
-      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev]"
+      - run: pip install -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev,server]"
+      - name: Audit Python dependencies
+        run: |
+          pip-audit --local --progress-spinner off
+          # PyPI advisory matching ignores the official PyTorch "+cpu" local tag.
+          # Normalize only that tag so the pinned Oracle runtime cannot escape audit.
+          sed 's/+cpu//' deploy/oracle/constraints.txt > /tmp/bekenai-oracle-audit.txt
+          pip-audit --requirement /tmp/bekenai-oracle-audit.txt --no-deps --disable-pip --progress-spinner off
       - run: ruff check backend ingestion retrieval
       - run: pytest backend/tests ingestion/tests retrieval/tests
 

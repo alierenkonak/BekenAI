@@ -18,13 +18,14 @@ class Reranker(Protocol):
 
 
 class IndexRegistry(Protocol):
-    def get(self, domain_code: str) -> DomainIndex | None: ...
+    def get(self, domain_code: str, channel: str = "primary") -> DomainIndex | None: ...
 
-    def supported_domains(self) -> tuple[str, ...]: ...
+    def supported_domains(self, channel: str = "primary") -> tuple[str, ...]: ...
 
 
 class DomainIndex(Protocol):
     domain_code: str
+    channel: str
     corpus_version: str
     index_version: str
 

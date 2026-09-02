@@ -176,13 +176,14 @@ class CorpusRepository:
                     """
                     insert into legal.documents (
                       fingerprint, source_name, source_document_id, source_kind, document_type,
-                      domain, title, authority, chamber, case_number, decision_number,
+                      domain, title, author, publication_year, citation_text, rights_basis,
+                      authority, chamber, case_number, decision_number,
                       document_date, effective_from, effective_to, canonical_source_url,
                       canonical_content_hash, parser_version, extraction_method,
                       extraction_confidence, related_legislation, domain_metadata
                     ) values (
                       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                      %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                     ) returning id
                     """,
                     (
@@ -193,6 +194,10 @@ class CorpusRepository:
                         parsed.document_type,
                         parsed.domain,
                         parsed.title,
+                        parsed.author,
+                        parsed.publication_year,
+                        parsed.citation_text,
+                        parsed.rights_basis,
                         parsed.authority,
                         parsed.chamber,
                         parsed.case_number,
@@ -212,6 +217,23 @@ class CorpusRepository:
                 document_id = document["id"]
 
             self._assign_document_domain(cursor, document_id, parsed)
+            cursor.execute(
+                """
+                update legal.documents
+                set author = coalesce(%s, author),
+                    publication_year = coalesce(%s, publication_year),
+                    citation_text = coalesce(%s, citation_text),
+                    rights_basis = coalesce(%s, rights_basis)
+                where id = %s
+                """,
+                (
+                    parsed.author,
+                    parsed.publication_year,
+                    parsed.citation_text,
+                    parsed.rights_basis,
+                    document_id,
+                ),
+            )
 
             if not artifact:
                 artifact = cursor.execute(
@@ -549,6 +571,7 @@ class CorpusRepository:
                 select
                   d.source_name, d.source_document_id, d.source_kind, d.document_type,
                   d.domain, d.title, d.authority, d.chamber, d.case_number,
+                  d.author, d.publication_year, d.citation_text, d.rights_basis,
                   d.decision_number, d.document_date, d.effective_from, d.effective_to,
                   d.related_legislation, d.domain_metadata,
                   a.source_url, a.storage_path, a.media_type, a.content_hash,
@@ -584,6 +607,7 @@ class CorpusRepository:
                   a.id as artifact_id, a.storage_path, a.media_type, a.content_hash,
                   a.byte_length, d.source_name, d.source_document_id, d.source_kind,
                   d.document_type, d.title, d.authority, d.chamber, d.case_number,
+                  d.author, d.publication_year,
                   d.decision_number
                 from legal.document_artifacts a
                 join legal.documents d on d.id = a.document_id

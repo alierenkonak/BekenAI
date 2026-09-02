@@ -4,6 +4,7 @@ import argparse
 import gc
 import hashlib
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from beken_retrieval.evaluation import (
 from beken_retrieval.model_catalog import ModelCatalog
 from beken_retrieval.models import ChunkRecord, SearchFilters
 from beken_retrieval.postgres import PostgresCorpusRepository
+from beken_retrieval.profile import RetrievalProfileCatalog
 from beken_retrieval.qdrant_store import (
     QdrantDenseRetriever,
     QdrantIndexer,
@@ -30,12 +32,29 @@ from beken_retrieval.qdrant_store import (
     collection_name,
 )
 from beken_retrieval.registry import FilesystemIndexRegistry, write_active_manifest
+from beken_retrieval.remote_inference import RemoteDenseEncoder, RemoteInferenceClient
 from beken_retrieval.scope import article_in_allowlist, load_scope
 from beken_retrieval.tokenization import normalize_for_lexical_search
 
 
 def _scope_path(settings: RetrievalSettings, value: Path) -> Path:
     return value if value.is_absolute() else settings.retrieval_scope_root / value
+
+
+def _channel_root(settings: RetrievalSettings, *, domain: str, channel: str) -> Path:
+    domain_root = settings.retrieval_index_root / domain
+    return domain_root if channel == "primary" else domain_root / "channels" / channel
+
+
+def _dense_encoder(settings: RetrievalSettings, spec):
+    if settings.model_inference_url and settings.model_inference_token:
+        client = RemoteInferenceClient(
+            base_url=settings.model_inference_base_url,
+            token=settings.model_inference_secret,
+            timeout_seconds=settings.model_inference_timeout_seconds,
+        )
+        return RemoteDenseEncoder(spec, client)
+    return create_dense_encoder(spec)
 
 
 def register_scope(args: argparse.Namespace, settings: RetrievalSettings) -> int:
@@ -86,7 +105,10 @@ def build_bm25(args: argparse.Namespace, settings: RetrievalSettings) -> int:
     records = repository.load_scope_records(scope)
     version_seed = f"{scope.manifest_hash}:{len(records)}:bm25s:tr-legal-v1"
     index_version = hashlib.sha256(version_seed.encode()).hexdigest()[:16]
-    index_dir = settings.retrieval_index_root / scope.domain / "bm25" / index_version
+    channel_root = _channel_root(
+        settings, domain=scope.domain, channel=scope.channel
+    ).resolve()
+    index_dir = channel_root / "bm25" / index_version
     retriever = BM25LexicalRetriever.build(records, index_dir, scope_hash=scope.manifest_hash)
     repository.register_index(
         scope=scope,
@@ -99,14 +121,17 @@ def build_bm25(args: argparse.Namespace, settings: RetrievalSettings) -> int:
     active_path = write_active_manifest(
         settings.retrieval_index_root,
         domain=scope.domain,
+        channel=scope.channel,
         updates={
             "domain": scope.domain,
+            "channel": scope.channel,
+            "scope_version": scope.version,
             "corpus_version": scope.corpus_version,
-            "scope_path": str(scope_path),
+            "scope_path": os.path.relpath(scope_path, channel_root),
             "scope_hash": scope.manifest_hash,
             "index_version": index_version,
-            "bm25_path": str(index_dir.resolve()),
-            "hybrid_candidate_limit": 50,
+            "bm25_path": os.path.relpath(index_dir.resolve(), channel_root),
+            "hybrid_candidate_limit": 25,
         },
     )
     print(
@@ -129,8 +154,17 @@ def build_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int:
     repository = PostgresCorpusRepository(settings.corpus_database_url)
     repository.register_scope(scope)
     records = repository.load_scope_records(scope)
-    spec = ModelCatalog.load(settings.retrieval_model_catalog).get(args.model)
-    encoder = create_dense_encoder(spec)
+    models = ModelCatalog.load(settings.retrieval_model_catalog)
+    spec = models.get(args.model)
+    if args.activate:
+        RetrievalProfileCatalog.load(
+            settings.retrieval_profile_catalog, models=models
+        ).get(scope.domain).validate_selection(
+            dense_model=args.model,
+            reranker_model=args.reranker,
+            candidate_limit=args.candidate_limit,
+        )
+    encoder = _dense_encoder(settings, spec)
     qdrant = QdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_secret,
@@ -143,6 +177,7 @@ def build_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int:
         corpus_version=scope.corpus_version,
         model_key=spec.key,
         index_version=index_version,
+        channel=scope.channel,
     )
     indexer = QdrantIndexer(qdrant)
     summary = indexer.build_immutable(
@@ -151,8 +186,10 @@ def build_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int:
         encoder=encoder,
         batch_size=args.batch_size,
     )
-    alias = active_alias(scope.domain)
-    indexer.activate(collection=collection, alias=alias)
+    # Alias is part of the immutable index metadata, but moving it is an explicit action.
+    alias = active_alias(scope.domain, scope.channel)
+    if args.activate:
+        indexer.activate(collection=collection, alias=alias)
     repository.register_index(
         scope=scope,
         backend="qdrant_dense",
@@ -167,27 +204,39 @@ def build_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int:
             "model_revision": spec.revision,
             **summary,
         },
+        activate=args.activate,
     )
-    active_path = write_active_manifest(
-        settings.retrieval_index_root,
-        domain=scope.domain,
-        updates={
-            "domain": scope.domain,
-            "corpus_version": scope.corpus_version,
-            "scope_path": str(scope_path),
-            "scope_hash": scope.manifest_hash,
-            "index_version": index_version,
-            "dense": {"collection": alias, "model_key": spec.key},
-            "reranker_model_key": args.reranker,
-            "hybrid_candidate_limit": args.candidate_limit,
-        },
-    )
+    active_path = None
+    if args.activate:
+        active_path = write_active_manifest(
+            settings.retrieval_index_root,
+            domain=scope.domain,
+            channel=scope.channel,
+            updates={
+                "domain": scope.domain,
+                "channel": scope.channel,
+                "scope_version": scope.version,
+                "corpus_version": scope.corpus_version,
+                "scope_path": os.path.relpath(
+                    scope_path,
+                    _channel_root(
+                        settings, domain=scope.domain, channel=scope.channel
+                    ).resolve(),
+                ),
+                "scope_hash": scope.manifest_hash,
+                "index_version": index_version,
+                "dense": {"collection": alias, "model_key": spec.key},
+                "reranker_model_key": args.reranker,
+                "hybrid_candidate_limit": args.candidate_limit,
+            },
+        )
     print(
         json.dumps(
             {
                 "collection": collection,
                 "alias": alias,
-                "active_manifest": str(active_path),
+                "activated": args.activate,
+                "active_manifest": str(active_path) if active_path else None,
                 **summary,
             },
             ensure_ascii=False,
@@ -202,7 +251,15 @@ def activate_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int
     scope.require_reviewed()
     repository = PostgresCorpusRepository(settings.corpus_database_url)
     records = repository.load_scope_records(scope)
-    spec = ModelCatalog.load(settings.retrieval_model_catalog).get(args.model)
+    models = ModelCatalog.load(settings.retrieval_model_catalog)
+    spec = models.get(args.model)
+    RetrievalProfileCatalog.load(
+        settings.retrieval_profile_catalog, models=models
+    ).get(scope.domain).validate_selection(
+        dense_model=args.model,
+        reranker_model=args.reranker,
+        candidate_limit=args.candidate_limit,
+    )
     version_seed = f"{scope.manifest_hash}:{spec.revision}:{len(records)}"
     index_version = hashlib.sha256(version_seed.encode()).hexdigest()[:16]
     collection = collection_name(
@@ -210,6 +267,7 @@ def activate_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int
         corpus_version=scope.corpus_version,
         model_key=spec.key,
         index_version=index_version,
+        channel=scope.channel,
     )
     qdrant = QdrantClient(
         url=settings.qdrant_url,
@@ -218,20 +276,29 @@ def activate_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int
     )
     if not qdrant.collection_exists(collection):
         raise ValueError(f"Dense collection is not built: {collection}")
-    alias = active_alias(scope.domain)
+    alias = active_alias(scope.domain, scope.channel)
     QdrantIndexer(qdrant).activate(collection=collection, alias=alias)
     repository.activate_index(
         domain=scope.domain,
+        channel=scope.channel,
         backend="qdrant_dense",
         index_version=index_version,
     )
     active_path = write_active_manifest(
         settings.retrieval_index_root,
         domain=scope.domain,
+        channel=scope.channel,
         updates={
             "domain": scope.domain,
+            "channel": scope.channel,
+            "scope_version": scope.version,
             "corpus_version": scope.corpus_version,
-            "scope_path": str(scope_path),
+            "scope_path": os.path.relpath(
+                scope_path,
+                _channel_root(
+                    settings, domain=scope.domain, channel=scope.channel
+                ).resolve(),
+            ),
             "scope_hash": scope.manifest_hash,
             "index_version": index_version,
             "dense": {"collection": alias, "model_key": spec.key},
@@ -296,6 +363,7 @@ def _dense_collection(scope, spec, record_count: int) -> str:
         corpus_version=scope.corpus_version,
         model_key=spec.key,
         index_version=index_version,
+        channel=scope.channel,
     )
 
 
@@ -484,14 +552,19 @@ def build_parser() -> argparse.ArgumentParser:
     dense.add_argument("--model", choices=("multilingual-e5-base", "bge-m3"), required=True)
     dense.add_argument("--reranker", default="mmarco-minilm")
     dense.add_argument("--batch-size", type=int, default=8)
-    dense.add_argument("--candidate-limit", type=int, choices=(20, 30, 50), default=50)
+    dense.add_argument("--candidate-limit", type=int, choices=(20, 25, 30, 50), default=25)
+    dense.add_argument(
+        "--activate",
+        action="store_true",
+        help="Activate only if this build matches the tracked domain retrieval profile",
+    )
     dense.set_defaults(handler=build_dense)
 
     activate = subparsers.add_parser("activate-dense")
     activate.add_argument("scope", type=Path)
     activate.add_argument("--model", choices=("multilingual-e5-base", "bge-m3"), required=True)
     activate.add_argument("--reranker", default="mmarco-minilm")
-    activate.add_argument("--candidate-limit", type=int, choices=(20, 30, 50), default=50)
+    activate.add_argument("--candidate-limit", type=int, choices=(20, 25, 30, 50), default=25)
     activate.set_defaults(handler=activate_dense)
 
     labels = subparsers.add_parser("draft-labels")

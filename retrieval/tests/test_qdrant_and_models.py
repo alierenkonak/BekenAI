@@ -4,18 +4,20 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from qdrant_client import QdrantClient
 
 from beken_retrieval.dense import DeterministicFakeEncoder
 from beken_retrieval.model_catalog import ModelCatalog
 from beken_retrieval.models import ChunkRecord, SearchFilters
+from beken_retrieval.profile import RetrievalProfileCatalog
 from beken_retrieval.qdrant_store import (
     QdrantDenseRetriever,
     QdrantIndexer,
     active_alias,
     collection_name,
 )
-from beken_retrieval.registry import write_active_manifest
+from beken_retrieval.registry import _resolve_active_path, write_active_manifest
 from beken_retrieval.scope import RetrievalScope
 
 
@@ -114,6 +116,48 @@ def test_model_catalog_pins_revisions_and_safe_artifacts() -> None:
     assert len(catalog.get("multilingual-e5-base").revision) == 40
     assert catalog.get("multilingual-e5-base").safe_artifact.endswith(".safetensors")
     assert catalog.get("bge-m3").safe_artifact.endswith(".onnx")
+    assert catalog.get("bge-m3").supporting_artifacts == ("onnx/model.onnx_data",)
+
+
+def test_labour_law_profile_pins_selected_hybrid_system() -> None:
+    models = ModelCatalog.load(Path("retrieval/config/models.json"))
+    profile = RetrievalProfileCatalog.load(
+        Path("retrieval/config/domain_profiles.json"), models=models
+    ).get("labour_law")
+
+    assert profile.lexical_backend == "bm25s"
+    assert profile.dense_model == "bge-m3"
+    assert profile.fusion == "rrf"
+    assert profile.fusion_k == 60
+    assert profile.reranker_model == "bge-reranker-v2-m3"
+    assert profile.hybrid_candidate_limit == 25
+    assert profile.selection_status == "owner_accepted"
+    assert profile.quality_gate_status == "owner_accepted_with_latency_exception"
+
+
+def test_evaluation_manifest_records_owner_acceptance_without_inventing_labels() -> None:
+    payload = json.loads(Path("evals/labour_law/manifest.json").read_text(encoding="utf-8"))
+
+    assert payload["status"] == "owner_accepted"
+    assert payload["acceptance"]["evidence_status"] == "owner_attestation"
+    assert payload["acceptance"]["per_passage_review_labels_imported"] is False
+
+
+def test_profile_rejects_an_active_e5_manifest() -> None:
+    models = ModelCatalog.load(Path("retrieval/config/models.json"))
+    profile = RetrievalProfileCatalog.load(
+        Path("retrieval/config/domain_profiles.json"), models=models
+    ).get("labour_law")
+
+    with pytest.raises(ValueError, match="dense model"):
+        profile.validate_active_manifest(
+            {
+                "domain": "labour_law",
+                "dense": {"model_key": "multilingual-e5-base"},
+                "reranker_model_key": "bge-reranker-v2-m3",
+                "hybrid_candidate_limit": 25,
+            }
+        )
 
 
 def test_new_scope_identity_cannot_retain_a_stale_dense_index(tmp_path: Path) -> None:
@@ -154,3 +198,14 @@ def test_dense_collection_name_changes_with_index_version() -> None:
     )
 
     assert first != second
+
+
+def test_active_manifest_paths_can_move_with_the_release(tmp_path: Path) -> None:
+    active = tmp_path / "retrieval_data" / "labour_law" / "active.json"
+
+    assert _resolve_active_path(active, "bm25/index") == (
+        active.parent / "bm25/index"
+    ).resolve()
+    assert _resolve_active_path(active, "../../retrieval-scopes/labour-law-v1/manifest.json") == (
+        tmp_path / "retrieval-scopes/labour-law-v1/manifest.json"
+    ).resolve()

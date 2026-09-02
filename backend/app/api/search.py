@@ -72,6 +72,7 @@ class SearchRequest(BaseModel):
     domains: list[str] = Field(default_factory=lambda: ["labour_law"], min_length=1, max_length=8)
     mode: SearchMode = SearchMode.HYBRID_RERANK
     limit: int = Field(default=10, ge=1, le=20)
+    include_doctrine: bool = False
     filters: SearchFilterRequest = Field(default_factory=SearchFilterRequest)
 
     @field_validator("query")
@@ -96,6 +97,8 @@ class SearchRequest(BaseModel):
 
 
 class SearchResult(BaseModel):
+    source_channel: Literal["primary", "doctrine"]
+    source_kind: str
     domain: str
     rank: int
     score: float
@@ -118,6 +121,9 @@ class SearchResult(BaseModel):
     corpus_version: str
     retrieval_scope_version: str
     index_version: str
+    author: str | None
+    publication_year: int | None
+    citation_text: str | None
 
 
 class SearchResponse(BaseModel):
@@ -125,6 +131,7 @@ class SearchResponse(BaseModel):
     mode: SearchMode
     domains: list[str]
     results: list[SearchResult]
+    doctrine_results: list[SearchResult] = Field(default_factory=list)
 
 
 @lru_cache
@@ -173,21 +180,56 @@ async def search(payload: SearchRequest, coordinator: SearchCoordinator) -> Sear
             filters=payload.filters.to_domain_filters(),
             limit=payload.limit,
         )
-        return _build_response(payload, coordinator, hits)
+        doctrine_hits: list[SearchHit] = []
+        if payload.include_doctrine:
+            doctrine_hits = await run_in_threadpool(
+                coordinator.search,
+                payload.query,
+                domains=tuple(payload.domains),
+                mode=payload.mode.value,
+                filters=payload.filters.to_domain_filters(),
+                limit=payload.limit,
+                channel="doctrine",
+            )
+        return _build_response(payload, coordinator, hits, doctrine_hits)
     except Exception as exc:
         raise _unavailable(exc) from None
 
 
 def _build_response(
-    payload: SearchRequest, coordinator: DomainSearchCoordinator, hits: list[SearchHit]
+    payload: SearchRequest,
+    coordinator: DomainSearchCoordinator,
+    hits: list[SearchHit],
+    doctrine_hits: list[SearchHit] | None = None,
 ) -> SearchResponse:
+    results = _build_results(coordinator, hits, channel="primary")
+    doctrine_results = _build_results(
+        coordinator, doctrine_hits or [], channel="doctrine"
+    )
+    return SearchResponse(
+        query=payload.query,
+        mode=payload.mode,
+        domains=payload.domains,
+        results=results,
+        doctrine_results=doctrine_results,
+    )
+
+
+def _build_results(
+    coordinator: DomainSearchCoordinator,
+    hits: list[SearchHit],
+    *,
+    channel: Literal["primary", "doctrine"],
+) -> list[SearchResult]:
     results = []
     for hit in hits:
-        index = coordinator.registry.get(hit.record.domain_code)
+        index = coordinator.registry.get(hit.record.domain_code, channel)
         if index is None:
             continue
         results.append(
             SearchResult(
+                source_channel=channel,
+                source_kind=hit.record.source_kind,
                 domain=hit.record.domain_code,
                 rank=hit.rank,
                 score=hit.score,
@@ -210,11 +252,9 @@ def _build_response(
                 corpus_version=hit.record.corpus_version,
                 retrieval_scope_version=hit.record.retrieval_scope_version,
                 index_version=index.index_version,
+                author=hit.record.author,
+                publication_year=hit.record.publication_year,
+                citation_text=hit.record.citation_text,
             )
         )
-    return SearchResponse(
-        query=payload.query,
-        mode=payload.mode,
-        domains=payload.domains,
-        results=results,
-    )
+    return results

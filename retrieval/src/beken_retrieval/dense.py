@@ -126,6 +126,19 @@ class OnnxDenseEncoder:
                 revision=spec.revision,
                 token=False,
             )
+            for artifact in spec.supporting_artifacts:
+                if (
+                    not artifact.startswith("onnx/")
+                    or ".." in artifact.split("/")
+                    or not artifact.endswith(".onnx_data")
+                ):
+                    raise ValueError("Unsafe ONNX supporting artifact")
+                hf_hub_download(
+                    spec.model_id,
+                    artifact,
+                    revision=spec.revision,
+                    token=False,
+                )
             self.tokenizer = AutoTokenizer.from_pretrained(
                 spec.model_id,
                 revision=spec.revision,

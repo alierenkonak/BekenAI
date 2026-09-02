@@ -16,6 +16,10 @@ class RetrievalSettings(BaseSettings):
     retrieval_index_root: Path = Path("retrieval_data")
     retrieval_scope_root: Path = Path("retrieval-scopes")
     retrieval_model_catalog: Path = Path("retrieval/config/models.json")
+    retrieval_profile_catalog: Path = Path("retrieval/config/domain_profiles.json")
+    model_inference_url: str | None = None
+    model_inference_token: SecretStr | None = None
+    model_inference_timeout_seconds: float = 120.0
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
@@ -41,6 +45,28 @@ class RetrievalSettings(BaseSettings):
     @property
     def qdrant_secret(self) -> str | None:
         return self.qdrant_api_key.get_secret_value() if self.qdrant_api_key else None
+
+    @property
+    def model_inference_base_url(self) -> str:
+        if not self.model_inference_url:
+            raise ValueError("MODEL_INFERENCE_URL is required for runtime retrieval")
+        parts = urlsplit(self.model_inference_url)
+        if parts.scheme not in {"http", "https"} or not parts.hostname:
+            raise ValueError("MODEL_INFERENCE_URL must be an absolute HTTP(S) URL")
+        if parts.username or parts.password or parts.query or parts.fragment:
+            raise ValueError("MODEL_INFERENCE_URL cannot contain credentials, query, or fragment")
+        if parts.scheme == "http" and parts.hostname not in {"127.0.0.1", "localhost", "::1"}:
+            raise ValueError("Plain HTTP model inference is allowed only over loopback")
+        return self.model_inference_url.rstrip("/")
+
+    @property
+    def model_inference_secret(self) -> str:
+        if not self.model_inference_token:
+            raise ValueError("MODEL_INFERENCE_TOKEN is required for runtime retrieval")
+        value = self.model_inference_token.get_secret_value()
+        if len(value) < 32:
+            raise ValueError("MODEL_INFERENCE_TOKEN must contain at least 32 characters")
+        return value
 
 
 @lru_cache

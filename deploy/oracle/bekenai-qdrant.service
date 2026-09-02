@@ -1,0 +1,19 @@
+[Unit]
+Description=Beken.ai private Qdrant vector database
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+ConditionPathIsDirectory=/var/lib/bekenai-qdrant
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=120
+TimeoutStopSec=60
+ExecStartPre=-/usr/bin/docker rm -f bekenai-qdrant
+ExecStart=/usr/bin/docker run --name bekenai-qdrant --pull=never --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=256 --memory=1g --cpus=0.5 -p 127.0.0.1:6333:6333 -p 127.0.0.1:6334:6334 -v /var/lib/bekenai-qdrant:/qdrant/storage qdrant/qdrant:v1.15.4
+ExecStop=/usr/bin/docker stop -t 30 bekenai-qdrant
+
+[Install]
+WantedBy=multi-user.target

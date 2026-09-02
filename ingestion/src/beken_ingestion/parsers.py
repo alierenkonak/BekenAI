@@ -11,6 +11,7 @@ from typing import Any
 from pypdf import PdfReader
 
 from beken_ingestion.chunking import PARSER_VERSION, build_chunks
+from beken_ingestion.doctrine_structure import clean_doctrine_pages, parse_doctrine_structure
 from beken_ingestion.legal_structure import audit_article_structure, parse_legal_structure
 from beken_ingestion.models import DocumentChunk, LegalUnit, ParsedDocument, RawDocument, TextPage
 from beken_ingestion.normalization import normalize_legal_text, normalized_identifier, stable_hash
@@ -387,7 +388,11 @@ def _build_parsed_document(
     has_complete_court_metadata = all(
         court.get(field) for field in ("authority", "chamber", "case_number", "decision_number")
     )
-    confidence = 0.95 if source_kind == "legislation" or has_complete_court_metadata else 0.75
+    confidence = (
+        0.95
+        if source_kind in {"legislation", "doctrine"} or has_complete_court_metadata
+        else 0.75
+    )
     metadata: dict[str, Any] = {
         "source_kind": source_kind,
         "authority": supplied.get("authority") or court.get("authority"),
@@ -410,15 +415,34 @@ def _build_parsed_document(
         ]
         title = ", ".join(part for part in (heading, *references) if part)
     title = title or raw.source_document_id or "Başlıksız hukuk belgesi"
-    legal_units, provision_events = (
-        parse_legal_structure(text, page_spans, extraction_method, confidence)
-        if source_kind == "legislation"
-        else ((), ())
-    )
     parse_metadata: dict[str, Any] = {}
+    if source_kind == "legislation":
+        legal_units, provision_events = parse_legal_structure(
+            text, page_spans, extraction_method, confidence
+        )
+    elif source_kind == "doctrine":
+        content_page_start = int(supplied.get("content_page_start") or 1)
+        try:
+            legal_units, doctrine_audit = parse_doctrine_structure(
+                text,
+                page_spans,
+                extraction_method,
+                confidence,
+                content_page_start=content_page_start,
+            )
+        except ValueError as exc:
+            raise ExtractionError(str(exc)) from exc
+        provision_events = ()
+        parse_metadata["doctrine_structure_audit"] = doctrine_audit
+    else:
+        legal_units, provision_events = (), ()
     if cleaned_page_count:
         parse_metadata["text_cleanup"] = {
-            "method": "yargitay_export_footer_v1",
+            "method": (
+                "doctrine_header_and_hyphenation_v1"
+                if source_kind == "doctrine"
+                else "yargitay_export_footer_v1"
+            ),
             "cleaned_page_count": cleaned_page_count,
             "raw_artifact_modified": False,
         }
@@ -441,11 +465,40 @@ def _build_parsed_document(
         page_spans=page_spans,
         legal_units=legal_units,
         document_title=title,
+        max_chars=2_500 if source_kind == "doctrine" else 3_000,
     )
     if not chunks:
         raise ExtractionError("Document did not produce any chunks")
     if source_kind == "legislation":
         _validate_legislation_structure(text, legal_units, chunks, expectations)
+    elif source_kind == "doctrine":
+        invalid_units = [
+            unit.unit_key
+            for unit in legal_units
+            if text[unit.char_start : unit.char_end] != unit.text
+        ]
+        invalid_chunks = [
+            str(chunk.chunk_index)
+            for chunk in chunks
+            if text[chunk.char_start : chunk.char_end] != chunk.text
+        ]
+        if invalid_units or invalid_chunks:
+            raise ExtractionError(
+                "Doctrine exact passage validation failed: "
+                f"units={invalid_units[:5]}, chunks={invalid_chunks[:5]}"
+            )
+        linked = {key for chunk in chunks for key in chunk.unit_keys}
+        unlinked = [unit.unit_key for unit in legal_units if unit.unit_key not in linked]
+        if unlinked:
+            raise ExtractionError(f"Doctrine units without a retrieval chunk: {unlinked[:5]}")
+
+    publication_year_value = supplied.get("publication_year")
+    publication_year = int(publication_year_value) if publication_year_value else None
+    if publication_year is not None and not 1000 <= publication_year <= 9999:
+        raise ExtractionError("publication_year must contain four digits")
+    rights_basis = str(supplied.get("rights_basis") or "").strip() or None
+    if source_kind == "doctrine" and not rights_basis:
+        raise ExtractionError("Doctrine documents require an explicit rights_basis")
 
     document_date = _parse_date(supplied.get("document_date")) or court.get("document_date")
 
@@ -457,6 +510,10 @@ def _build_parsed_document(
         document_type=document_type,
         domain=domain,
         title=title,
+        author=str(supplied.get("author") or "").strip() or None,
+        publication_year=publication_year,
+        citation_text=str(supplied.get("citation_text") or "").strip() or None,
+        rights_basis=rights_basis,
         authority=metadata.get("authority"),
         chamber=metadata.get("chamber"),
         case_number=metadata.get("case_number"),
@@ -548,6 +605,30 @@ def _parse_court_decision(
         extraction_method=extraction_method,
         cleaned_page_count=cleaned_page_count,
         court=court,
+    )
+
+
+@PARSER_REGISTRY.register("doctrine", "course_note")
+def _parse_course_note(
+    raw: RawDocument,
+    pages: list[TextPage],
+    extraction_method: str,
+    domain: str,
+) -> ParsedDocument:
+    cleaned_pages, cleaned_page_count = clean_doctrine_pages(pages)
+    text, page_spans, _ = _join_pages(cleaned_pages)
+    if len(text) < 500:
+        raise ExtractionError("Doctrine document contains too little extractable text")
+    return _build_parsed_document(
+        raw=raw,
+        source_kind="doctrine",
+        document_type="course_note",
+        domain=domain,
+        text=text,
+        page_spans=page_spans,
+        extraction_method=f"{extraction_method}+doctrine_cleanup_v1",
+        cleaned_page_count=cleaned_page_count,
+        court={},
     )
 
 

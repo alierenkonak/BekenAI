@@ -1,0 +1,9 @@
+[Unit]
+Description=Beken.ai model-service swap
+Before=bekenai-model-service.service
+
+[Swap]
+What=/swapfile
+
+[Install]
+WantedBy=swap.target

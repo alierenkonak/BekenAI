@@ -184,7 +184,7 @@ def test_legislation_parser_preserves_hierarchy_special_articles_and_events() ->
     parsed = parse_document(raw)
     unit_types = {unit.unit_type for unit in parsed.legal_units}
 
-    assert parsed.parser_version == "2026.08.4"
+    assert parsed.parser_version == "2026.09.1"
     assert {
         "chapter",
         "article",
@@ -511,3 +511,82 @@ def test_yargitay_export_metadata_and_footers_are_cleaned() -> None:
     assert {"yargılama_süreci", "uyuşmazlık", "gerekçe", "sonuç"} <= {
         chunk.section_type for chunk in parsed.chunks
     }
+
+
+def test_doctrine_course_note_is_structured_and_excludes_bibliography() -> None:
+    body = (
+        "BİRİNCİ BÖLÜM\nBİREYSEL İŞ HUKUKU\n"
+        "§ 1. İŞ HUKUKUNA GİRİŞ\n"
+        "I. İŞ HUKUKUNUN KONUSU\n"
+        "A. İşçi Kavramı\n"
+        + "İşçi ile işveren arasındaki ilişkiyi açıklayan yardımcı kaynak metni. " * 12
+        + "\nB. İşveren Kavramı\n"
+        + "İşverenin yükümlülüklerini açıklayan yardımcı kaynak metni. " * 12
+        + "\nYARARLANILAN KAYNAKLAR\nÖrnek kaynakça kaydı."
+    )
+    raw = RawDocument(
+        source_name="authorized-author",
+        source_document_id="course-note-2026",
+        source_url="https://example.test/course-note",
+        media_type="text/plain",
+        content=body.encode(),
+        metadata={
+            "source_kind": "doctrine",
+            "document_type": "course_note",
+            "domain": "labour_law",
+            "title": "İş Hukuku Ders Notu (2026)",
+            "author": "Örnek Yazar",
+            "publication_year": 2026,
+            "citation_text": "Örnek Yazar, İş Hukuku Ders Notu, 2026.",
+            "rights_basis": "user_attested_permission",
+            "content_page_start": 1,
+        },
+    )
+
+    parsed = parse_document(raw)
+
+    assert parsed.source_kind == "doctrine"
+    assert parsed.author == "Örnek Yazar"
+    assert parsed.publication_year == 2026
+    assert {unit.unit_type for unit in parsed.legal_units} >= {
+        "chapter",
+        "section",
+        "part",
+        "paragraph",
+        "metadata",
+    }
+    bibliography = next(
+        unit for unit in parsed.legal_units if unit.label == "bibliography"
+    )
+    assert bibliography.metadata["retrieval_eligible"] is False
+    bibliography_chunks = [
+        chunk for chunk in parsed.chunks if bibliography.unit_key in chunk.unit_keys
+    ]
+    assert bibliography_chunks
+    assert all(
+        chunk.metadata["retrieval_eligible"] is False
+        for chunk in bibliography_chunks
+    )
+    assert all(len(chunk.text) <= 2_500 for chunk in parsed.chunks)
+
+
+def test_doctrine_requires_an_explicit_rights_basis() -> None:
+    raw = RawDocument(
+        source_name="manual",
+        source_document_id="course-note-without-rights",
+        source_url="https://example.test/course-note",
+        media_type="text/plain",
+        content=(
+            "BİRİNCİ BÖLÜM\nBİREYSEL İŞ HUKUKU\n§ 1. GİRİŞ\n"
+            + "Yeterli uzunlukta açıklama. " * 30
+        ).encode(),
+        metadata={
+            "source_kind": "doctrine",
+            "document_type": "course_note",
+            "domain": "labour_law",
+            "content_page_start": 1,
+        },
+    )
+
+    with pytest.raises(ExtractionError, match="rights_basis"):
+        parse_document(raw)

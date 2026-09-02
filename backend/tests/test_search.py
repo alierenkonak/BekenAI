@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -123,6 +124,77 @@ async def test_search_returns_traceable_exact_passage() -> None:
     assert result["chunk_id"] == hit.record.chunk_id
     assert result["exact_passage"] == hit.record.text
     assert result["index_version"] == "test-index"
+
+
+@pytest.mark.asyncio
+async def test_doctrine_is_opt_in_and_returned_in_a_separate_channel() -> None:
+    primary_hit = fixture_hit()
+    doctrine_hit = SearchHit(
+        record=replace(
+            primary_hit.record,
+            chunk_id=str(uuid4()),
+            parse_id=str(uuid4()),
+            document_id=str(uuid4()),
+            source_document_id="course-note-2026",
+            corpus_version="labour-law-doctrine-v1",
+            retrieval_scope_version="labour-law-doctrine-v1",
+            domain_role="supplemental",
+            source_kind="doctrine",
+            document_type="course_note",
+            title="İş Hukuku Ders Notu (2026)",
+            author="Örnek Yazar",
+            publication_year=2026,
+            citation_text="Örnek Yazar, İş Hukuku Ders Notu, 2026.",
+        ),
+        score=0.9,
+        rank=1,
+        score_breakdown={"bm25": 0.9},
+    )
+    registry = InMemoryIndexRegistry(
+        (
+            HybridDomainIndex(
+                "labour_law",
+                "labour-law-pilot-v4",
+                "primary-index",
+                lexical=StaticRetriever([primary_hit]),
+            ),
+            HybridDomainIndex(
+                "labour_law",
+                "labour-law-doctrine-v1",
+                "doctrine-index",
+                channel="doctrine",
+                lexical=StaticRetriever([doctrine_hit]),
+            ),
+        )
+    )
+    app.dependency_overrides[get_search_coordinator] = lambda: DomainSearchCoordinator(
+        registry
+    )
+    try:
+        async with api_client() as client:
+            without_doctrine = await client.post(
+                "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
+            )
+            with_doctrine = await client.post(
+                "/search",
+                json={
+                    "query": "fesih bildirimi",
+                    "mode": "bm25",
+                    "include_doctrine": True,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert without_doctrine.status_code == 200
+    assert without_doctrine.json()["doctrine_results"] == []
+    assert with_doctrine.status_code == 200
+    payload = with_doctrine.json()
+    assert payload["results"][0]["source_channel"] == "primary"
+    assert payload["doctrine_results"][0]["source_channel"] == "doctrine"
+    assert payload["doctrine_results"][0]["source_kind"] == "doctrine"
+    assert payload["doctrine_results"][0]["author"] == "Örnek Yazar"
+    assert payload["doctrine_results"][0]["index_version"] == "doctrine-index"
 
 
 @pytest.mark.asyncio

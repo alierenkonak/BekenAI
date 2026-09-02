@@ -55,3 +55,22 @@ def test_court_decision_storage_path_uses_legal_identifiers() -> None:
         "global/yargitay/"
         "yargitay-22-hukuk-dairesi-e-2013-31047-k-2015-4444--0123456789ab.html"
     )
+
+
+def test_course_note_storage_path_is_readable_and_content_addressed() -> None:
+    path = readable_storage_path(
+        source_name="ragip-karakus",
+        source_document_id="course-note-ragip-karakus-is-hukuku-2026",
+        media_type="application/pdf",
+        content_hash="00b222d99ec69a5093304c0f9655604a9cfe5672900f2f0dba10575b21f7f7f1",
+        metadata={
+            "source_kind": "doctrine",
+            "document_type": "course_note",
+            "title": "İş Hukuku Ders Notu (2026)",
+        },
+    )
+
+    assert path == (
+        "global/doktrin/ders-notu/"
+        "is-hukuku-ders-notu-2026--00b222d99ec6.pdf"
+    )

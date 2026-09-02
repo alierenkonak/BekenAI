@@ -233,7 +233,9 @@ class LocalFileAdapter:
         return RawDocument(
             source_name=str(metadata.get("source_name") or "manual"),
             source_document_id=str(metadata.get("source_document_id") or resolved.stem),
-            source_url=str(metadata.get("source_url") or resolved.as_uri()),
+            # Local filesystem paths may contain usernames or private directory names.
+            # Persist only an explicitly supplied public/canonical source URL.
+            source_url=str(metadata["source_url"]) if metadata.get("source_url") else None,
             media_type=media_type,
             content=resolved.read_bytes(),
             metadata=metadata,

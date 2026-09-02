@@ -18,16 +18,21 @@ def collection_name(
     corpus_version: str,
     model_key: str,
     index_version: str | None = None,
+    channel: str = "primary",
     prefix: str = "beken_global",
 ) -> str:
-    value = f"{prefix}_{domain}_{corpus_version}_{model_key}"
+    lane = "" if channel == "primary" else f"_{channel}"
+    value = f"{prefix}_{domain}{lane}_{corpus_version}_{model_key}"
     if index_version:
         value = f"{value}_{index_version}"
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", value)[:255]
 
 
-def active_alias(domain: str, prefix: str = "beken_global") -> str:
-    return f"{prefix}_{domain}_active"
+def active_alias(
+    domain: str, channel: str = "primary", prefix: str = "beken_global"
+) -> str:
+    lane = "" if channel == "primary" else f"_{channel}"
+    return f"{prefix}_{domain}{lane}_active"
 
 
 class QdrantIndexer:

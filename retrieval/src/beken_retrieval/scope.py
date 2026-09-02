@@ -28,11 +28,17 @@ class RetrievalScope:
         return str(self.payload["corpus_version"])
 
     @property
+    def channel(self) -> str:
+        return str(self.payload.get("channel") or "primary")
+
+    @property
     def review_status(self) -> str:
         return str(self.payload.get("review_status") or "draft")
 
     def allows(self, record: ChunkRecord) -> bool:
         if record.domain_code != self.domain or record.corpus_version != self.corpus_version:
+            return False
+        if not record.retrieval_eligible:
             return False
         roles = self.payload.get("roles") or {}
         role_rule = roles.get(record.domain_role) or {}

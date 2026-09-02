@@ -1,0 +1,23 @@
+{
+  "version": "labour-law-doctrine-v1",
+  "channel": "doctrine",
+  "domain": "labour_law",
+  "corpus_version": "labour-law-doctrine-v1",
+  "review_status": "reviewed",
+  "evaluation_status": "skipped_by_owner",
+  "context_builder_version": "legal-context-v1",
+  "description": "Kullanıcı seçimiyle açılan, birincil kaynak sonuçlarından ayrı tutulan Doktrin/Yardımcı Kaynaklar retrieval kapsamı.",
+  "roles": {
+    "core": {"include": false, "mode": "excluded"},
+    "supplemental": {"include": true, "mode": "full_document"},
+    "future_domain": {"include": false, "mode": "excluded"}
+  },
+  "selected_models": {
+    "dense": "bge-m3",
+    "fusion": "rrf",
+    "fusion_k": 60,
+    "reranker": "bge-reranker-v2-m3",
+    "candidate_limit": 25,
+    "selection_basis": "project_owner_choice_without_doctrine_evaluation"
+  }
+}

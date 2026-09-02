@@ -194,6 +194,16 @@ def test_local_file_adapter_does_not_persist_local_path_when_source_url_is_suppl
     assert raw.source_url == "https://karararama.yargitay.gov.tr/"
 
 
+def test_local_file_adapter_does_not_infer_a_file_url(tmp_path: Path) -> None:
+    document = tmp_path / "private-directory" / "decision.txt"
+    document.parent.mkdir()
+    document.write_text("Karar metni")
+
+    raw = LocalFileAdapter().fetch(document, {"source_document_id": "decision-1"})
+
+    assert raw.source_url is None
+
+
 def test_reparse_command_requires_distinct_source_and_target_inputs() -> None:
     args = build_parser().parse_args(
         [
@@ -236,7 +246,7 @@ def test_reparse_uses_target_manifest_metadata_without_losing_existing_values() 
 
 def test_current_manifest_requires_article_expectations_for_every_legislation_source() -> None:
     manifest = {
-        "parser_version": "2026.08.4",
+        "parser_version": "2026.09.1",
         "sources": [
             {
                 "source_document_id": "law-without-expectations",

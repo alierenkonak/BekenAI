@@ -19,6 +19,7 @@ class ChunkRecord:
     title: str
     text: str
     section_type: str
+    source_kind: str = "legislation"
     breadcrumb: tuple[str, ...] = ()
     page_number: int | None = None
     authority: str | None = None
@@ -30,6 +31,10 @@ class ChunkRecord:
     legislation_numbers: tuple[str, ...] = ()
     article_labels: tuple[str, ...] = ()
     source_url: str | None = None
+    author: str | None = None
+    publication_year: int | None = None
+    citation_text: str | None = None
+    retrieval_eligible: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

@@ -105,6 +105,58 @@ def test_identity_reranker_keeps_candidate_order() -> None:
     assert IdentityReranker().rerank("q", hits, limit=1)[0].rank == 1
 
 
+def test_default_hybrid_candidate_limit_is_mvp_limit() -> None:
+    index = HybridDomainIndex("labour_law", "v1", "i1")
+
+    assert index.hybrid_candidate_limit == 25
+
+
+def test_doctrine_channel_does_not_replace_primary_index() -> None:
+    primary = record("labour_law", "primary")
+    doctrine = replace(
+        record("labour_law", "doctrine"),
+        source_kind="doctrine",
+        document_type="course_note",
+    )
+    registry = InMemoryIndexRegistry(
+        (
+            HybridDomainIndex(
+                "labour_law",
+                "v1",
+                "primary-index",
+                lexical=StaticRetriever([SearchHit(primary, 1)]),
+            ),
+            HybridDomainIndex(
+                "labour_law",
+                "doctrine-v1",
+                "doctrine-index",
+                channel="doctrine",
+                lexical=StaticRetriever([SearchHit(doctrine, 1)]),
+            ),
+        )
+    )
+    coordinator = DomainSearchCoordinator(registry)
+
+    primary_results = coordinator.search(
+        "sorgu",
+        domains=("labour_law",),
+        mode="bm25",
+        filters=SearchFilters(),
+        limit=10,
+    )
+    doctrine_results = coordinator.search(
+        "sorgu",
+        domains=("labour_law",),
+        mode="bm25",
+        filters=SearchFilters(),
+        limit=10,
+        channel="doctrine",
+    )
+
+    assert primary_results[0].record.source_kind == "legislation"
+    assert doctrine_results[0].record.source_kind == "doctrine"
+
+
 def test_evaluation_draft_has_expected_split_and_cannot_pass_unreviewed() -> None:
     queries = load_queries(__import__("pathlib").Path("evals/labour_law/queries.v1.jsonl"))
 

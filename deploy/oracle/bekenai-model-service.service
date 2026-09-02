@@ -1,0 +1,54 @@
+[Unit]
+Description=Beken.ai pinned embedding and reranker service
+After=network-online.target swapfile.swap
+Wants=network-online.target
+Requires=swapfile.swap
+ConditionPathExists=/opt/bekenai/current/retrieval/config/models.json
+
+[Service]
+Type=simple
+User=bekenai
+Group=bekenai
+WorkingDirectory=/opt/bekenai/current
+EnvironmentFile=/etc/bekenai/model-service.env
+Environment=PYTHONPATH=/opt/bekenai/current/retrieval/src
+Environment=HF_HOME=/var/cache/bekenai-model-service/huggingface
+Environment=HF_HUB_DISABLE_IMPLICIT_TOKEN=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=TOKENIZERS_PARALLELISM=false
+Environment=OMP_NUM_THREADS=2
+Environment=OPENBLAS_NUM_THREADS=2
+ExecStart=/opt/bekenai/venv/bin/uvicorn beken_retrieval.model_service:create_app --factory --host 127.0.0.1 --port 8081 --workers 1 --no-access-log --limit-concurrency 2
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=900
+TimeoutStopSec=60
+KillSignal=SIGINT
+
+StateDirectory=bekenai-model-service
+CacheDirectory=bekenai-model-service
+UMask=0077
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

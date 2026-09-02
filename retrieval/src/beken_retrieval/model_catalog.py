@@ -12,6 +12,7 @@ class ModelSpec:
     revision: str
     backend: str
     safe_artifact: str
+    supporting_artifacts: tuple[str, ...] = ()
     dimensions: int | None = None
     max_tokens: int | None = None
     query_prefix: str = ""
@@ -25,7 +26,14 @@ class ModelCatalog:
     @classmethod
     def load(cls, path: Path) -> ModelCatalog:
         payload = json.loads(path.read_text(encoding="utf-8"))
-        return cls({key: ModelSpec(key=key, **value) for key, value in payload.items()})
+        specs = {}
+        for key, value in payload.items():
+            normalized = dict(value)
+            normalized["supporting_artifacts"] = tuple(
+                normalized.get("supporting_artifacts", ())
+            )
+            specs[key] = ModelSpec(key=key, **normalized)
+        return cls(specs)
 
     def get(self, key: str) -> ModelSpec:
         try:

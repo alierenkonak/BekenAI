@@ -22,12 +22,17 @@ select
   dd.domain_code,
   cvd.corpus_version,
   dd.role as domain_role,
+  d.source_kind,
   d.document_type,
   d.title,
+  d.author,
+  d.publication_year,
+  d.citation_text,
   c.text,
   c.section_type,
   c.metadata -> 'breadcrumb' as breadcrumb,
   c.page_number,
+  coalesce((c.metadata ->> 'retrieval_eligible')::boolean, true) as retrieval_eligible,
   d.authority,
   d.chamber,
   d.case_number,
@@ -78,7 +83,8 @@ left join legal.legal_units u
 _CHUNK_GROUP_BY = """
 group by
   c.id, c.parse_id, d.id, d.source_document_id, dd.domain_code,
-  cvd.corpus_version, dd.role, d.document_type, d.title, c.text,
+  cvd.corpus_version, dd.role, d.source_kind, d.document_type, d.title,
+  d.author, d.publication_year, d.citation_text, c.text,
   c.section_type, c.metadata, c.page_number, d.authority, d.chamber,
   d.case_number, d.decision_number, d.document_date,
   d.source_kind, d.source_document_id, d.related_legislation,
@@ -136,7 +142,7 @@ class PostgresCorpusRepository:
         with self._connect() as connection, connection.cursor() as cursor:
             existing = cursor.execute(
                 """
-                select manifest_hash, status
+                select manifest_hash, status, channel
                 from legal.retrieval_scopes
                 where version = %s
                 """,
@@ -150,6 +156,10 @@ class PostgresCorpusRepository:
                 raise ValueError(
                     f"Retrieval scope {scope.version!r} already has a different manifest"
                 )
+            if existing and existing["channel"] != scope.channel:
+                raise ValueError(
+                    f"Retrieval scope {scope.version!r} already belongs to another channel"
+                )
             status = "reviewed" if scope.review_status == "reviewed" else "draft"
             if existing:
                 cursor.execute(
@@ -157,6 +167,7 @@ class PostgresCorpusRepository:
                     update legal.retrieval_scopes
                     set manifest_hash = %s,
                         manifest = %s,
+                        channel = %s,
                         status = %s,
                         reviewed_at = case when %s = 'reviewed' then now() else null end
                     where version = %s
@@ -164,6 +175,7 @@ class PostgresCorpusRepository:
                     (
                         scope.manifest_hash,
                         Jsonb(scope.payload),
+                        scope.channel,
                         status,
                         status,
                         scope.version,
@@ -173,10 +185,10 @@ class PostgresCorpusRepository:
             cursor.execute(
                 """
                 insert into legal.retrieval_scopes (
-                  version, domain_code, corpus_version, manifest_hash, manifest, status,
+                  version, domain_code, corpus_version, channel, manifest_hash, manifest, status,
                   reviewed_at
                 ) values (
-                  %s, %s, %s, %s, %s, %s,
+                  %s, %s, %s, %s, %s, %s, %s,
                   case when %s = 'reviewed' then now() else null end
                 )
                 """,
@@ -184,6 +196,7 @@ class PostgresCorpusRepository:
                     scope.version,
                     scope.domain,
                     scope.corpus_version,
+                    scope.channel,
                     scope.manifest_hash,
                     Jsonb(scope.payload),
                     status,
@@ -211,9 +224,10 @@ class PostgresCorpusRepository:
                 """
                 select id, manifest_hash
                 from legal.retrieval_indexes
-                where domain_code = %s and backend = %s and index_version = %s
+                where domain_code = %s and channel = %s
+                  and backend = %s and index_version = %s
                 """,
-                (scope.domain, backend, index_version),
+                (scope.domain, scope.channel, backend, index_version),
             ).fetchone()
             if existing and existing["manifest_hash"] != manifest_hash:
                 raise ValueError("An immutable retrieval index version has different metadata")
@@ -223,13 +237,14 @@ class PostgresCorpusRepository:
                 row = cursor.execute(
                     """
                     insert into legal.retrieval_indexes (
-                      domain_code, scope_version, backend, model_id,
+                      domain_code, channel, scope_version, backend, model_id,
                       model_revision, index_version, manifest_hash, status, metadata
-                    ) values (%s, %s, %s, %s, %s, %s, %s, 'ready', %s)
+                    ) values (%s, %s, %s, %s, %s, %s, %s, %s, 'ready', %s)
                     returning id
                     """,
                     (
                         scope.domain,
+                        scope.channel,
                         scope.version,
                         backend,
                         model_id,
@@ -245,10 +260,11 @@ class PostgresCorpusRepository:
                     """
                     update legal.retrieval_indexes
                     set status = 'retired'
-                    where domain_code = %s and backend = %s and id <> %s
+                    where domain_code = %s and channel = %s
+                      and backend = %s and id <> %s
                       and status = 'ready'
                     """,
-                    (scope.domain, backend, index_id),
+                    (scope.domain, scope.channel, backend, index_id),
                 )
                 cursor.execute(
                     """
@@ -260,15 +276,23 @@ class PostgresCorpusRepository:
                 )
             return index_id
 
-    def activate_index(self, *, domain: str, backend: str, index_version: str) -> None:
+    def activate_index(
+        self,
+        *,
+        domain: str,
+        backend: str,
+        index_version: str,
+        channel: str = "primary",
+    ) -> None:
         with self._connect() as connection, connection.cursor() as cursor:
             row = cursor.execute(
                 """
                 select id
                 from legal.retrieval_indexes
-                where domain_code = %s and backend = %s and index_version = %s
+                where domain_code = %s and channel = %s
+                  and backend = %s and index_version = %s
                 """,
-                (domain, backend, index_version),
+                (domain, channel, backend, index_version),
             ).fetchone()
             if not row:
                 raise ValueError("Cannot activate an unregistered retrieval index")
@@ -276,10 +300,11 @@ class PostgresCorpusRepository:
                 """
                 update legal.retrieval_indexes
                 set status = 'retired'
-                where domain_code = %s and backend = %s and id <> %s
+                where domain_code = %s and channel = %s
+                  and backend = %s and id <> %s
                   and status = 'ready'
                 """,
-                (domain, backend, row["id"]),
+                (domain, channel, backend, row["id"]),
             )
             cursor.execute(
                 """
@@ -302,6 +327,7 @@ class PostgresCorpusRepository:
             corpus_version=str(row["corpus_version"]),
             retrieval_scope_version=scope_version,
             domain_role=str(row["domain_role"]),
+            source_kind=str(row["source_kind"]),
             document_type=str(row["document_type"]),
             title=str(row["title"]),
             text=str(row["text"]),
@@ -317,4 +343,8 @@ class PostgresCorpusRepository:
             legislation_numbers=tuple(row.get("legislation_numbers") or ()),
             article_labels=tuple(row.get("article_labels") or ()),
             source_url=row.get("source_url"),
+            author=row.get("author"),
+            publication_year=row.get("publication_year"),
+            citation_text=row.get("citation_text"),
+            retrieval_eligible=bool(row.get("retrieval_eligible", True)),
         )

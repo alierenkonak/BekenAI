@@ -16,6 +16,7 @@
     "max_tokens": 8192,
     "backend": "onnx",
     "safe_artifact": "onnx/model.onnx",
+    "supporting_artifacts": ["onnx/model.onnx_data"],
     "query_prefix": "",
     "passage_prefix": ""
   },
