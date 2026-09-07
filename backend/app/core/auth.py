@@ -103,7 +103,6 @@ def get_token_verifier() -> SupabaseTokenVerifier:
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
-    verifier: Annotated[SupabaseTokenVerifier, Depends(get_token_verifier)],
 ) -> AuthenticatedUser:
     if credentials is None or credentials.scheme.casefold() != "bearer":
         raise HTTPException(
@@ -111,6 +110,7 @@ async def get_current_user(
             detail={"code": "authentication_required"},
             headers={"WWW-Authenticate": "Bearer"},
         )
+    verifier = get_token_verifier()
     try:
         return await verifier.verify(credentials.credentials)
     except Exception:
