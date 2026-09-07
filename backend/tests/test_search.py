@@ -65,7 +65,7 @@ async def test_search_returns_503_when_domain_index_is_not_ready() -> None:
                 "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
             )
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_search_coordinator, None)
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "retrieval_index_not_ready"
@@ -89,7 +89,7 @@ async def test_search_returns_empty_200_for_no_matches() -> None:
                 "/search", json={"query": "eşleşmeyen soru", "mode": "bm25"}
             )
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_search_coordinator, None)
 
     assert response.status_code == 200
     assert response.json()["results"] == []
@@ -117,7 +117,7 @@ async def test_search_returns_traceable_exact_passage() -> None:
                 json={"query": "fesih bildirimi", "mode": "hybrid_rerank"},
             )
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_search_coordinator, None)
 
     assert response.status_code == 200
     result = response.json()["results"][0]
@@ -184,7 +184,7 @@ async def test_doctrine_is_opt_in_and_returned_in_a_separate_channel() -> None:
                 },
             )
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_search_coordinator, None)
 
     assert without_doctrine.status_code == 200
     assert without_doctrine.json()["doctrine_results"] == []
@@ -242,7 +242,7 @@ async def test_search_does_not_expose_non_http_source_urls() -> None:
                 "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
             )
     finally:
-        app.dependency_overrides.clear()
+        app.dependency_overrides.pop(get_search_coordinator, None)
 
     assert response.status_code == 200
     assert response.json()["results"][0]["source_url"] is None

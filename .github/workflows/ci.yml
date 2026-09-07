@@ -72,7 +72,7 @@ jobs:
         env:
           BEKEN_RUN_DB_TESTS: "1"
           DATABASE_URL: postgresql://beken:local-development-only@localhost:5432/beken
-        run: pytest ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
+        run: pytest backend/tests/test_stage3_database_integration.py ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
       - name: Run Qdrant integration test with fake encoder
         env:
           BEKEN_RUN_QDRANT_TESTS: "1"

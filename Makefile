@@ -1,4 +1,4 @@
-.PHONY: setup infra-up infra-down frontend-dev backend-dev ingestion-help retrieval-help db-test test lint build validate
+.PHONY: setup infra-up infra-down frontend-dev backend-dev worker-dev ingestion-help retrieval-help db-test test lint build validate
 
 setup:
 	npm --prefix frontend ci
@@ -20,6 +20,9 @@ frontend-dev:
 backend-dev:
 	.venv/bin/uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
 
+worker-dev:
+	PYTHONPATH=backend:retrieval/src .venv/bin/python -m app.worker
+
 ingestion-help:
 	.venv/bin/python -m beken_ingestion --help
 
@@ -28,7 +31,7 @@ retrieval-help:
 
 db-test:
 	docker compose up -d --wait postgres
-	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
+	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest backend/tests/test_stage3_database_integration.py ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
 
 test:
 	.venv/bin/pytest backend/tests ingestion/tests retrieval/tests

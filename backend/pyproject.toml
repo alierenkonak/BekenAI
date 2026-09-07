@@ -9,7 +9,9 @@ description = "Beken.ai Turkish labour law API foundation"
 requires-python = ">=3.12,<3.14"
 dependencies = [
   "fastapi>=0.115,<1",
+  "google-genai>=1.64,<2",
   "httpx>=0.28,<1",
+  "pyjwt[crypto]>=2.10,<3",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.7,<3",
   "uvicorn[standard]>=0.34,<1",
@@ -35,4 +37,3 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
-

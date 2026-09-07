@@ -18,6 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.auth import CurrentUser
+
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
 
@@ -170,7 +172,9 @@ def _safe_source_url(value: str | None) -> str | None:
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search(payload: SearchRequest, coordinator: SearchCoordinator) -> SearchResponse:
+async def search(
+    payload: SearchRequest, coordinator: SearchCoordinator, user: CurrentUser
+) -> SearchResponse:
     try:
         hits = await run_in_threadpool(
             coordinator.search,
@@ -203,9 +207,7 @@ def _build_response(
     doctrine_hits: list[SearchHit] | None = None,
 ) -> SearchResponse:
     results = _build_results(coordinator, hits, channel="primary")
-    doctrine_results = _build_results(
-        coordinator, doctrine_hits or [], channel="doctrine"
-    )
+    doctrine_results = _build_results(coordinator, doctrine_hits or [], channel="doctrine")
     return SearchResponse(
         query=payload.query,
         mode=payload.mode,

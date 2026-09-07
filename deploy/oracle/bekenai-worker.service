@@ -1,5 +1,5 @@
 [Unit]
-Description=Beken.ai FastAPI search service
+Description=Beken.ai durable chat and file worker
 After=network-online.target bekenai-qdrant.service bekenai-model-service.service
 Wants=network-online.target
 Requires=bekenai-qdrant.service bekenai-model-service.service
@@ -13,16 +13,16 @@ Group=bekenai
 WorkingDirectory=/opt/bekenai/current
 EnvironmentFile=/etc/bekenai/api.env
 Environment=PYTHONUNBUFFERED=1
-Environment=PYTHONPATH=/opt/bekenai/current/retrieval/src
+Environment=PYTHONPATH=/opt/bekenai/current/backend:/opt/bekenai/current/retrieval/src
 Environment=TOKENIZERS_PARALLELISM=false
-ExecStart=/opt/bekenai/venv/bin/uvicorn app.main:app --app-dir /opt/bekenai/current/backend --host 127.0.0.1 --port 8000 --workers 1 --no-access-log --timeout-keep-alive 10
+ExecStart=/opt/bekenai/venv/bin/python -m app.worker
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=120
-TimeoutStopSec=30
+TimeoutStopSec=60
 KillSignal=SIGINT
 
-StateDirectory=bekenai-api
+StateDirectory=bekenai-worker
 UMask=0077
 NoNewPrivileges=true
 PrivateDevices=true
