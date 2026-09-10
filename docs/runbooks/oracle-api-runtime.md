@@ -17,8 +17,13 @@ configured, access FastAPI only through an SSH tunnel.
 ## Runtime files
 
 - `/etc/bekenai/api.env`: root-owned mode `0600`; database and model-service secrets
+- `/etc/bekenai/supabase-ca.crt`: Supabase dashboardından indirilen sunucu kök sertifikası
 - `/opt/bekenai/current/retrieval_data`: immutable BM25 index and active manifest
 - `/var/lib/bekenai-qdrant`: persistent Qdrant storage
+
+`/etc/bekenai/api.env` içinde `SUPABASE_DB_SSL_ROOT_CERT=/etc/bekenai/supabase-ca.crt`
+ayarlanmalıdır. Backend, ingestion ve retrieval bağlantıları `sslmode=verify-full` kullanır; sertifika
+olmadan production bağlantısı başlatılmamalıdır.
 
 ## Checks
 

@@ -4,8 +4,10 @@ import logging
 import re
 from datetime import date
 from functools import lru_cache
+from threading import Lock
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from beken_retrieval.config import get_settings as get_retrieval_settings
 from beken_retrieval.coordinator import (
@@ -22,6 +24,26 @@ from app.core.auth import CurrentUser
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
+
+
+class _PerUserSearchGate:
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._active_users: set[UUID] = set()
+
+    def try_acquire(self, user_id: UUID) -> bool:
+        with self._lock:
+            if user_id in self._active_users:
+                return False
+            self._active_users.add(user_id)
+            return True
+
+    def release(self, user_id: UUID) -> None:
+        with self._lock:
+            self._active_users.discard(user_id)
+
+
+_search_gate = _PerUserSearchGate()
 
 
 class SearchFilterRequest(BaseModel):
@@ -175,6 +197,12 @@ def _safe_source_url(value: str | None) -> str | None:
 async def search(
     payload: SearchRequest, coordinator: SearchCoordinator, user: CurrentUser
 ) -> SearchResponse:
+    if not _search_gate.try_acquire(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "search_capacity_exceeded"},
+            headers={"Retry-After": "10"},
+        )
     try:
         hits = await run_in_threadpool(
             coordinator.search,
@@ -198,6 +226,8 @@ async def search(
         return _build_response(payload, coordinator, hits, doctrine_hits)
     except Exception as exc:
         raise _unavailable(exc) from None
+    finally:
+        _search_gate.release(user.id)
 
 
 def _build_response(

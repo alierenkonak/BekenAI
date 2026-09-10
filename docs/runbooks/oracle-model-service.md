@@ -14,9 +14,21 @@ The model service runs the pinned `bge-m3` embedding model and
 The service refuses arbitrary model identifiers. Model revisions and safe artifacts are pinned in
 `retrieval/config/models.json`.
 
-The Oracle ARM runtime also uses `deploy/oracle/constraints.txt`. PyTorch must be installed from
-the official CPU-only wheel index before the rest of the package; this prevents pip from resolving
-unused CUDA packages on the CPU-only VM.
+The Oracle ARM runtime uses `deploy/oracle/requirements.lock`, generated for Python 3.12 on
+Linux ARM64. Every transitive dependency and accepted artifact hash is fixed. The CPU-only PyTorch
+wheel is bound to its official HTTPS URL and SHA-256 digest. Install only wheels from that lock,
+then install the local retrieval package without dependency resolution or isolated build tooling:
+
+```bash
+python3.12 -m venv /opt/bekenai/venv
+/opt/bekenai/venv/bin/python -m pip install --require-hashes --only-binary=:all: -r deploy/oracle/torch.lock -r deploy/oracle/requirements.lock
+/opt/bekenai/venv/bin/python -m pip install --no-deps --no-build-isolation ./retrieval
+/opt/bekenai/venv/bin/python -m pip check
+```
+
+`deploy/oracle/requirements.in` records the reviewed direct model versions. Regenerate the lock
+for `aarch64-manylinux_2_31` with the CPU PyTorch backend; do not resolve it on the server during
+deployment.
 
 ## Required server environment
 
@@ -57,6 +69,13 @@ curl --fail http://127.0.0.1:8081/health/ready
 ```
 
 Never include queries, passages, tokens, or provider URLs in application logs.
+
+Before restarting Qdrant after a unit update, preload the exact multi-architecture manifest used
+by the service:
+
+```bash
+sudo docker pull qdrant/qdrant:v1.15.4@sha256:6ac4807063bbecddca0250bfbcff52acf18c22263b904d12919349e6d0a408f1
+```
 
 ## Oracle A1 MVP baseline
 

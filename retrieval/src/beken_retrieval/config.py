@@ -11,6 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class RetrievalSettings(BaseSettings):
     database_url: str = "postgresql://beken:local-development-only@localhost:5432/beken"
     supabase_db_url: SecretStr | None = None
+    supabase_db_ssl_root_cert: str | None = None
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: SecretStr | None = None
     retrieval_index_root: Path = Path("retrieval_data")
@@ -34,12 +35,17 @@ class RetrievalSettings(BaseSettings):
             return self.database_url
         url = self.supabase_db_url.get_secret_value()
         parts = urlsplit(url)
+        replaced_keys = {"sslmode"}
+        if self.supabase_db_ssl_root_cert:
+            replaced_keys.add("sslrootcert")
         query = [
             (key, value)
             for key, value in parse_qsl(parts.query, keep_blank_values=True)
-            if key.casefold() != "sslmode"
+            if key.casefold() not in replaced_keys
         ]
-        query.append(("sslmode", "require"))
+        if self.supabase_db_ssl_root_cert:
+            query.append(("sslrootcert", self.supabase_db_ssl_root_cert))
+        query.append(("sslmode", "verify-full"))
         return urlunsplit(parts._replace(query=urlencode(query)))
 
     @property

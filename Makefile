@@ -3,10 +3,9 @@
 setup:
 	npm --prefix frontend ci
 	python3 -m venv .venv
-	.venv/bin/pip install --upgrade pip
-	.venv/bin/pip install -e "./backend[dev]"
-	.venv/bin/pip install -e "./ingestion[dev]"
-	.venv/bin/pip install -e "./retrieval[dev,server]"
+	.venv/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock
+	.venv/bin/python -m pip install --no-deps --no-build-isolation -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev,server]"
+	.venv/bin/python -m pip check
 
 infra-up:
 	docker compose up -d --wait

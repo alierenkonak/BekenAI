@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -56,6 +56,7 @@ def fixture_hit(*, source_url: str = "https://www.mevzuat.gov.tr/") -> SearchHit
 
 @pytest.mark.asyncio
 async def test_search_returns_503_when_domain_index_is_not_ready() -> None:
+    user_id = UUID("11111111-1111-1111-1111-111111111111")
     app.dependency_overrides[get_search_coordinator] = lambda: DomainSearchCoordinator(
         InMemoryIndexRegistry()
     )
@@ -69,10 +70,13 @@ async def test_search_returns_503_when_domain_index_is_not_ready() -> None:
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "retrieval_index_not_ready"
+    assert search_api._search_gate.try_acquire(user_id)
+    search_api._search_gate.release(user_id)
 
 
 @pytest.mark.asyncio
 async def test_search_returns_empty_200_for_no_matches() -> None:
+    user_id = UUID("11111111-1111-1111-1111-111111111111")
     empty = StaticRetriever([])
     index = HybridDomainIndex(
         "labour_law",
@@ -93,6 +97,25 @@ async def test_search_returns_empty_200_for_no_matches() -> None:
 
     assert response.status_code == 200
     assert response.json()["results"] == []
+    assert search_api._search_gate.try_acquire(user_id)
+    search_api._search_gate.release(user_id)
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_a_second_active_request_for_the_same_user() -> None:
+    user_id = UUID("11111111-1111-1111-1111-111111111111")
+    assert search_api._search_gate.try_acquire(user_id)
+    try:
+        async with api_client() as client:
+            response = await client.post(
+                "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
+            )
+    finally:
+        search_api._search_gate.release(user_id)
+
+    assert response.status_code == 429
+    assert response.json()["detail"]["code"] == "search_capacity_exceeded"
+    assert response.headers["retry-after"] == "10"
 
 
 @pytest.mark.asyncio

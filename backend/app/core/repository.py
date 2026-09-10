@@ -20,6 +20,10 @@ class ConflictError(RuntimeError):
     pass
 
 
+class CapacityExceededError(RuntimeError):
+    pass
+
+
 class CitationIntegrityError(RuntimeError):
     pass
 
@@ -328,7 +332,10 @@ class AppRepository:
         include_doctrine: bool,
         retrieval_query: str,
         requested_model: str,
+        max_active_jobs: int = 2,
     ) -> dict[str, Any]:
+        if max_active_jobs < 1:
+            raise ValueError("max_active_jobs_must_be_positive")
         job_key = f"chat:{idempotency_key}"
         async with await self.database.connect() as conn:
             workspace = await self._workspace(conn, user_id)
@@ -366,7 +373,23 @@ class AppRepository:
                     raise ConflictError("conversation_domain_mismatch")
                 if case_id is not None and conversation["case_id"] != case_id:
                     raise ConflictError("conversation_case_mismatch")
-            else:
+
+            await conn.execute(
+                "select pg_advisory_xact_lock(hashtext(%s))",
+                (f"chat-capacity:{workspace['id']}",),
+            )
+            active = await (
+                await conn.execute(
+                    """select count(*) as count from app_private.jobs
+                    where workspace_id=%s and kind='chat_generation'
+                      and status in ('queued','processing')""",
+                    (workspace["id"],),
+                )
+            ).fetchone()
+            if int(active["count"]) >= max_active_jobs:
+                raise CapacityExceededError("chat_capacity_exceeded")
+
+            if conversation is None:
                 title = " ".join(message.split())[:80]
                 conversation = await (
                     await conn.execute(
@@ -486,19 +509,24 @@ class AppRepository:
         safe_name: str,
         media_type: str,
         size_bytes: int,
+        reservation_bytes: int,
         bucket: str,
         quota_bytes: int,
     ) -> dict[str, Any]:
+        if reservation_bytes < size_bytes or reservation_bytes > quota_bytes:
+            raise ValueError("invalid_file_reservation")
         async with await self.database.connect() as conn:
             workspace = await self._workspace(conn, user_id)
             await self._assert_case(conn, workspace["id"], case_id)
             await conn.execute("select pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
             usage = await (
                 await conn.execute(
-                    """select coalesce(sum(coalesce(verified_size_bytes,expected_size_bytes)),0)
+                    """select coalesce(sum(
+                         case when status='uploaded'
+                              then coalesce(verified_size_bytes,reserved_size_bytes)
+                              else reserved_size_bytes end),0)
                        as bytes from public.user_files
-                       where workspace_id=%s and status not in ('failed','deleted')
-                         and (status<>'pending_upload' or upload_expires_at>now())""",
+                       where workspace_id=%s and status<>'deleted'""",
                     (workspace["id"],),
                 )
             ).fetchone()
@@ -510,8 +538,8 @@ class AppRepository:
                 await conn.execute(
                     """insert into public.user_files
                     (id,workspace_id,case_id,uploader_user_id,original_name,storage_bucket,
-                     storage_path,declared_media_type,expected_size_bytes)
-                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
+                     storage_path,declared_media_type,expected_size_bytes,reserved_size_bytes)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
                     (
                         file_id,
                         workspace["id"],
@@ -522,6 +550,7 @@ class AppRepository:
                         storage_path,
                         media_type,
                         size_bytes,
+                        reservation_bytes,
                     ),
                 )
             ).fetchone()
@@ -529,18 +558,25 @@ class AppRepository:
     async def complete_file(self, user_id: UUID, file_id: UUID) -> dict[str, Any]:
         job_key = f"file-verify:{file_id}"
         async with await self.database.connect() as conn:
+            await conn.execute(
+                "select pg_advisory_xact_lock(hashtext(%s))", (f"file:{file_id}",)
+            )
             file = await self._owned_file(conn, user_id, file_id)
             if file["status"] == "uploaded":
                 return file
             if file["status"] not in {"pending_upload", "verifying"}:
                 raise ConflictError("file_not_completable")
-            file = await (
-                await conn.execute(
-                    """update public.user_files set status='verifying',updated_at=now()
-                    where id=%s returning *""",
-                    (file_id,),
-                )
-            ).fetchone()
+            if file["status"] == "pending_upload":
+                file = await (
+                    await conn.execute(
+                        """update public.user_files set status='verifying',updated_at=now()
+                        where id=%s and status='pending_upload' and upload_expires_at>now()
+                        returning *""",
+                        (file_id,),
+                    )
+                ).fetchone()
+                if not file:
+                    raise ConflictError("upload_intent_expired")
             await conn.execute(
                 """insert into app_private.jobs
                 (kind,workspace_id,subject_id,idempotency_key,payload)

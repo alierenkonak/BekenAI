@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from app.core.pagination import decode_cursor, encode_cursor
-from app.core.repository import ConflictError, NotFoundError, Page
+from app.core.repository import CapacityExceededError, ConflictError, NotFoundError, Page
 
 
 def parsed_cursor(value: str | None) -> tuple[datetime, UUID] | None:
@@ -30,6 +30,12 @@ def page_payload(page: Page) -> dict[str, Any]:
 def map_repository_error(exc: Exception) -> HTTPException:
     if isinstance(exc, NotFoundError):
         return HTTPException(status_code=404, detail={"code": str(exc)})
+    if isinstance(exc, CapacityExceededError):
+        return HTTPException(
+            status_code=429,
+            detail={"code": str(exc)},
+            headers={"Retry-After": "10"},
+        )
     if isinstance(exc, ConflictError):
         return HTTPException(status_code=409, detail={"code": str(exc)})
     return HTTPException(

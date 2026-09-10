@@ -11,8 +11,10 @@ from app.core.config import Settings
 from app.core.database import AppDatabase
 from app.core.repository import (
     AppRepository,
+    CapacityExceededError,
     CitationIntegrityError,
     ConflictError,
+    NotFoundError,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -64,9 +66,73 @@ def test_private_job_queue_is_not_exposed_to_frontend_roles() -> None:
                 has_table_privilege('authenticated','app_private.jobs','select'),
                 has_table_privilege('authenticated','public.chat_generations','insert'),
                 has_table_privilege('authenticated','public.message_citations','insert'),
-                has_table_privilege('authenticated','public.user_files','select')"""
+                has_table_privilege('authenticated','public.user_files','select'),
+                has_table_privilege('authenticated','public.user_files','insert'),
+                has_table_privilege('authenticated','public.user_files','update'),
+                has_table_privilege('authenticated','public.user_files','delete'),
+                has_table_privilege('authenticated','public.user_files','truncate'),
+                has_table_privilege('authenticated','public.user_files','references'),
+                has_table_privilege('authenticated','public.user_files','trigger'),
+                has_table_privilege('authenticated','public.cases','delete'),
+                has_table_privilege('authenticated','public.cases','truncate'),
+                has_table_privilege('authenticated','public.workspaces','delete'),
+                has_table_privilege('authenticated','public.workspaces','truncate')"""
         ).fetchone()
-    assert privileges == (False, False, False, False, True)
+        policies = conn.execute(
+            """select cmd, roles from pg_policies
+            where schemaname='public' and tablename='user_files'
+            order by policyname"""
+        ).fetchall()
+    assert privileges[:5] == (False, False, False, False, True)
+    assert privileges[5:] == (False,) * 10
+    assert policies == [("SELECT", ["authenticated"])]
+
+
+def test_authenticated_user_files_are_read_only() -> None:
+    user_id, file_id = uuid4(), uuid4()
+    with psycopg.connect(database_url()) as conn:
+        with conn.transaction(force_rollback=True):
+            workspace_id = conn.execute(
+                "insert into public.workspaces(owner_user_id) values (%s) returning id",
+                (user_id,),
+            ).fetchone()[0]
+            case_id = conn.execute(
+                "insert into public.cases(workspace_id,name) values (%s,'Dosya') returning id",
+                (workspace_id,),
+            ).fetchone()[0]
+            conn.execute(
+                """insert into public.user_files
+                (id,workspace_id,case_id,uploader_user_id,original_name,storage_path,
+                 declared_media_type,expected_size_bytes)
+                values (%s,%s,%s,%s,'belge.txt',%s,'text/plain',1)""",
+                (
+                    file_id,
+                    workspace_id,
+                    case_id,
+                    user_id,
+                    f"{user_id}/{workspace_id}/{case_id}/{file_id}/belge.txt",
+                ),
+            )
+
+            conn.execute("set local role authenticated")
+            conn.execute("select set_config('request.jwt.claim.sub',%s,true)", (str(user_id),))
+            assert conn.execute(
+                "select id from public.user_files where id=%s", (file_id,)
+            ).fetchone() == (file_id,)
+
+            blocked_statements = (
+                ("update public.user_files set status='failed' where id=%s", (file_id,)),
+                ("delete from public.user_files where id=%s", (file_id,)),
+                ("truncate table public.user_files", None),
+                ("delete from public.cases where id=%s", (case_id,)),
+                ("truncate table public.cases", None),
+                ("delete from public.workspaces where id=%s", (workspace_id,)),
+                ("truncate table public.workspaces", None),
+            )
+            for statement, params in blocked_statements:
+                with pytest.raises(psycopg.errors.InsufficientPrivilege):
+                    with conn.transaction():
+                        conn.execute(statement, params)
 
 
 def test_all_user_tables_have_rls_enabled() -> None:
@@ -143,6 +209,99 @@ async def test_chat_idempotency_and_stale_job_recovery() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() -> None:
+    user_id = uuid4()
+    repository = AppRepository(AppDatabase(database_url()))
+    try:
+        await repository.bootstrap(user_id, "capacity@example.test")
+        first = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="capacity-first",
+            conversation_id=None,
+            case_id=None,
+            message="Birinci soru",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="birinci soru",
+            requested_model="fixture-model",
+            max_active_jobs=2,
+        )
+        await repository.enqueue_chat(
+            user_id,
+            idempotency_key="capacity-second",
+            conversation_id=None,
+            case_id=None,
+            message="İkinci soru",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="ikinci soru",
+            requested_model="fixture-model",
+            max_active_jobs=2,
+        )
+
+        replay = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="capacity-first",
+            conversation_id=None,
+            case_id=None,
+            message="Tekrar gönderim",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="tekrar gönderim",
+            requested_model="fixture-model",
+            max_active_jobs=2,
+        )
+        assert replay["generation_id"] == first["generation_id"]
+
+        with pytest.raises(NotFoundError, match="case_not_found"):
+            await repository.enqueue_chat(
+                user_id,
+                idempotency_key="capacity-invalid-case",
+                conversation_id=None,
+                case_id=uuid4(),
+                message="Geçersiz dosya",
+                domain_code="labour_law",
+                include_doctrine=False,
+                retrieval_query="geçersiz dosya",
+                requested_model="fixture-model",
+                max_active_jobs=2,
+            )
+
+        with pytest.raises(CapacityExceededError, match="chat_capacity_exceeded"):
+            await repository.enqueue_chat(
+                user_id,
+                idempotency_key="capacity-third",
+                conversation_id=None,
+                case_id=None,
+                message="Üçüncü soru",
+                domain_code="labour_law",
+                include_doctrine=False,
+                retrieval_query="üçüncü soru",
+                requested_model="fixture-model",
+                max_active_jobs=2,
+            )
+
+        await repository.cancel_generation(user_id, first["generation_id"])
+        third = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="capacity-third",
+            conversation_id=None,
+            case_id=None,
+            message="Üçüncü soru",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="üçüncü soru",
+            requested_model="fixture-model",
+            max_active_jobs=2,
+        )
+        assert third["status"] == "queued"
+    finally:
+        with psycopg.connect(database_url()) as conn:
+            conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
+            conn.execute("delete from public.profiles where user_id=%s", (user_id,))
+
+
+@pytest.mark.asyncio
 async def test_user_file_quota_is_enforced_atomically() -> None:
     user_id = uuid4()
     repository = AppRepository(AppDatabase(database_url()))
@@ -157,6 +316,7 @@ async def test_user_file_quota_is_enforced_atomically() -> None:
                 safe_name=f"dosya-{index}.pdf",
                 media_type="application/pdf",
                 size_bytes=52_428_800,
+                reservation_bytes=52_428_800,
                 bucket="case-files",
                 quota_bytes=104_857_600,
             )
@@ -168,6 +328,68 @@ async def test_user_file_quota_is_enforced_atomically() -> None:
                 safe_name="fazla.txt",
                 media_type="text/plain",
                 size_bytes=1,
+                reservation_bytes=52_428_800,
+                bucket="case-files",
+                quota_bytes=104_857_600,
+            )
+    finally:
+        with psycopg.connect(database_url()) as conn:
+            conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
+            conn.execute("delete from public.profiles where user_id=%s", (user_id,))
+
+
+@pytest.mark.asyncio
+async def test_failed_and_expired_uploads_stay_reserved_until_deleted() -> None:
+    user_id = uuid4()
+    repository = AppRepository(AppDatabase(database_url()))
+    try:
+        await repository.bootstrap(user_id, "reserved-files@example.test")
+        case = await repository.create_case(user_id, "Dosya", None)
+        failed = await repository.create_file_intent(
+            user_id,
+            case_id=case["id"],
+            original_name="failed.pdf",
+            safe_name="failed.pdf",
+            media_type="application/pdf",
+            size_bytes=1,
+            reservation_bytes=52_428_800,
+            bucket="case-files",
+            quota_bytes=104_857_600,
+        )
+        with psycopg.connect(database_url()) as conn:
+            conn.execute(
+                "update public.user_files set status='failed' where id=%s",
+                (failed["id"],),
+            )
+        expired = await repository.create_file_intent(
+            user_id,
+            case_id=case["id"],
+            original_name="expired.pdf",
+            safe_name="expired.pdf",
+            media_type="application/pdf",
+            size_bytes=1,
+            reservation_bytes=52_428_800,
+            bucket="case-files",
+            quota_bytes=104_857_600,
+        )
+        with psycopg.connect(database_url()) as conn:
+            conn.execute(
+                "update public.user_files set upload_expires_at=now()-interval '1 second' "
+                "where id=%s",
+                (expired["id"],),
+            )
+
+        with pytest.raises(ConflictError, match="upload_intent_expired"):
+            await repository.complete_file(user_id, expired["id"])
+        with pytest.raises(ConflictError, match="user_file_quota_exceeded"):
+            await repository.create_file_intent(
+                user_id,
+                case_id=case["id"],
+                original_name="third.pdf",
+                safe_name="third.pdf",
+                media_type="application/pdf",
+                size_bytes=1,
+                reservation_bytes=52_428_800,
                 bucket="case-files",
                 quota_bytes=104_857_600,
             )
@@ -243,6 +465,7 @@ async def test_failed_file_deletion_can_be_requeued() -> None:
             safe_name="belge.pdf",
             media_type="application/pdf",
             size_bytes=10,
+            reservation_bytes=52_428_800,
             bucket="case-files",
             quota_bytes=104_857_600,
         )

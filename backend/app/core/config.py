@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = "postgresql://beken:local-development-only@localhost:5432/beken"
     supabase_db_url: SecretStr | None = None
+    supabase_db_ssl_root_cert: str | None = None
     supabase_url: str | None = None
     supabase_publishable_key: SecretStr | None = None
     supabase_secret_key: SecretStr | None = None
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
     chat_worker_poll_seconds: float = Field(default=2.0, ge=0.25, le=30)
     chat_worker_stale_minutes: int = Field(default=10, ge=2, le=120)
+    chat_max_active_jobs: int = Field(default=2, ge=1, le=10)
     case_files_bucket: str = "case-files"
     case_file_max_bytes: int = 52_428_800
     user_file_quota_bytes: int = 104_857_600
@@ -58,12 +60,17 @@ class Settings(BaseSettings):
             return self.database_url
         url = self.supabase_db_url.get_secret_value()
         parts = urlsplit(url)
+        replaced_keys = {"sslmode"}
+        if self.supabase_db_ssl_root_cert:
+            replaced_keys.add("sslrootcert")
         query = [
             (key, value)
             for key, value in parse_qsl(parts.query, keep_blank_values=True)
-            if key.casefold() != "sslmode"
+            if key.casefold() not in replaced_keys
         ]
-        query.append(("sslmode", "require"))
+        if self.supabase_db_ssl_root_cert:
+            query.append(("sslrootcert", self.supabase_db_ssl_root_cert))
+        query.append(("sslmode", "verify-full"))
         return urlunsplit(parts._replace(query=urlencode(query)))
 
     @property

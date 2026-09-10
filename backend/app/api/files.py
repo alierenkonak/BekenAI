@@ -58,6 +58,7 @@ async def upload_intent(
             safe_name=_safe_storage_name(payload.filename, payload.media_type),
             media_type=payload.media_type,
             size_bytes=payload.size_bytes,
+            reservation_bytes=settings.case_file_max_bytes,
             bucket=settings.case_files_bucket,
             quota_bytes=settings.user_file_quota_bytes,
         )

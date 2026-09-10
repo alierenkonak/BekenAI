@@ -30,3 +30,27 @@ async def test_worker_recovers_jobs_that_become_stale_after_start(monkeypatch):
     worker._process = process
     await worker.run()
     assert worker.repository.recover_stale_jobs.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_file_verification_bounds_download_to_declared_size():
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.storage = SimpleNamespace(download=AsyncMock(return_value=b"%PDF-1.7\n"))
+    worker.repository = SimpleNamespace(
+        get_worker_file=AsyncMock(
+            return_value={
+                "id": "file-id",
+                "storage_path": "private/file.pdf",
+                "expected_size_bytes": 9,
+                "declared_media_type": "application/pdf",
+            }
+        ),
+        complete_file_verification=AsyncMock(),
+    )
+
+    await worker._verify_file({"id": "job-id", "subject_id": "file-id"})
+
+    worker.storage.download.assert_awaited_once_with(
+        "private/file.pdf", maximum_bytes=9
+    )
+    worker.repository.complete_file_verification.assert_awaited_once()

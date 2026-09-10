@@ -53,6 +53,7 @@ async def enqueue_chat(
             include_doctrine=payload.include_doctrine,
             retrieval_query=derive_retrieval_query(payload.message),
             requested_model=settings.gemini_primary_model,
+            max_active_jobs=settings.chat_max_active_jobs,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None

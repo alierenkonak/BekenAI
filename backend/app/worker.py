@@ -103,7 +103,9 @@ class Worker:
 
     async def _verify_file(self, job: dict) -> None:
         file = await self.repository.get_worker_file(job["subject_id"])
-        data = await self.storage.download(file["storage_path"])
+        data = await self.storage.download(
+            file["storage_path"], maximum_bytes=file["expected_size_bytes"]
+        )
         if len(data) != file["expected_size_bytes"]:
             raise ValueError("file_size_mismatch")
         media_type = detect_file(data, file["declared_media_type"])

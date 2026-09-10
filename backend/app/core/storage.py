@@ -12,6 +12,28 @@ class StorageError(RuntimeError):
     pass
 
 
+class StorageSizeLimitExceeded(ValueError):
+    pass
+
+
+async def _read_bounded_body(response: httpx.Response, maximum_bytes: int) -> bytes:
+    content_length = response.headers.get("content-length")
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except ValueError as exc:
+            raise StorageError("invalid_storage_content_length") from exc
+        if declared_length > maximum_bytes:
+            raise StorageSizeLimitExceeded("file_size_mismatch")
+
+    body = bytearray()
+    async for chunk in response.aiter_bytes():
+        if len(body) + len(chunk) > maximum_bytes:
+            raise StorageSizeLimitExceeded("file_size_mismatch")
+        body.extend(chunk)
+    return bytes(body)
+
+
 class SupabaseStorage:
     def __init__(self, settings: Settings) -> None:
         if not settings.supabase_url:
@@ -38,19 +60,20 @@ class SupabaseStorage:
         safe_path = quote(storage_path, safe="/")
         return f"/storage/v1/object/{safe_bucket}/{safe_path}"
 
-    async def download(self, storage_path: str) -> bytes:
+    async def download(self, storage_path: str, *, maximum_bytes: int | None = None) -> bytes:
+        byte_limit = min(maximum_bytes or self.maximum_bytes, self.maximum_bytes)
         async with httpx.AsyncClient(
             base_url=self.base_url,
             timeout=httpx.Timeout(60.0),
             follow_redirects=False,
             trust_env=False,
         ) as client:
-            response = await client.get(self._object_path(storage_path), headers=self._headers)
-        if response.status_code != 200:
-            raise StorageError("storage_object_unavailable")
-        if len(response.content) > self.maximum_bytes:
-            raise StorageError("file_too_large")
-        return response.content
+            async with client.stream(
+                "GET", self._object_path(storage_path), headers=self._headers
+            ) as response:
+                if response.status_code != 200:
+                    raise StorageError("storage_object_unavailable")
+                return await _read_bounded_body(response, byte_limit)
 
     async def delete(self, storage_path: str) -> None:
         async with httpx.AsyncClient(
