@@ -40,7 +40,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements/ci.lock
       - name: Install hash-locked Python dependencies
-        run: python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock
+        run: "python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock"
       - name: Audit Python dependencies
         run: |
           pip-audit --requirement requirements/ci.lock --no-deps --disable-pip --progress-spinner off
@@ -67,7 +67,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements/ci.lock
       - name: Install hash-locked Python dependencies
-        run: python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock
+        run: "python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock"
       - name: Audit Python dependencies
         run: pip-audit --requirement requirements/ci.lock --no-deps --disable-pip --progress-spinner off
       - name: Install local projects without dependency resolution
