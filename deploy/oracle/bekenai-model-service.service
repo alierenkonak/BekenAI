@@ -19,7 +19,7 @@ Environment=TRANSFORMERS_OFFLINE=1
 Environment=TOKENIZERS_PARALLELISM=false
 Environment=OMP_NUM_THREADS=2
 Environment=OPENBLAS_NUM_THREADS=2
-ExecStart=/opt/bekenai/venv/bin/uvicorn beken_retrieval.model_service:create_app --factory --host 127.0.0.1 --port 8081 --workers 1 --no-access-log --limit-concurrency 2
+ExecStart=/opt/bekenai/venv/bin/uvicorn beken_retrieval.model_service:create_app --factory --host 127.0.0.1 --port 8081 --workers 1 --no-access-log --limit-concurrency 8
 Restart=on-failure
 RestartSec=10
 TimeoutStartSec=900

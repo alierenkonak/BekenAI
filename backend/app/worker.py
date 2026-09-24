@@ -7,6 +7,8 @@ import signal
 import socket
 import time
 
+from beken_retrieval.remote_inference import TransientInferenceError
+
 from app.api.search import _load_search_coordinator
 from app.chat.grounded import GroundedChatService
 from app.core.config import get_settings
@@ -78,6 +80,10 @@ class Worker:
         except TransientLLMError:
             await self.repository.fail_job(
                 job, error_code="provider_temporarily_unavailable", retryable=True
+            )
+        except TransientInferenceError:
+            await self.repository.fail_job(
+                job, error_code="model_temporarily_unavailable", retryable=True
             )
         except StorageError:
             await self.repository.fail_job(

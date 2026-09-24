@@ -29,6 +29,10 @@ class _RerankResponse(BaseModel):
     scores: list[float]
 
 
+class TransientInferenceError(RuntimeError):
+    """A retryable transport, rate-limit, or model-service failure."""
+
+
 class RemoteInferenceClient:
     def __init__(
         self,
@@ -58,6 +62,16 @@ class RemoteInferenceClient:
             if not isinstance(value, dict):
                 raise ValueError("Response body must be an object")
             return value
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429 or exc.response.status_code >= 500:
+                raise TransientInferenceError(
+                    "Remote model inference temporarily unavailable"
+                ) from None
+            raise RuntimeError("Remote model inference failed (HTTPStatusError)") from None
+        except httpx.TransportError:
+            raise TransientInferenceError(
+                "Remote model inference temporarily unavailable"
+            ) from None
         except (httpx.HTTPError, ValueError) as exc:
             raise RuntimeError(
                 f"Remote model inference failed ({type(exc).__name__})"

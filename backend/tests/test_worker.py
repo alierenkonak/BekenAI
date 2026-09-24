@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from beken_retrieval.remote_inference import TransientInferenceError
 
 from app import worker as worker_module
 
@@ -54,3 +55,17 @@ async def test_file_verification_bounds_download_to_declared_size():
         "private/file.pdf", maximum_bytes=9
     )
     worker.repository.complete_file_verification.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_worker_retries_transient_model_service_failure():
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.repository = SimpleNamespace(fail_job=AsyncMock())
+    worker._chat = AsyncMock(side_effect=TransientInferenceError("unavailable"))
+    job = {"id": "job-id", "kind": "chat_generation", "attempt_count": 1}
+
+    await worker._process(job)
+
+    worker.repository.fail_job.assert_awaited_once_with(
+        job, error_code="model_temporarily_unavailable", retryable=True
+    )

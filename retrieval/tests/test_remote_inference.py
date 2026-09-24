@@ -6,7 +6,11 @@ from pydantic import SecretStr
 
 from beken_retrieval.config import RetrievalSettings
 from beken_retrieval.model_catalog import ModelCatalog
-from beken_retrieval.remote_inference import RemoteDenseEncoder, RemoteInferenceClient
+from beken_retrieval.remote_inference import (
+    RemoteDenseEncoder,
+    RemoteInferenceClient,
+    TransientInferenceError,
+)
 
 
 def _client(handler) -> RemoteInferenceClient:
@@ -47,6 +51,40 @@ def test_remote_client_rejects_redirects_without_leaking_provider_details() -> N
         client.embed(spec=spec, texts=["iş sözleşmesi"], input_type="query")
 
     assert "example.com" not in str(caught.value)
+
+
+@pytest.mark.parametrize("status_code", [429, 503])
+def test_remote_client_marks_capacity_and_service_errors_retryable(status_code: int) -> None:
+    spec = ModelCatalog.load(RetrievalSettings().retrieval_model_catalog).get("bge-m3")
+    client = _client(lambda _: httpx.Response(status_code, text="private provider detail"))
+
+    with pytest.raises(TransientInferenceError) as caught:
+        client.embed(spec=spec, texts=["işe iade"], input_type="query")
+
+    assert "private provider detail" not in str(caught.value)
+
+
+def test_remote_client_does_not_retry_invalid_request() -> None:
+    spec = ModelCatalog.load(RetrievalSettings().retrieval_model_catalog).get("bge-m3")
+    client = _client(lambda _: httpx.Response(422, text="private provider detail"))
+
+    with pytest.raises(RuntimeError, match="Remote model inference failed") as caught:
+        client.embed(spec=spec, texts=["işe iade"], input_type="query")
+
+    assert not isinstance(caught.value, TransientInferenceError)
+    assert "private provider detail" not in str(caught.value)
+
+
+def test_remote_client_marks_transport_errors_retryable() -> None:
+    spec = ModelCatalog.load(RetrievalSettings().retrieval_model_catalog).get("bge-m3")
+
+    def unavailable(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("private transport detail", request=request)
+
+    with pytest.raises(TransientInferenceError) as caught:
+        _client(unavailable).embed(spec=spec, texts=["işe iade"], input_type="query")
+
+    assert "private transport detail" not in str(caught.value)
 
 
 def test_plain_http_model_service_is_restricted_to_loopback() -> None:
