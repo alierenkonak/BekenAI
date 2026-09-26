@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
@@ -10,6 +11,8 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from app.core.database import AppDatabase, get_database
+
+GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
 
 
 class NotFoundError(RuntimeError):
@@ -318,7 +321,54 @@ class AppRepository:
                     params,
                 )
             ).fetchall()
-        return self._page(rows, limit)
+            page = self._page(rows, limit)
+            await self._attach_message_details(conn, conversation["workspace_id"], page.items)
+        return page
+
+    async def _attach_message_details(
+        self, conn: AsyncConnection, workspace_id: UUID, messages: list[dict[str, Any]]
+    ) -> None:
+        # A conversation reloaded later must render the same citations and in-flight
+        # progress the live generation endpoint returns, without one request per message.
+        if not messages:
+            return
+        message_ids = [message["id"] for message in messages]
+        generations = await (
+            await conn.execute(
+                """select id,user_message_id,assistant_message_id,status,stage,answer_status,
+                          safe_error_code,include_doctrine,latency_ms,corpus_versions,
+                          index_versions,created_at,started_at,completed_at
+                   from public.chat_generations
+                   where workspace_id=%s
+                     and (user_message_id=any(%s) or assistant_message_id=any(%s))""",
+                (workspace_id, message_ids, message_ids),
+            )
+        ).fetchall()
+        generation_by_message: dict[UUID, dict[str, Any]] = {}
+        for generation in generations:
+            generation_by_message[generation["user_message_id"]] = generation
+            if generation["assistant_message_id"]:
+                generation_by_message[generation["assistant_message_id"]] = generation
+        assistant_ids = [message["id"] for message in messages if message["role"] == "assistant"]
+        citations: dict[UUID, list[dict[str, Any]]] = defaultdict(list)
+        if assistant_ids:
+            rows = await (
+                await conn.execute(
+                    """select message_id,claim_id,source_id,source_scope,source_channel,
+                              source_snapshot,integrity_status,support_status,support_reason,
+                              ordinal
+                       from public.message_citations
+                       where workspace_id=%s and message_id=any(%s)
+                       order by message_id,ordinal""",
+                    (workspace_id, assistant_ids),
+                )
+            ).fetchall()
+            for row in rows:
+                citations[row.pop("message_id")].append(row)
+        for message in messages:
+            message["generation"] = generation_by_message.get(message["id"])
+            if message["role"] == "assistant":
+                message["citations"] = citations.get(message["id"], [])
 
     async def enqueue_chat(
         self,
@@ -657,7 +707,8 @@ class AppRepository:
             generation_ids = [row["subject_id"] for row in rows if row["kind"] == "chat_generation"]
             if generation_ids:
                 await conn.execute(
-                    """update public.chat_generations set status='queued',started_at=null
+                    """update public.chat_generations
+                    set status='queued',started_at=null,stage=null
                     where id=any(%s) and status='processing'""",
                     (generation_ids,),
                 )
@@ -688,11 +739,21 @@ class AppRepository:
                 await conn.execute(
                     """update public.chat_generations
                     set status='processing',started_at=coalesce(started_at,now()),
-                        attempt_count=%s
+                        attempt_count=%s,stage='retrieving'
                     where id=%s and status='queued'""",
                     (job["attempt_count"], job["subject_id"]),
                 )
         return job
+
+    async def set_generation_stage(self, generation_id: UUID, stage: str) -> None:
+        if stage not in GENERATION_STAGES:
+            raise ValueError("invalid_generation_stage")
+        async with await self.database.connect() as conn:
+            await conn.execute(
+                """update public.chat_generations set stage=%s
+                where id=%s and status='processing'""",
+                (stage, generation_id),
+            )
 
     async def get_chat_work(self, generation_id: UUID) -> dict[str, Any]:
         async with await self.database.connect() as conn:
@@ -824,9 +885,10 @@ class AppRepository:
                 await conn.execute(
                     """update public.chat_generations
                     set status=%s,safe_error_code=%s,
+                        stage=case when %s then null else stage end,
                         completed_at=case when %s then null else now() end
                     where id=%s and status='processing'""",
-                    (status, error_code, retry, job["subject_id"]),
+                    (status, error_code, retry, retry, job["subject_id"]),
                 )
             elif job["kind"] == "file_verification" and not retry:
                 await conn.execute(

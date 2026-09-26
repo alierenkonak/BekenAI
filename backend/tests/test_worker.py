@@ -69,3 +69,59 @@ async def test_worker_retries_transient_model_service_failure():
     worker.repository.fail_job.assert_awaited_once_with(
         job, error_code="model_temporarily_unavailable", retryable=True
     )
+
+
+class _StageReportingService:
+    def __init__(self, *_args) -> None:
+        pass
+
+    async def answer(self, *, on_stage, **_kwargs):
+        for stage in ("retrieving", "generating", "verifying"):
+            await on_stage(stage)
+        return SimpleNamespace(answer_status="answered")
+
+
+def _chat_worker(monkeypatch, set_generation_stage: AsyncMock) -> worker_module.Worker:
+    monkeypatch.setattr(worker_module, "GroundedChatService", _StageReportingService)
+    monkeypatch.setattr(worker_module, "_load_search_coordinator", lambda: None)
+    monkeypatch.setattr(worker_module, "get_llm_provider", lambda: None)
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.settings = SimpleNamespace()
+    worker.repository = SimpleNamespace(
+        get_chat_work=AsyncMock(
+            return_value={
+                "user_message": "Fesih nasıl yapılır?",
+                "retrieval_query": "fesih nasıl yapılır",
+                "domain_code": "labour_law",
+                "include_doctrine": False,
+                "history": [],
+            }
+        ),
+        set_generation_stage=set_generation_stage,
+        complete_generation=AsyncMock(),
+    )
+    return worker
+
+
+@pytest.mark.asyncio
+async def test_chat_job_persists_each_pipeline_stage(monkeypatch):
+    set_stage = AsyncMock()
+    worker = _chat_worker(monkeypatch, set_stage)
+
+    await worker._chat({"id": "job-id", "subject_id": "generation-id"})
+
+    assert [call.args for call in set_stage.await_args_list] == [
+        ("generation-id", "retrieving"),
+        ("generation-id", "generating"),
+        ("generation-id", "verifying"),
+    ]
+    worker.repository.complete_generation.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_stage_update_failure_does_not_fail_the_answer(monkeypatch):
+    worker = _chat_worker(monkeypatch, AsyncMock(side_effect=RuntimeError("db hiccup")))
+
+    await worker._chat({"id": "job-id", "subject_id": "generation-id"})
+
+    worker.repository.complete_generation.assert_awaited_once()

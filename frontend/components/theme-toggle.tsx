@@ -1,0 +1,20 @@
+'use client';
+
+import { setTheme, useTheme } from '@/lib/theme';
+import { Icon } from './icons';
+
+export function ThemeToggle({ className = '' }: { className?: string }) {
+  const theme = useTheme();
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button
+      type="button"
+      onClick={() => setTheme(next)}
+      aria-label={next === 'dark' ? 'Karanlık temaya geç' : 'Aydınlık temaya geç'}
+      title={next === 'dark' ? 'Karanlık tema' : 'Aydınlık tema'}
+      className={`flex size-8 items-center justify-center rounded-lg border border-line bg-surface text-fg2 transition-colors hover:bg-hover hover:text-fg ${className}`}
+    >
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
+    </button>
+  );
+}

@@ -393,6 +393,24 @@ async def test_failed_and_expired_uploads_stay_reserved_until_deleted() -> None:
                 bucket="case-files",
                 quota_bytes=104_857_600,
             )
+
+        # An expired pending upload must remain reserved until its deletion job
+        # completes, then the user can create another upload intent.
+        deleting = await repository.request_file_deletion(user_id, expired["id"])
+        assert deleting["status"] == "delete_pending"
+        await repository.complete_file_deletion(uuid4(), expired["id"])
+        replacement = await repository.create_file_intent(
+            user_id,
+            case_id=case["id"],
+            original_name="replacement.pdf",
+            safe_name="replacement.pdf",
+            media_type="application/pdf",
+            size_bytes=1,
+            reservation_bytes=52_428_800,
+            bucket="case-files",
+            quota_bytes=104_857_600,
+        )
+        assert replacement["status"] == "pending_upload"
     finally:
         with psycopg.connect(database_url()) as conn:
             conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
@@ -491,6 +509,53 @@ async def test_failed_file_deletion_can_be_requeued() -> None:
                 (job["id"],),
             ).fetchone()
         assert status_row == ("queued", 0)
+    finally:
+        with psycopg.connect(database_url()) as conn:
+            conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
+            conn.execute("delete from public.profiles where user_id=%s", (user_id,))
+
+
+@pytest.mark.asyncio
+async def test_generation_stage_lifecycle_and_message_details() -> None:
+    user_id = uuid4()
+    repository = AppRepository(AppDatabase(database_url()))
+    try:
+        await repository.bootstrap(user_id, "stages@example.test")
+        queued = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="stage-lifecycle-fixture",
+            conversation_id=None,
+            case_id=None,
+            message="İhbar süresi kaç haftadır?",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="ihbar süresi kaç haftadır",
+            requested_model="fixture-model",
+        )
+        job = await repository.claim_job("integration-worker")
+        assert job and job["subject_id"] == queued["generation_id"]
+        generation = await repository.get_generation(user_id, queued["generation_id"])
+        assert generation["status"] == "processing"
+        assert generation["stage"] == "retrieving"
+
+        await repository.set_generation_stage(queued["generation_id"], "verifying")
+        with pytest.raises(ValueError, match="invalid_generation_stage"):
+            await repository.set_generation_stage(queued["generation_id"], "thinking")
+
+        page = await repository.list_messages(
+            user_id, queued["conversation_id"], limit=50, cursor=None
+        )
+        [user_message] = page.items
+        assert user_message["generation"]["id"] == queued["generation_id"]
+        assert user_message["generation"]["stage"] == "verifying"
+        assert "citations" not in user_message
+
+        await repository.fail_job(
+            job, error_code="provider_temporarily_unavailable", retryable=True
+        )
+        generation = await repository.get_generation(user_id, queued["generation_id"])
+        assert generation["status"] == "queued"
+        assert generation["stage"] is None
     finally:
         with psycopg.connect(database_url()) as conn:
             conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))

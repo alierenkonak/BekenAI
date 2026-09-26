@@ -261,3 +261,43 @@ async def test_no_primary_evidence_never_calls_model() -> None:
     )
     assert result.answer_status == "insufficient_evidence"
     assert provider.calls == []
+
+
+@pytest.mark.asyncio
+async def test_answer_reports_pipeline_stages_in_order() -> None:
+    stages: list[str] = []
+
+    async def record(stage: str) -> None:
+        stages.append(stage)
+
+    service = GroundedChatService(FakeCoordinator([hit()]), FakeProvider(answer()), app_settings())
+    result = await service.answer(
+        message="Fesih nasıl yapılır?",
+        retrieval_query="fesih nasıl yapılır",
+        domain="labour_law",
+        include_doctrine=False,
+        history=[],
+        on_stage=record,
+    )
+    assert result.answer_status == "answered"
+    assert stages == ["retrieving", "generating", "verifying"]
+
+
+@pytest.mark.asyncio
+async def test_missing_primary_evidence_stops_after_retrieval_stage() -> None:
+    stages: list[str] = []
+
+    async def record(stage: str) -> None:
+        stages.append(stage)
+
+    service = GroundedChatService(FakeCoordinator([]), FakeProvider(answer()), app_settings())
+    result = await service.answer(
+        message="Bilinmeyen konu nedir?",
+        retrieval_query="bilinmeyen konu",
+        domain="labour_law",
+        include_doctrine=False,
+        history=[],
+        on_stage=record,
+    )
+    assert result.answer_status == "insufficient_evidence"
+    assert stages == ["retrieving"]
