@@ -98,12 +98,21 @@ class Worker:
     async def _chat(self, job: dict) -> None:
         work = await self.repository.get_chat_work(job["subject_id"])
         service = GroundedChatService(_load_search_coordinator(), get_llm_provider(), self.settings)
+
+        async def report_stage(stage: str) -> None:
+            # Progress is display-only; a failed update must never fail the answer.
+            try:
+                await self.repository.set_generation_stage(job["subject_id"], stage)
+            except Exception as exc:
+                logger.warning("Stage update skipped (%s)", type(exc).__name__)
+
         result = await service.answer(
             message=work["user_message"],
             retrieval_query=work["retrieval_query"],
             domain=work["domain_code"],
             include_doctrine=work["include_doctrine"],
             history=work["history"],
+            on_stage=report_stage,
         )
         await self.repository.complete_generation(job["subject_id"], result)
 

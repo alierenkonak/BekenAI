@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from time import monotonic
-from typing import Any
+from typing import Any, Literal
 
 from beken_retrieval.coordinator import DomainSearchCoordinator, SearchMode
 from beken_retrieval.models import SearchFilters
@@ -13,6 +14,9 @@ from app.chat.context import EvidenceSource, estimate_tokens, select_history, se
 from app.core.config import Settings
 from app.llm.models import AnswerSection, GeneratedClaim, GroundedAnswer, SupportReport
 from app.llm.provider import LLMProvider, PermanentLLMError, StructuredResult, TransientLLMError
+
+GenerationStage = Literal["retrieving", "generating", "verifying"]
+StageCallback = Callable[[GenerationStage], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -50,8 +54,10 @@ class GroundedChatService:
         domain: str,
         include_doctrine: bool,
         history: list[dict],
+        on_stage: StageCallback | None = None,
     ) -> CompletedAnswer:
         started = monotonic()
+        await self._report(on_stage, "retrieving")
         primary_hits = await asyncio.to_thread(
             self.coordinator.search,
             retrieval_query,
@@ -96,6 +102,7 @@ class GroundedChatService:
             sources=sources,
             include_doctrine=include_doctrine,
         )
+        await self._report(on_stage, "generating")
         generated, fallback_used = await self._generate_with_fallback(prompt)
         answer = generated.value
         if not isinstance(answer, GroundedAnswer):
@@ -126,6 +133,7 @@ class GroundedChatService:
                 input_tokens=generated.input_tokens,
                 output_tokens=generated.output_tokens,
             )
+        await self._report(on_stage, "verifying")
         support = await self._verify_support(claims, source_map)
         filtered, citations = self._filter_supported(answer, support, source_map)
         if not filtered.primary_answer or not filtered.primary_answer.claims:
@@ -163,6 +171,11 @@ class GroundedChatService:
                 for source in sources
             },
         )
+
+    @staticmethod
+    async def _report(on_stage: StageCallback | None, stage: GenerationStage) -> None:
+        if on_stage is not None:
+            await on_stage(stage)
 
     def _evidence(self, hits: list, domain: str, channel: str) -> list[EvidenceSource]:
         index = self.coordinator.registry.get(domain, channel)

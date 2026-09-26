@@ -1,18 +1,138 @@
 @import 'tailwindcss';
 
-:root { --background: #f3f6f4; --foreground: #17201e; }
+/* BekenAI tokens. Color carries meaning only: blue = primary sources and
+   interaction, amber = doctrine, green = verified content. */
+:root {
+  color-scheme: light;
+  --bg: #fcfcfb;
+  --side: #f6f6f4;
+  --surface: #ffffff;
+  --muted: #f3f3f1;
+  --hover: #eaeae7;
+  --line: #e7e7e4;
+  --line-strong: #d6d6d2;
+  --fg: #111113;
+  --fg2: #4b4b52;
+  --fg3: #6b6b72;
+  --inv: #111113;
+  --inv-fg: #ffffff;
+  --dot: #7c9bff;
+  --accent: #2b59c3;
+  --accent-bg: #eef2fc;
+  --accent-line: #c5d3f4;
+  --doc: #a7520a;
+  --doc-bg: #fdf3e7;
+  --doc-line: #efcfa6;
+  --ok: #1f7a45;
+  --ok-bg: #eaf6ef;
+  --err: #b42318;
+  --err-bg: #fdf1ef;
+  --err-line: #f4cfc9;
+  --mark: #dce5fb;
+  --tick: #d2d2cd;
+  --scrim: rgba(17, 17, 19, 0.35);
+  --shadow-soft: 0 1px 2px rgba(16, 16, 20, 0.04), 0 12px 32px rgba(16, 16, 20, 0.08);
+  --shadow-lg: 0 2px 4px rgba(16, 16, 20, 0.04), 0 40px 80px rgba(16, 16, 20, 0.1);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e0e10;
+  --side: #131316;
+  --surface: #18181b;
+  --muted: #1f1f24;
+  --hover: #24242a;
+  --line: #26262b;
+  --line-strong: #35353b;
+  --fg: #ededef;
+  --fg2: #b4b4bb;
+  --fg3: #8b8b93;
+  --inv: #ededef;
+  --inv-fg: #0e0e10;
+  --dot: #2b59c3;
+  --accent: #8ea8ff;
+  --accent-bg: #1a2140;
+  --accent-line: #34437a;
+  --doc: #f0b060;
+  --doc-bg: #2a2013;
+  --doc-line: #56401f;
+  --ok: #5cc98b;
+  --ok-bg: #12281c;
+  --err: #f58a8a;
+  --err-bg: #2b1517;
+  --err-line: #5a2a2d;
+  --mark: #27365f;
+  --tick: #3a3a42;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 40px 80px rgba(0, 0, 0, 0.45);
+}
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-side: var(--side);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg2: var(--fg2);
+  --color-fg3: var(--fg3);
+  --color-inv: var(--inv);
+  --color-inv-fg: var(--inv-fg);
+  --color-accent: var(--accent);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-line: var(--accent-line);
+  --color-doc: var(--doc);
+  --color-doc-bg: var(--doc-bg);
+  --color-doc-line: var(--doc-line);
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-err: var(--err);
+  --color-err-bg: var(--err-bg);
+  --color-err-line: var(--err-line);
+  --color-mark: var(--mark);
+  --color-tick: var(--tick);
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: var(--font-instrument-serif), 'Times New Roman', serif;
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lg: var(--shadow-lg);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-* { box-sizing: border-box; }
+::selection {
+  background: var(--mark);
+  color: var(--fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
