@@ -21,7 +21,7 @@ from app.llm.models import (
     SupportAssessment,
     SupportReport,
 )
-from app.llm.provider import PermanentLLMError, StructuredResult, TransientLLMError
+from app.llm.provider import StructuredResult, TransientLLMError
 
 
 def hit(*, channel: str = "primary", text: str = "Fesih bildirimi yazılı yapılır.") -> SearchHit:
@@ -446,26 +446,126 @@ async def test_neither_law_nor_file_evidence_is_insufficient_without_a_model_cal
     assert provider.calls == []
 
 
-@pytest.mark.parametrize(
-    ("section", "source_id"),
-    [
-        ("file_answer", "SOURCE_PRIMARY_01"),  # a file claim may not lean on the law
-        ("primary_answer", "SOURCE_FILE_01"),  # a legal claim may not lean on the file
-        ("doctrine_answer", "SOURCE_FILE_01"),
-    ],
-)
-def test_sections_only_accept_their_own_kind_of_source(section: str, source_id: str) -> None:
-    sources = {
+def _channel_sources() -> dict:
+    return {
         "SOURCE_PRIMARY_01": EvidenceSource("SOURCE_PRIMARY_01", "primary", hit(), "v1"),
+        "SOURCE_DOCTRINE_01": EvidenceSource(
+            "SOURCE_DOCTRINE_01", "doctrine", hit(channel="doctrine"), "v1"
+        ),
         "SOURCE_FILE_01": FileEvidenceSource("SOURCE_FILE_01", file_hit(), "private"),
     }
-    claim = GeneratedClaim(claim_id="C1", text="İddia.", source_ids=[source_id])
+
+
+P, D, F = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01"
+
+
+@pytest.mark.parametrize(
+    ("section", "cited", "kept"),
+    [
+        # A file claim states what the file says; a legal source is stripped from it.
+        ("file_answer", [F, P], [F]),
+        ("file_answer", [P], None),
+        # A legal claim must rest on the law, and may point at the facts it applies to.
+        ("primary_answer", [P, F], [P, F]),
+        ("primary_answer", [F], None),
+        ("primary_answer", [P, "SOURCE_PRIMARY_99"], [P]),
+        ("doctrine_answer", [D, F], [D, F]),
+        ("doctrine_answer", [F], None),
+    ],
+)
+def test_channel_rules_keep_allowed_pairs_and_drop_unsupported_claims(section, cited, kept) -> None:
+    claim = GeneratedClaim(claim_id="C1", text="İddia.", source_ids=cited)
     generated = GroundedAnswer(
         answer_status="answered", **{section: AnswerSection(summary="s", claims=[claim])}
     )
 
-    with pytest.raises(PermanentLLMError, match="invalid_source_id"):
-        GroundedChatService._validate_integrity(generated, sources, include_doctrine=True)
+    cleaned, claims = GroundedChatService._enforce_channels(
+        generated, _channel_sources(), include_doctrine=True
+    )
+
+    if kept is None:
+        assert claims == [] and getattr(cleaned, section) is None
+    else:
+        assert [claim.source_ids for claim in claims] == [kept]
+        assert getattr(cleaned, section).claims[0].source_ids == kept
+
+
+def test_limitations_never_show_schema_names_or_source_ids() -> None:
+    generated = GroundedAnswer(
+        answer_status="answered",
+        file_answer=AnswerSection(
+            summary="s",
+            claims=[GeneratedClaim(claim_id="F1", text="Olgu.", source_ids=["SOURCE_FILE_01"])],
+        ),
+        limitations=[
+            "Soru dosyayla ilgili olduğundan primary_answer ve doctrine_answer üretilmemiştir.",
+            "SOURCE_FILE_01 dışında pasaj yok.",
+            "Dosyada fesih tarihinden sonraki yazışmalar bulunmuyor.",
+        ],
+    )
+
+    cleaned, _ = GroundedChatService._enforce_channels(
+        generated, _channel_sources(), include_doctrine=False
+    )
+
+    assert cleaned.limitations == ["Dosyada fesih tarihinden sonraki yazışmalar bulunmuyor."]
+
+
+@pytest.mark.asyncio
+async def test_a_legal_claim_applied_to_the_file_facts_is_answered_not_failed() -> None:
+    """Regression: citing the file inside a legal claim used to fail the whole answer."""
+    mixed = GroundedAnswer(
+        answer_status="answered",
+        file_answer=file_answer().file_answer,
+        primary_answer=AnswerSection(
+            summary="s",
+            claims=[
+                GeneratedClaim(
+                    claim_id="P1",
+                    text="Savunma alınmadan verim düşüklüğüyle yapılan fesih geçersizdir; "
+                    "dosyada savunma alınmadığı görülmektedir.",
+                    source_ids=["SOURCE_PRIMARY_01", "SOURCE_FILE_01"],
+                )
+            ],
+        ),
+    )
+    provider = FakeProvider(mixed)
+    service = GroundedChatService(
+        FakeCoordinator([hit()]),
+        provider,
+        app_settings(),
+        private_retriever=FakePrivateRetriever([file_hit()]),
+    )
+
+    result = await _ask(service)
+
+    assert result.answer_status == "answered"
+    assert provider.calls == ["gemini-primary", "gemini-support"]  # no fallback retry
+    legal = [c for c in result.citations if c["claim_id"] == "P1"]
+    assert {c["source_channel"] for c in legal} == {"primary", "file"}
+
+
+@pytest.mark.asyncio
+async def test_an_answer_whose_every_claim_breaks_the_rules_is_insufficient() -> None:
+    broken = GroundedAnswer(
+        answer_status="answered",
+        primary_answer=AnswerSection(
+            summary="s",
+            claims=[GeneratedClaim(claim_id="P1", text="İddia.", source_ids=["SOURCE_FILE_01"])],
+        ),
+    )
+    provider = FakeProvider(broken)
+    service = GroundedChatService(
+        FakeCoordinator([hit()]),
+        provider,
+        app_settings(),
+        private_retriever=FakePrivateRetriever([file_hit()]),
+    )
+
+    result = await _ask(service)
+
+    assert result.answer_status == "insufficient_evidence"
+    assert provider.calls == ["gemini-primary"]  # nothing left to verify
 
 
 def test_file_passages_fill_their_share_of_the_context_first() -> None:

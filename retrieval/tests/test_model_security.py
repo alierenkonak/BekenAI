@@ -88,6 +88,7 @@ def test_all_public_model_loaders_disable_implicit_credentials(provider_stubs):
         assert len(kwargs["revision"]) == 40
     assert dict(calls)["dense"]["model_kwargs"]["use_safetensors"] is True
     assert dict(calls)["reranker"]["model_kwargs"]["use_safetensors"] is True
+    assert dict(calls)["reranker"]["max_length"] == 512
     assert sum(stage == "download" for stage, _ in calls) == 2
 
 
