@@ -535,7 +535,7 @@ class AppRepository:
                     """insert into public.chat_generations
                     (workspace_id,conversation_id,user_message_id,requested_model,prompt_version,
                      retrieval_query,include_doctrine)
-                    values (%s,%s,%s,%s,'grounded-chat-v1',%s,%s) returning *""",
+                    values (%s,%s,%s,%s,'grounded-chat-v2',%s,%s) returning *""",
                     (
                         workspace["id"],
                         conversation["id"],
@@ -982,6 +982,12 @@ class AppRepository:
                         citation["ordinal"],
                     ),
                 )
+            rewritten = getattr(result, "retrieval_query", None)
+            if rewritten and 3 <= len(rewritten) <= 500:
+                await conn.execute(
+                    "update public.chat_generations set retrieval_query=%s where id=%s",
+                    (rewritten, generation_id),
+                )
             await conn.execute(
                 """update public.chat_generations
                 set assistant_message_id=%s,status='completed',answer_status=%s,
@@ -1298,8 +1304,8 @@ class AppRepository:
     async def _assert_citation_integrity(
         self, conn: AsyncConnection, result: Any, workspace_id: UUID
     ) -> None:
-        if result.answer_status == "answered" and not result.citations:
-            raise CitationIntegrityError("citation_integrity_failed")
+        # Conversational answers may legitimately cite nothing (a greeting, a follow-up
+        # clarification); every citation that is present must still resolve exactly.
         private = [item for item in result.citations if item["source_scope"] == "private"]
         citations = [item for item in result.citations if item["source_scope"] != "private"]
         if private:

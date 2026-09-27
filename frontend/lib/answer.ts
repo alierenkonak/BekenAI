@@ -1,4 +1,12 @@
-import type { Citation, SourceChannel, SourceSnapshot, StructuredAnswer } from './types';
+import type {
+  AnswerBlock,
+  Citation,
+  ConversationalAnswer,
+  LegacyAnswer,
+  SourceChannel,
+  SourceSnapshot,
+  StructuredAnswer,
+} from './types';
 
 export interface SourceClaim {
   number: number;
@@ -15,64 +23,117 @@ export interface SourceRef {
   claims: SourceClaim[];
 }
 
+export interface Chip {
+  sourceId: string;
+  label: string;
+  channel: SourceChannel;
+  partial: boolean;
+}
+
 export interface RenderedClaim {
   number: number;
   text: string;
-  chips: { sourceId: string; label: string; channel: SourceChannel; partial: boolean }[];
+  chips: Chip[];
 }
 
-export interface RenderedAnswer {
+export interface RenderedSentence extends RenderedClaim {
+  unverified: boolean;
+}
+
+export interface RenderedBlock {
+  kind: AnswerBlock['kind'];
+  sentences: RenderedSentence[];
+}
+
+/** Answers from before the conversational format: one claim list per source kind. */
+export interface RenderedLegacyAnswer {
+  kind: 'legacy';
   file: RenderedClaim[];
   primary: RenderedClaim[];
   doctrine: RenderedClaim[];
   sources: SourceRef[];
 }
 
+export interface RenderedConversation {
+  kind: 'conversational';
+  blocks: RenderedBlock[];
+  sources: SourceRef[];
+  unverifiedCount: number;
+}
+
+export type RenderedAnswer = RenderedLegacyAnswer | RenderedConversation;
+
 const LABEL_PREFIX: Record<SourceChannel, string> = { primary: '', doctrine: 'D', file: 'F' };
+
+export function isConversational(answer: StructuredAnswer): answer is ConversationalAnswer {
+  return answer.format === 'conversational-v1';
+}
 
 /**
  * Numbers sources by first appearance per channel (file F1, F2…; primary 1, 2…;
- * doctrine D1, D2…) and joins each claim–source pair to its persisted citation so
+ * doctrine D1, D2…) and joins each sentence–source pair to its persisted citation so
  * chips carry the verifier's verdict.
  */
-export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): RenderedAnswer {
+function createNumbering(citations: Citation[]) {
   const citationByPair = new Map(citations.map((citation) => [`${citation.claim_id}::${citation.source_id}`, citation]));
   const sources = new Map<string, SourceRef>();
   const counts: Record<SourceChannel, number> = { primary: 0, doctrine: 0, file: 0 };
-  let claimNumber = 0;
 
-  const renderSection = (claims: StructuredAnswer['primary_answer']): RenderedClaim[] =>
-    (claims?.claims ?? []).map((claim) => {
-      claimNumber += 1;
-      const number = claimNumber;
-      const chips: RenderedClaim['chips'] = [];
-      for (const sourceId of claim.source_ids) {
-        const citation = citationByPair.get(`${claim.claim_id}::${sourceId}`);
-        if (!citation) continue;
-        let ref = sources.get(sourceId);
-        if (!ref) {
-          const channel = citation.source_channel;
-          counts[channel] += 1;
-          ref = {
-            sourceId,
-            label: `${LABEL_PREFIX[channel]}${counts[channel]}`,
-            channel,
-            snapshot: citation.source_snapshot,
-            claims: [],
-          };
-          sources.set(sourceId, ref);
-        }
-        ref.claims.push({ number, text: claim.text, status: citation.support_status, reason: citation.support_reason });
-        chips.push({ sourceId, label: ref.label, channel: ref.channel, partial: citation.support_status === 'partial' });
+  const chipsFor = (claimId: string, number: number, text: string, sourceIds: string[]): Chip[] => {
+    const chips: Chip[] = [];
+    for (const sourceId of sourceIds) {
+      const citation = citationByPair.get(`${claimId}::${sourceId}`);
+      if (!citation) continue;
+      let ref = sources.get(sourceId);
+      if (!ref) {
+        const channel = citation.source_channel;
+        counts[channel] += 1;
+        ref = { sourceId, label: `${LABEL_PREFIX[channel]}${counts[channel]}`, channel, snapshot: citation.source_snapshot, claims: [] };
+        sources.set(sourceId, ref);
       }
-      return { number, text: claim.text, chips };
-    });
+      ref.claims.push({ number, text, status: citation.support_status, reason: citation.support_reason });
+      chips.push({ sourceId, label: ref.label, channel: ref.channel, partial: citation.support_status === 'partial' });
+    }
+    return chips;
+  };
+  return { chipsFor, sources: () => [...sources.values()] };
+}
 
+export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): RenderedAnswer {
+  return isConversational(answer) ? renderConversation(answer, citations) : renderLegacy(answer, citations);
+}
+
+function renderConversation(answer: ConversationalAnswer, citations: Citation[]): RenderedConversation {
+  const { chipsFor, sources } = createNumbering(citations);
+  let number = 0;
+  const blocks = answer.blocks.map((block) => ({
+    kind: block.kind,
+    sentences: block.sentences.map((sentence) => {
+      number += 1;
+      return {
+        number,
+        text: sentence.text,
+        chips: chipsFor(sentence.id, number, sentence.text, sentence.source_ids),
+        unverified: sentence.verification === 'unverified',
+      };
+    }),
+  }));
+  return { kind: 'conversational', blocks, sources: sources(), unverifiedCount: answer.unverified_count ?? 0 };
+}
+
+function renderLegacy(answer: LegacyAnswer, citations: Citation[]): RenderedLegacyAnswer {
+  const { chipsFor, sources } = createNumbering(citations);
+  let claimNumber = 0;
+  const renderSection = (section: LegacyAnswer['primary_answer']): RenderedClaim[] =>
+    (section?.claims ?? []).map((claim) => {
+      claimNumber += 1;
+      return { number: claimNumber, text: claim.text, chips: chipsFor(claim.claim_id, claimNumber, claim.text, claim.source_ids) };
+    });
   // Facts from the user's file come first, then the law they are weighed against.
   const file = renderSection(answer.file_answer ?? null);
   const primary = renderSection(answer.primary_answer);
   const doctrine = renderSection(answer.doctrine_answer);
-  return { file, primary, doctrine, sources: [...sources.values()] };
+  return { kind: 'legacy', file, primary, doctrine, sources: sources() };
 }
 
 export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel): string {

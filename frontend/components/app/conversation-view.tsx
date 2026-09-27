@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, Spinner } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
-import { renderAnswer, type RenderedAnswer } from '@/lib/answer';
+import { isConversational, renderAnswer, type RenderedAnswer } from '@/lib/answer';
 import { describeError } from '@/lib/format';
 import type { Conversation, GenerationSummary, Message } from '@/lib/types';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
@@ -33,8 +33,9 @@ function buildTurns(messages: Message[]): Turn[] {
       const generation = user.generation;
       const assistant = generation?.assistant_message_id ? (assistants.get(generation.assistant_message_id) ?? null) : null;
       const structured = assistant?.structured_content;
-      const rendered =
-        structured && structured.answer_status === 'answered' ? renderAnswer(structured, assistant?.citations ?? []) : null;
+      // Conversational answers explain a missing source in prose, so they always render.
+      const renderable = structured && (isConversational(structured) || structured.answer_status === 'answered');
+      const rendered = renderable ? renderAnswer(structured, assistant?.citations ?? []) : null;
       return { user, generation, assistant, rendered };
     });
 }
@@ -329,8 +330,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
               {turns.map((turn, index) => {
                 const generation = turn.generation;
                 const structured = turn.assistant?.structured_content ?? null;
+                const conversational = structured !== null && isConversational(structured);
                 const insufficient =
-                  generation?.answer_status === 'insufficient_evidence' || structured?.answer_status === 'insufficient_evidence';
+                  !conversational &&
+                  (generation?.answer_status === 'insufficient_evidence' || structured?.answer_status === 'insufficient_evidence');
                 return (
                   <section key={turn.user.id} data-turn={index} aria-label={`${index + 1}. soru`} className="flex flex-col gap-5">
                     <div className="max-w-[500px] self-end whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">

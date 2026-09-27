@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.llm.gemini import _gemini_json_schema
-from app.llm.models import GroundedAnswer, SupportReport
+from app.llm.models import ChatAnswer, QueryPlan, SupportReport
 
 
 def _keys(value: Any) -> set[str]:
@@ -21,7 +21,7 @@ def _keys(value: Any) -> set[str]:
 
 
 def test_gemini_schema_inlines_refs_and_drops_unsupported_constraints() -> None:
-    for model in (GroundedAnswer, SupportReport):
+    for model in (ChatAnswer, QueryPlan, SupportReport):
         schema = _gemini_json_schema(model)
         keys = _keys(schema)
         assert "$defs" not in keys
@@ -36,11 +36,10 @@ def test_gemini_schema_inlines_refs_and_drops_unsupported_constraints() -> None:
         assert schema["type"] == "object"
 
 
-def test_gemini_schema_compacts_nullable_objects_without_any_of() -> None:
-    schema = _gemini_json_schema(GroundedAnswer)
-    primary = schema["properties"]["primary_answer"]
-    doctrine = schema["properties"]["doctrine_answer"]
-    assert primary["type"] == ["object", "null"]
-    assert doctrine["type"] == ["object", "null"]
-    assert "anyOf" not in primary
-    assert "anyOf" not in doctrine
+def test_gemini_schema_keeps_the_answer_block_structure() -> None:
+    schema = _gemini_json_schema(ChatAnswer)
+    block = schema["properties"]["blocks"]["items"]
+    sentence = block["properties"]["sentences"]["items"]
+    assert block["properties"]["kind"]["enum"] == ["paragraph", "heading", "bullets"]
+    assert set(sentence["properties"]) == {"text", "source_ids"}
+    assert "anyOf" not in _keys(schema)

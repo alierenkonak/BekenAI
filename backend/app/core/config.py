@@ -26,9 +26,12 @@ class Settings(BaseSettings):
     gemini_primary_model: str = "gemini-3.8-flash"
     gemini_fallback_model: str = "gemini-3.5-flash-lite"
     gemini_claim_support_model: str = "gemini-3.5-flash-lite"
+    # Rewrites follow-up questions into standalone search queries; small and fast.
+    gemini_query_model: str = "gemini-3.5-flash-lite"
     gemini_target_input_tokens: int = Field(default=64_000, ge=8_000, le=128_000)
     gemini_max_input_tokens: int = Field(default=128_000, ge=16_000, le=128_000)
-    gemini_max_output_tokens: int = Field(default=4_096, ge=512, le=4_096)
+    # Thinking tokens count against this budget too; conversational answers need room.
+    gemini_max_output_tokens: int = Field(default=8_192, ge=512, le=16_384)
     gemini_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
     chat_worker_poll_seconds: float = Field(default=2.0, ge=0.25, le=30)
     chat_worker_stale_minutes: int = Field(default=10, ge=2, le=120)

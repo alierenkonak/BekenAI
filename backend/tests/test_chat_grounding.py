@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
@@ -10,18 +11,23 @@ from pydantic import ValidationError
 
 from app.api.chat import ChatRequest
 from app.chat.context import EvidenceSource, FileEvidenceSource, select_history, select_sources
-from app.chat.grounded import GroundedChatService
-from app.chat.query import derive_retrieval_query
+from app.chat.grounded import ANSWER_FORMAT, GroundedChatService
+from app.chat.query import derive_retrieval_query, fallback_plan, plan_query
 from app.core.config import Settings
 from app.files.retrieval import PrivateHit, PrivateScope
 from app.llm.models import (
-    AnswerSection,
-    GeneratedClaim,
-    GroundedAnswer,
+    AnswerBlock,
+    AnswerSentence,
+    ChatAnswer,
+    QueryPlan,
     SupportAssessment,
     SupportReport,
 )
-from app.llm.provider import StructuredResult, TransientLLMError
+from app.llm.provider import PermanentLLMError, StructuredResult, TransientLLMError
+
+P, D, F = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01"
+SCOPE = PrivateScope(workspace_id=uuid4(), conversation_id=uuid4(), case_id=uuid4())
+REWRITTEN = "performans düşüklüğü gerekçesiyle savunma alınmadan fesih işe iade tazminat"
 
 
 def hit(*, channel: str = "primary", text: str = "Fesih bildirimi yazılı yapılır.") -> SearchHit:
@@ -47,6 +53,22 @@ def hit(*, channel: str = "primary", text: str = "Fesih bildirimi yazılı yapı
     return SearchHit(record=record, score=1.0, rank=1)
 
 
+def file_hit(text: str = "Fesihten önce savunma alınmamıştır.", *, page: int = 2) -> PrivateHit:
+    return PrivateHit(
+        chunk_id=uuid4(),
+        file_id=uuid4(),
+        file_name="Fesih Bildirimi.pdf",
+        chunk_index=0,
+        text=text,
+        section_title="AÇIKLAMALAR",
+        page_start=page,
+        page_end=page,
+        paragraph_start=3,
+        paragraph_end=4,
+        score=0.9,
+    )
+
+
 class FakeRegistry:
     def get(self, _domain: str, channel: str = "primary"):
         return SimpleNamespace(index_version=f"{channel}-index")
@@ -57,70 +79,69 @@ class FakeCoordinator:
         self.primary = primary
         self.doctrine = doctrine or []
         self.registry = FakeRegistry()
-        self.channels: list[str] = []
-        self.limits: list[int] = []
+        self.searches: list[tuple[str, str]] = []
 
-    def search(self, _query: str, **kwargs):
+    def search(self, query: str, **kwargs):
         channel = kwargs.get("channel", "primary")
-        self.channels.append(channel)
-        self.limits.append(kwargs["limit"])
+        self.searches.append((query, channel))
         return self.doctrine if channel == "doctrine" else self.primary
 
 
+class FakePrivateRetriever:
+    def __init__(self, hits: list[PrivateHit]) -> None:
+        self.hits = hits
+        self.calls: list[tuple[str, PrivateScope]] = []
+
+    async def search(self, query: str, scope: PrivateScope) -> list[PrivateHit]:
+        self.calls.append((query, scope))
+        return self.hits
+
+
 class FakeProvider:
+    """Plans, answers and verifies from fixtures, recording every call."""
+
     def __init__(
         self,
-        answer: GroundedAnswer,
+        answer: ChatAnswer,
         *,
-        support_status: str = "supported",
-        transient_first: bool = False,
+        plan: QueryPlan | Exception | None = None,
+        support: dict[str, str] | None = None,
+        skip_support_for: set[tuple[str, str]] | None = None,
+        primary_error: Exception | None = None,
     ) -> None:
         self.answer = answer
-        self.support_status = support_status
-        self.transient_first = transient_first
+        self.plan = plan if plan is not None else QueryPlan(intent="legal", search_query=REWRITTEN)
+        self.support = support or {}
+        self.skip_support_for = skip_support_for or set()
+        self.primary_error = primary_error
         self.calls: list[str] = []
-        self.prompts: list[str] = []
-
-    async def generate(self, *, model: str, prompt: str) -> str:
-        return "unused"
-
-    async def stream(self, *, model: str, prompt: str):
-        if False:
-            yield ""
+        self.prompts: dict[str, str] = {}
 
     async def structured_output(self, *, model: str, prompt: str, schema):
-        self.calls.append(model)
-        if schema is GroundedAnswer:
-            self.prompts.append(prompt)
-            if self.transient_first and len(self.calls) == 1:
-                raise TransientLLMError("temporary")
-            return StructuredResult(
-                value=self.answer, model=model, input_tokens=100, output_tokens=20
+        self.calls.append(f"{model}:{schema.__name__}")
+        self.prompts[schema.__name__] = prompt
+        if schema is QueryPlan:
+            if isinstance(self.plan, Exception):
+                raise self.plan
+            return StructuredResult(value=self.plan, model=model)
+        if schema is ChatAnswer:
+            if self.primary_error and model == "gemini-primary":
+                raise self.primary_error
+            return StructuredResult(value=self.answer, model=model, input_tokens=9, output_tokens=3)
+        import json
+
+        pairs = json.loads(prompt[prompt.index("[") :])
+        assessments = [
+            SupportAssessment(
+                claim_id=pair["claim_id"],
+                source_id=pair["source_id"],
+                status=self.support.get(pair["source_id"], "supported"),
+                reason="fixture",
             )
-        assessments = []
-        sections = [
-            self.answer.file_answer,
-            self.answer.primary_answer,
-            self.answer.doctrine_answer,
+            for pair in pairs
+            if (pair["claim_id"], pair["source_id"]) not in self.skip_support_for
         ]
-        for section in sections:
-            if section:
-                for claim in section.claims:
-                    for source_id in claim.source_ids:
-                        assessments.append(
-                            SupportAssessment(
-                                claim_id=claim.claim_id,
-                                source_id=source_id,
-                                status=self.support_status,
-                                reason="fixture",
-                            )
-                        )
-        return StructuredResult(
-            value=SupportReport(assessments=assessments),
-            model=model,
-            input_tokens=20,
-            output_tokens=10,
-        )
+        return StructuredResult(value=SupportReport(assessments=assessments), model=model)
 
 
 def app_settings() -> Settings:
@@ -131,35 +152,57 @@ def app_settings() -> Settings:
         gemini_primary_model="gemini-primary",
         gemini_fallback_model="gemini-fallback",
         gemini_claim_support_model="gemini-support",
+        gemini_query_model="gemini-query",
     )
 
 
-def answer(*, doctrine: bool = False) -> GroundedAnswer:
-    return GroundedAnswer(
-        answer_status="answered",
-        primary_answer=AnswerSection(
-            summary="model summary",
-            claims=[
-                GeneratedClaim(
-                    claim_id="P1",
-                    text="Fesih bildirimi yazılı yapılmalıdır.",
-                    source_ids=["SOURCE_PRIMARY_01"],
-                )
-            ],
-        ),
-        doctrine_answer=AnswerSection(
-            summary="doctrine summary",
-            claims=[
-                GeneratedClaim(
-                    claim_id="D1",
-                    text="Öğretide yazılılık koruyucu görülür.",
-                    source_ids=["SOURCE_DOCTRINE_01"],
-                )
-            ],
-        )
-        if doctrine
-        else None,
+def paragraph(*sentences: tuple[str, list[str]]) -> AnswerBlock:
+    return AnswerBlock(
+        kind="paragraph",
+        sentences=[AnswerSentence(text=text, source_ids=ids) for text, ids in sentences],
     )
+
+
+def chat_answer(*blocks: AnswerBlock, status: str = "answered", limitations=()) -> ChatAnswer:
+    return ChatAnswer(answer_status=status, blocks=list(blocks), limitations=list(limitations))
+
+
+MIXED = chat_answer(
+    paragraph(
+        ("Evet, bu feshe itiraz edebilirsiniz.", []),
+        ("Verim nedeniyle fesihte önce savunma alınmalıdır.", [P]),
+        ("Dosyada sizden savunma istenmediği yazıyor.", [F]),
+        ("Bu nedenle fesih usulden geçersiz sayılabilir.", [P, F]),
+    )
+)
+
+
+def service(provider, *, primary=None, doctrine=None, files=None) -> GroundedChatService:
+    return GroundedChatService(
+        FakeCoordinator([hit()] if primary is None else primary, doctrine),
+        provider,
+        app_settings(),
+        private_retriever=FakePrivateRetriever([file_hit()] if files is None else files),
+    )
+
+
+async def ask(chat: GroundedChatService, **overrides):
+    values = {
+        "message": "doğru mu söylemişler, itiraz edemez miyim?",
+        "retrieval_query": "doğru mu söylemişler itiraz edemez miyim",
+        "domain": "labour_law",
+        "include_doctrine": False,
+        "history": [
+            {"role": "user", "content": "İşveren fesih gerekçesi olarak ne göstermiş?"},
+            {"role": "assistant", "content": "Performans düşüklüğü gösterilmiş."},
+        ],
+        "private_scope": SCOPE,
+    }
+    return await chat.answer(**{**values, **overrides})
+
+
+def sentences(result) -> list[dict]:
+    return [s for block in result.structured_content["blocks"] for s in block["sentences"]]
 
 
 def test_retrieval_query_is_deterministic_and_at_most_500_characters() -> None:
@@ -178,11 +221,7 @@ def test_chat_message_limit_is_1500_characters() -> None:
 
 def test_target_context_cannot_exceed_128k_hard_limit() -> None:
     with pytest.raises(ValidationError):
-        Settings(
-            _env_file=None,
-            gemini_target_input_tokens=128_000,
-            gemini_max_input_tokens=64_000,
-        )
+        Settings(_env_file=None, gemini_target_input_tokens=128_000, gemini_max_input_tokens=64_000)
     with pytest.raises(ValidationError):
         Settings(_env_file=None, gemini_max_input_tokens=128_001)
 
@@ -199,75 +238,244 @@ def test_context_budget_never_splits_a_passage() -> None:
     small = EvidenceSource("SOURCE_PRIMARY_02", "primary", hit(text="tam pasaj"), "v1")
     selected = select_sources([large, small], [], base_tokens=0, target_tokens=100, hard_tokens=200)
     assert [item.source_id for item in selected] == ["SOURCE_PRIMARY_02"]
-    assert selected[0].hit.record.text == "tam pasaj"
+
+
+def test_file_passages_fill_their_share_of_the_context_first() -> None:
+    files = [
+        FileEvidenceSource(f"SOURCE_FILE_{i:02d}", file_hit("d" * 600), "private")
+        for i in range(1, 6)
+    ]
+    primary = [EvidenceSource(P, "primary", hit(text="kanun"), "v1")]
+    selected = select_sources(
+        primary, [], base_tokens=0, target_tokens=10_000, hard_tokens=10_000,
+        files=files, file_tokens=1_000,
+    )
+    kinds = [source.channel for source in selected]
+    assert kinds[0] == "file" and "primary" in kinds
+    assert kinds.count("file") < len(files)
 
 
 @pytest.mark.asyncio
-async def test_grounded_answer_keeps_channels_separate_and_verified() -> None:
-    coordinator = FakeCoordinator([hit()], [hit(channel="doctrine")])
-    provider = FakeProvider(answer(doctrine=True))
-    service = GroundedChatService(coordinator, provider, app_settings())
-    result = await service.answer(
-        message="Fesih nasıl yapılır?",
-        retrieval_query="fesih nasıl yapılır",
-        domain="labour_law",
-        include_doctrine=True,
-        history=[],
+async def test_a_follow_up_is_searched_with_its_conversation_context() -> None:
+    """Regression: 'doğru mu söylemişler?' used to be searched as is and matched nothing."""
+    provider = FakeProvider(MIXED)
+    chat = service(provider, doctrine=[hit(channel="doctrine")])
+
+    result = await ask(chat, include_doctrine=True)
+
+    assert chat.coordinator.searches == [(REWRITTEN, "primary"), (REWRITTEN, "doctrine")]
+    assert chat.private_retriever.calls == [(REWRITTEN, SCOPE)]
+    assert result.retrieval_query == REWRITTEN
+    assert "İşveren fesih gerekçesi" in provider.prompts["QueryPlan"]
+    assert provider.calls[0] == "gemini-query:QueryPlan"
+
+
+@pytest.mark.asyncio
+async def test_planner_failure_falls_back_to_the_previous_question() -> None:
+    provider = FakeProvider(MIXED, plan=TransientLLMError("provider_temporarily_unavailable"))
+    chat = service(provider)
+
+    await ask(chat)
+
+    query = chat.coordinator.searches[0][0]
+    assert query.startswith("İşveren fesih gerekçesi") and "itiraz" in query
+
+
+def test_fallback_plan_without_history_uses_the_message() -> None:
+    assert fallback_plan("Kıdem tazminatı nasıl hesaplanır?", []).search_query == (
+        "Kıdem tazminatı nasıl hesaplanır?"
     )
+
+
+@pytest.mark.asyncio
+async def test_planner_keeps_legal_queries_short_and_detects_small_talk() -> None:
+    long_query = QueryPlan(intent="legal", search_query="fesih " * 200)
+    provider = FakeProvider(MIXED, plan=long_query)
+    plan = await plan_query(provider, model="m", message="x", history=[])
+    assert plan.intent == "legal" and len(plan.search_query) <= 500
+
+    chatty = QueryPlan(intent="conversation", search_query="ignored")
+    provider = FakeProvider(MIXED, plan=chatty)
+    plan = await plan_query(provider, model="m", message="Merhaba", history=[])
+    assert plan == QueryPlan(intent="conversation", search_query="")
+
+
+@pytest.mark.asyncio
+async def test_a_mixed_answer_cites_law_and_file_sentence_by_sentence() -> None:
+    provider = FakeProvider(MIXED)
+    result = await ask(service(provider))
+
     assert result.answer_status == "answered"
-    assert coordinator.channels == ["primary", "doctrine"]
-    assert coordinator.limits == [25, 25]
-    assert {item["source_channel"] for item in result.citations} == {
-        "primary",
-        "doctrine",
+    assert result.structured_content["format"] == ANSWER_FORMAT
+    first, rule, fact, applied = sentences(result)
+    assert first["verification"] == "plain" and first["source_ids"] == []
+    assert rule["verification"] == "verified" and rule["source_ids"] == [P]
+    assert applied["source_ids"] == [P, F]
+    by_sentence = {(c["claim_id"], c["source_channel"]) for c in result.citations}
+    assert by_sentence == {("S2", "primary"), ("S3", "file"), ("S4", "primary"), ("S4", "file")}
+    assert result.content.startswith("Evet, bu feshe itiraz edebilirsiniz.")
+    assert result.index_versions == {
+        "labour_law:primary": "primary-index",
+        "private:file": "beken_private_files_bge_m3_v1",
     }
-    assert "Doktrin/Yardımcı Kaynaklarla Değerlendirme" in result.content
+    prompt = provider.prompts["ChatAnswer"]
+    assert "<case_file_evidence>" in prompt and "file_name=Fesih Bildirimi.pdf" in prompt
+    assert "Önce soruyu doğrudan cevapla" in prompt
 
 
 @pytest.mark.asyncio
-async def test_unsupported_primary_claim_becomes_insufficient_evidence() -> None:
-    provider = FakeProvider(answer(), support_status="unsupported")
-    service = GroundedChatService(FakeCoordinator([hit()]), provider, app_settings())
-    result = await service.answer(
-        message="Fesih nasıl yapılır?",
-        retrieval_query="fesih nasıl yapılır",
-        domain="labour_law",
-        include_doctrine=False,
-        history=[],
+async def test_a_sentence_whose_sources_fail_verification_stays_marked_unverified() -> None:
+    provider = FakeProvider(MIXED, support={F: "unsupported"})
+    result = await ask(service(provider))
+
+    fact = sentences(result)[2]
+    assert fact["verification"] == "unverified" and fact["source_ids"] == []
+    applied = sentences(result)[3]
+    assert applied["verification"] == "verified" and applied["source_ids"] == [P]
+    assert result.structured_content["unverified_count"] == 1
+    assert all(c["source_channel"] != "file" for c in result.citations)
+
+
+@pytest.mark.asyncio
+async def test_a_pair_the_verifier_skipped_is_unverified_not_a_failure() -> None:
+    provider = FakeProvider(MIXED, skip_support_for={("S3", F)})
+    result = await ask(service(provider))
+
+    assert result.answer_status == "answered"
+    assert sentences(result)[2]["verification"] == "unverified"
+
+
+@pytest.mark.asyncio
+async def test_unsourced_specific_facts_are_marked_but_explanation_is_not() -> None:
+    answer = chat_answer(
+        AnswerBlock(kind="heading", sentences=[AnswerSentence(text="Süreler", source_ids=[P])]),
+        paragraph(
+            ("Bu konuda acele etmeniz iyi olur.", []),
+            ("Arabulucuya 30 gün içinde başvurmalısınız.", []),
+        ),
     )
+    result = await ask(service(FakeProvider(answer)))
+
+    heading, advice, deadline = sentences(result)
+    assert heading["source_ids"] == [] and heading["verification"] == "plain"
+    assert advice["verification"] == "plain"
+    assert deadline["verification"] == "unverified"
+
+
+@pytest.mark.asyncio
+async def test_unknown_ids_and_leaked_internal_terms_never_reach_the_reader() -> None:
+    answer = chat_answer(
+        paragraph(("Savunma alınmalıdır [SOURCE_PRIMARY_01].", [P, "SOURCE_PRIMARY_99"])),
+        limitations=["primary_answer boş kaldı.", "Dosyada fesih sonrası yazışma yok."],
+    )
+    result = await ask(service(FakeProvider(answer)))
+
+    [sentence] = sentences(result)
+    assert sentence["text"] == "Savunma alınmalıdır."
+    assert sentence["source_ids"] == [P]
+    assert result.structured_content["limitations"] == ["Dosyada fesih sonrası yazışma yok."]
+
+
+@pytest.mark.asyncio
+async def test_small_talk_is_answered_without_searching_or_verifying() -> None:
+    answer = chat_answer(paragraph(("Merhaba! Size iş hukukunda nasıl yardımcı olabilirim?", [])))
+    provider = FakeProvider(answer, plan=QueryPlan(intent="conversation"))
+    stages: list[str] = []
+
+    async def record(stage: str) -> None:
+        stages.append(stage)
+
+    chat = service(provider)
+    result = await ask(chat, message="Merhaba", on_stage=record)
+
+    assert chat.coordinator.searches == [] and chat.private_retriever.calls == []
+    assert result.answer_status == "answered" and result.citations == []
+    assert stages == ["retrieving", "generating"]
+    assert "hukuki bir soru değil" in provider.prompts["ChatAnswer"]
+
+
+@pytest.mark.asyncio
+async def test_without_any_source_the_model_explains_that_instead_of_guessing() -> None:
+    answer = chat_answer(
+        paragraph(("Bu konuda kaynaklarımda bir bilgi bulamadım.", [])),
+        status="insufficient_evidence",
+    )
+    provider = FakeProvider(answer)
+    result = await ask(service(provider, primary=[], files=[]))
+
     assert result.answer_status == "insufficient_evidence"
-    assert result.citations == []
+    assert "ilgili bir pasaj bulunamadı" in provider.prompts["ChatAnswer"]
+    assert "gemini-support:SupportReport" not in provider.calls
 
 
 @pytest.mark.asyncio
-async def test_transient_primary_failure_uses_fallback_once() -> None:
-    provider = FakeProvider(answer(), transient_first=True)
-    service = GroundedChatService(FakeCoordinator([hit()]), provider, app_settings())
-    result = await service.answer(
-        message="Fesih nasıl yapılır?",
-        retrieval_query="fesih nasıl yapılır",
-        domain="labour_law",
-        include_doctrine=False,
-        history=[],
-    )
-    assert result.fallback_used is True
-    assert result.actual_model == "gemini-fallback"
-    assert provider.calls == ["gemini-primary", "gemini-fallback", "gemini-support"]
+@pytest.mark.parametrize(
+    "error",
+    [
+        TransientLLMError("provider_temporarily_unavailable"),
+        PermanentLLMError("invalid_structured_output"),
+        PermanentLLMError("output_truncated"),
+    ],
+)
+async def test_primary_model_failures_fall_back_and_are_logged(error, caplog, monkeypatch) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 0)
+    provider = FakeProvider(MIXED, primary_error=error)
+    with caplog.at_level(logging.WARNING, logger="bekenai.chat"):
+        result = await ask(service(provider))
+
+    assert result.fallback_used and result.actual_model == "gemini-fallback"
+    assert f"{type(error).__name__}: {error}" in caplog.text
+
+
+class FlakyPrimary(FakeProvider):
+    """The primary model fails a set number of times before answering."""
+
+    def __init__(self, answer, *, failures: int, error: Exception) -> None:
+        super().__init__(answer)
+        self.failures = failures
+        self.error = error
+
+    async def structured_output(self, *, model: str, prompt: str, schema):
+        if schema is ChatAnswer and model == "gemini-primary" and self.failures:
+            self.failures -= 1
+            self.calls.append(f"{model}:{schema.__name__}")
+            raise self.error
+        return await super().structured_output(model=model, prompt=prompt, schema=schema)
+
+
+def _status_error(status: int) -> TransientLLMError:
+    error = TransientLLMError("provider_temporarily_unavailable")
+    error.status_code = status
+    return error
 
 
 @pytest.mark.asyncio
-async def test_no_primary_evidence_never_calls_model() -> None:
-    provider = FakeProvider(answer())
-    service = GroundedChatService(FakeCoordinator([]), provider, app_settings())
-    result = await service.answer(
-        message="Bilinmeyen konu nedir?",
-        retrieval_query="bilinmeyen konu",
-        domain="labour_law",
-        include_doctrine=False,
-        history=[],
-    )
-    assert result.answer_status == "insufficient_evidence"
-    assert provider.calls == []
+async def test_an_overloaded_primary_model_is_retried_once_before_falling_back(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 0)
+    provider = FlakyPrimary(MIXED, failures=1, error=_status_error(503))
+    result = await ask(service(provider))
+
+    assert not result.fallback_used and result.actual_model == "gemini-primary"
+    assert provider.calls.count("gemini-primary:ChatAnswer") == 2
+
+
+@pytest.mark.asyncio
+async def test_a_quota_error_falls_back_without_waiting(monkeypatch) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 60)
+    provider = FlakyPrimary(MIXED, failures=1, error=_status_error(429))
+    result = await ask(service(provider))
+
+    assert result.fallback_used
+    assert provider.calls.count("gemini-primary:ChatAnswer") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_request_error_on_the_primary_model_is_not_retried() -> None:
+    provider = FakeProvider(MIXED, primary_error=PermanentLLMError("provider_request_failed"))
+    with pytest.raises(PermanentLLMError, match="provider_request_failed"):
+        await ask(service(provider))
 
 
 @pytest.mark.asyncio
@@ -277,314 +485,5 @@ async def test_answer_reports_pipeline_stages_in_order() -> None:
     async def record(stage: str) -> None:
         stages.append(stage)
 
-    service = GroundedChatService(FakeCoordinator([hit()]), FakeProvider(answer()), app_settings())
-    result = await service.answer(
-        message="Fesih nasıl yapılır?",
-        retrieval_query="fesih nasıl yapılır",
-        domain="labour_law",
-        include_doctrine=False,
-        history=[],
-        on_stage=record,
-    )
-    assert result.answer_status == "answered"
+    await ask(service(FakeProvider(MIXED)), on_stage=record)
     assert stages == ["retrieving", "generating", "verifying"]
-
-
-@pytest.mark.asyncio
-async def test_missing_primary_evidence_stops_after_retrieval_stage() -> None:
-    stages: list[str] = []
-
-    async def record(stage: str) -> None:
-        stages.append(stage)
-
-    service = GroundedChatService(FakeCoordinator([]), FakeProvider(answer()), app_settings())
-    result = await service.answer(
-        message="Bilinmeyen konu nedir?",
-        retrieval_query="bilinmeyen konu",
-        domain="labour_law",
-        include_doctrine=False,
-        history=[],
-        on_stage=record,
-    )
-    assert result.answer_status == "insufficient_evidence"
-    assert stages == ["retrieving"]
-
-
-def file_hit(text: str = "İşveren fesih gerekçesi olarak performans düşüklüğünü göstermiştir.",
-             *, page: int = 2) -> PrivateHit:
-    return PrivateHit(
-        chunk_id=uuid4(),
-        file_id=uuid4(),
-        file_name="Fesih Bildirimi.pdf",
-        chunk_index=0,
-        text=text,
-        section_title="AÇIKLAMALAR",
-        page_start=page,
-        page_end=page,
-        paragraph_start=3,
-        paragraph_end=4,
-        score=0.9,
-    )
-
-
-class FakePrivateRetriever:
-    def __init__(self, hits: list[PrivateHit]) -> None:
-        self.hits = hits
-        self.calls: list[tuple[str, PrivateScope]] = []
-
-    async def search(self, query: str, scope: PrivateScope) -> list[PrivateHit]:
-        self.calls.append((query, scope))
-        return self.hits
-
-
-SCOPE = PrivateScope(workspace_id=uuid4(), conversation_id=uuid4(), case_id=uuid4())
-
-
-def file_answer(*, with_law: bool = False) -> GroundedAnswer:
-    return GroundedAnswer(
-        answer_status="answered",
-        file_answer=AnswerSection(
-            summary="model summary",
-            claims=[
-                GeneratedClaim(
-                    claim_id="F1",
-                    text="Fesih bildiriminde gerekçe olarak performans düşüklüğü gösterilmiştir.",
-                    source_ids=["SOURCE_FILE_01"],
-                )
-            ],
-        ),
-        primary_answer=answer().primary_answer if with_law else None,
-    )
-
-
-async def _ask(service: GroundedChatService, **overrides):
-    values = {
-        "message": "İşveren fesih gerekçesi olarak ne göstermiş?",
-        "retrieval_query": "işveren fesih gerekçesi olarak ne göstermiş",
-        "domain": "labour_law",
-        "include_doctrine": False,
-        "history": [],
-        "private_scope": SCOPE,
-    }
-    return await service.answer(**{**values, **overrides})
-
-
-@pytest.mark.asyncio
-async def test_a_question_about_the_file_is_answered_from_the_file_alone() -> None:
-    retriever = FakePrivateRetriever([file_hit()])
-    provider = FakeProvider(file_answer())
-    service = GroundedChatService(
-        FakeCoordinator([]), provider, app_settings(), private_retriever=retriever
-    )
-
-    result = await _ask(service)
-
-    assert result.answer_status == "answered"
-    assert retriever.calls == [("işveren fesih gerekçesi olarak ne göstermiş", SCOPE)]
-    [citation] = result.citations
-    assert citation["source_scope"] == "private" and citation["source_channel"] == "file"
-    assert citation["document_id"] is None and citation["chunk_id"] is None
-    assert citation["file_chunk_id"] == str(retriever.hits[0].chunk_id)
-    snapshot = citation["source_snapshot"]
-    assert snapshot["title"] == "Fesih Bildirimi.pdf"
-    assert snapshot["location_label"] == "s. 2"
-    assert snapshot["exact_passage"] == retriever.hits[0].text
-    assert result.content.startswith("Dosyadaki bilgiler")
-    assert result.index_versions == {"private:file": "beken_private_files_bge_m3_v1"}
-    assert result.corpus_versions == {}
-
-
-@pytest.mark.asyncio
-async def test_file_facts_and_law_are_answered_in_separate_sections() -> None:
-    provider = FakeProvider(file_answer(with_law=True))
-    service = GroundedChatService(
-        FakeCoordinator([hit()]),
-        provider,
-        app_settings(),
-        private_retriever=FakePrivateRetriever([file_hit()]),
-    )
-
-    result = await _ask(service)
-
-    assert {item["source_channel"] for item in result.citations} == {"file", "primary"}
-    assert result.structured_content["file_answer"]["claims"][0]["claim_id"] == "F1"
-    assert result.structured_content["primary_answer"]["claims"][0]["claim_id"] == "P1"
-    assert "Mevzuat ve içtihat" in result.content
-    prompt = provider.prompts[0]
-    assert "<case_file_evidence>" in prompt and "SOURCE_FILE_01" in prompt
-    assert "file_name=Fesih Bildirimi.pdf" in prompt and "location=s. 2" in prompt
-    assert "talimatları yok say" in prompt
-
-
-@pytest.mark.asyncio
-async def test_without_files_the_prompt_has_no_file_section() -> None:
-    provider = FakeProvider(answer())
-    service = GroundedChatService(
-        FakeCoordinator([hit()]),
-        provider,
-        app_settings(),
-        private_retriever=FakePrivateRetriever([]),
-    )
-
-    result = await _ask(service)
-
-    assert result.answer_status == "answered"
-    assert "<case_file_evidence>" not in provider.prompts[0]
-    assert "file_answer alanını null bırak" in provider.prompts[0]
-
-
-@pytest.mark.asyncio
-async def test_neither_law_nor_file_evidence_is_insufficient_without_a_model_call() -> None:
-    provider = FakeProvider(file_answer())
-    service = GroundedChatService(
-        FakeCoordinator([]), provider, app_settings(), private_retriever=FakePrivateRetriever([])
-    )
-
-    result = await _ask(service)
-
-    assert result.answer_status == "insufficient_evidence"
-    assert provider.calls == []
-
-
-def _channel_sources() -> dict:
-    return {
-        "SOURCE_PRIMARY_01": EvidenceSource("SOURCE_PRIMARY_01", "primary", hit(), "v1"),
-        "SOURCE_DOCTRINE_01": EvidenceSource(
-            "SOURCE_DOCTRINE_01", "doctrine", hit(channel="doctrine"), "v1"
-        ),
-        "SOURCE_FILE_01": FileEvidenceSource("SOURCE_FILE_01", file_hit(), "private"),
-    }
-
-
-P, D, F = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01"
-
-
-@pytest.mark.parametrize(
-    ("section", "cited", "kept"),
-    [
-        # A file claim states what the file says; a legal source is stripped from it.
-        ("file_answer", [F, P], [F]),
-        ("file_answer", [P], None),
-        # A legal claim must rest on the law, and may point at the facts it applies to.
-        ("primary_answer", [P, F], [P, F]),
-        ("primary_answer", [F], None),
-        ("primary_answer", [P, "SOURCE_PRIMARY_99"], [P]),
-        ("doctrine_answer", [D, F], [D, F]),
-        ("doctrine_answer", [F], None),
-    ],
-)
-def test_channel_rules_keep_allowed_pairs_and_drop_unsupported_claims(section, cited, kept) -> None:
-    claim = GeneratedClaim(claim_id="C1", text="İddia.", source_ids=cited)
-    generated = GroundedAnswer(
-        answer_status="answered", **{section: AnswerSection(summary="s", claims=[claim])}
-    )
-
-    cleaned, claims = GroundedChatService._enforce_channels(
-        generated, _channel_sources(), include_doctrine=True
-    )
-
-    if kept is None:
-        assert claims == [] and getattr(cleaned, section) is None
-    else:
-        assert [claim.source_ids for claim in claims] == [kept]
-        assert getattr(cleaned, section).claims[0].source_ids == kept
-
-
-def test_limitations_never_show_schema_names_or_source_ids() -> None:
-    generated = GroundedAnswer(
-        answer_status="answered",
-        file_answer=AnswerSection(
-            summary="s",
-            claims=[GeneratedClaim(claim_id="F1", text="Olgu.", source_ids=["SOURCE_FILE_01"])],
-        ),
-        limitations=[
-            "Soru dosyayla ilgili olduğundan primary_answer ve doctrine_answer üretilmemiştir.",
-            "SOURCE_FILE_01 dışında pasaj yok.",
-            "Dosyada fesih tarihinden sonraki yazışmalar bulunmuyor.",
-        ],
-    )
-
-    cleaned, _ = GroundedChatService._enforce_channels(
-        generated, _channel_sources(), include_doctrine=False
-    )
-
-    assert cleaned.limitations == ["Dosyada fesih tarihinden sonraki yazışmalar bulunmuyor."]
-
-
-@pytest.mark.asyncio
-async def test_a_legal_claim_applied_to_the_file_facts_is_answered_not_failed() -> None:
-    """Regression: citing the file inside a legal claim used to fail the whole answer."""
-    mixed = GroundedAnswer(
-        answer_status="answered",
-        file_answer=file_answer().file_answer,
-        primary_answer=AnswerSection(
-            summary="s",
-            claims=[
-                GeneratedClaim(
-                    claim_id="P1",
-                    text="Savunma alınmadan verim düşüklüğüyle yapılan fesih geçersizdir; "
-                    "dosyada savunma alınmadığı görülmektedir.",
-                    source_ids=["SOURCE_PRIMARY_01", "SOURCE_FILE_01"],
-                )
-            ],
-        ),
-    )
-    provider = FakeProvider(mixed)
-    service = GroundedChatService(
-        FakeCoordinator([hit()]),
-        provider,
-        app_settings(),
-        private_retriever=FakePrivateRetriever([file_hit()]),
-    )
-
-    result = await _ask(service)
-
-    assert result.answer_status == "answered"
-    assert provider.calls == ["gemini-primary", "gemini-support"]  # no fallback retry
-    legal = [c for c in result.citations if c["claim_id"] == "P1"]
-    assert {c["source_channel"] for c in legal} == {"primary", "file"}
-
-
-@pytest.mark.asyncio
-async def test_an_answer_whose_every_claim_breaks_the_rules_is_insufficient() -> None:
-    broken = GroundedAnswer(
-        answer_status="answered",
-        primary_answer=AnswerSection(
-            summary="s",
-            claims=[GeneratedClaim(claim_id="P1", text="İddia.", source_ids=["SOURCE_FILE_01"])],
-        ),
-    )
-    provider = FakeProvider(broken)
-    service = GroundedChatService(
-        FakeCoordinator([hit()]),
-        provider,
-        app_settings(),
-        private_retriever=FakePrivateRetriever([file_hit()]),
-    )
-
-    result = await _ask(service)
-
-    assert result.answer_status == "insufficient_evidence"
-    assert provider.calls == ["gemini-primary"]  # nothing left to verify
-
-
-def test_file_passages_fill_their_share_of_the_context_first() -> None:
-    files = [
-        FileEvidenceSource(f"SOURCE_FILE_{i:02d}", file_hit("d" * 600), "private")
-        for i in range(1, 6)
-    ]
-    primary = [EvidenceSource("SOURCE_PRIMARY_01", "primary", hit(text="kanun"), "v1")]
-
-    selected = select_sources(
-        primary,
-        [],
-        base_tokens=0,
-        target_tokens=10_000,
-        hard_tokens=10_000,
-        files=files,
-        file_tokens=1_000,
-    )
-
-    kinds = [source.channel for source in selected]
-    assert kinds[0] == "file" and "primary" in kinds
-    assert kinds.count("file") < len(files)  # capped by the file share
