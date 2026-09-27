@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import io
 import zipfile
+from pathlib import Path
 
 import pytest
 from file_fixtures import build_docx, build_pdf
 from pypdf import PdfReader, PdfWriter
 
+from app.files.chunking import chunk_document
 from app.files.extraction import (
     DOCX,
     PDF,
@@ -16,6 +18,8 @@ from app.files.extraction import (
     extract_document,
     is_heading,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 BODY = [
     "Müvekkil 01.03.2019 tarihinden itibaren davali isyerinde satis temsilcisi olarak",
@@ -192,3 +196,16 @@ def test_media_type_detection_checks_the_actual_bytes() -> None:
 )
 def test_heading_detection(line: str, expected: bool) -> None:
     assert is_heading(line) is expected
+
+
+def test_the_public_sample_case_file_extracts_cleanly() -> None:
+    """The demo file visitors download must keep working with the real pipeline."""
+    sample = REPO_ROOT / "frontend/public/ornek/ornek-ise-iade-dosyasi.pdf"
+    document = extract_document(sample.read_bytes(), PDF)
+
+    assert (document.page_count, document.unreadable_pages) == (9, 0)
+    text = "\n".join(paragraph.text for paragraph in document.paragraphs)
+    assert "KURGUSAL DAVA DOSYASI" not in text and "Sayfa 4 / 9" not in text
+    chunks = chunk_document(document)
+    notice = next(chunk for chunk in chunks if chunk.section_title == "EK-1 · FESİH BİLDİRİMİ")
+    assert notice.location_label == "s. 4" and "yüzde 62" in notice.text

@@ -140,12 +140,17 @@ export const LIMITS = [
   'Yalnızca iş hukuku kapsanıyor; diğer alanlar henüz yok.',
   'Doğrulama adımları nedeniyle bir cevap 1–2 dakika sürebilir.',
   'Altyapı tek kullanıcılı demo için boyutlandırıldı.',
+  'Taranmış (görüntü) PDF’ler okunmaz; metin katmanı olan PDF, Word (DOCX) veya TXT gerekir.',
   'Cevaplar araştırma amaçlıdır; hukuki danışmanlık değildir.',
 ];
 
 export const FAQ = [
   { q: 'Bu gerçek bir ürün mü?', a: 'Hayır. BekenAI bir demo ve portföy projesidir. Arama ve doğrulama hattı gerçek kaynaklarla çalışır, ancak ticari bir hizmet sunulmaz.' },
-  { q: 'Hangi kaynakları kullanıyor?', a: 'İş hukukuna ilişkin kanunlar, Yargıtay kararları ve izinli doktrin kaynakları. Her cevapta kullanılan kaynaklar ve sürümleri gösterilir.' },
+  { q: 'Hangi kaynakları kullanıyor?', a: 'İş hukukuna ilişkin kanunlar, Yargıtay kararları, izinli doktrin kaynakları ve sizin yüklediğiniz dosyalar. Her cevapta kullanılan kaynaklar ve sürümleri gösterilir.' },
+  {
+    q: 'Kendi dosyamı yükleyebilir miyim?',
+    a: 'Evet. Bir sohbete ya da davaya PDF, Word (DOCX) veya TXT ekleyebilirsiniz. Dosya işlendikten sonra sorular dosyadaki pasaja sayfa atfıyla cevaplanır; dosyada yazanlar mevzuat ve içtihattan ayrı bir bölümde gösterilir. Dosyalar yalnızca sizin çalışma alanınızda tutulur. Elinizde dosya yoksa demo bölümündeki kurgusal örnek dava dosyasını kullanabilirsiniz.',
+  },
   { q: 'Cevap bulamazsa ne olur?', a: 'Soruyu destekleyen yeterli birincil kaynak yoksa BekenAI cevap üretmez ve bunu açıkça belirtir.' },
   { q: 'Cevap neden birkaç dakika sürebiliyor?', a: 'Her iddia ayrı bir doğrulama adımından geçer. Bekleme sırasında işin hangi adımda olduğunu görürsünüz.' },
 ];

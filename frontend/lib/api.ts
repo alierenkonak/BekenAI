@@ -84,6 +84,8 @@ export const api = {
       `/conversations${query({ case_id: params.caseId, cursor: params.cursor, limit: params.limit ?? 50 })}`,
     ),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),
+  createConversation: (payload: { title: string; case_id: string | null; include_doctrine: boolean }) =>
+    request<Conversation>('/conversations', { method: 'POST', body: payload }),
   updateConversation: (id: string, patch: { title?: string; case_id?: string | null; include_doctrine?: boolean }) =>
     request<Conversation>(`/conversations/${id}`, { method: 'PATCH', body: patch }),
   deleteConversation: (id: string) => request<void>(`/conversations/${id}`, { method: 'DELETE' }),
@@ -112,32 +114,19 @@ export const api = {
   deleteCase: (id: string) => request<void>(`/cases/${id}`, { method: 'DELETE' }),
 
   listFiles: (caseId: string) => request<{ items: UserFile[] }>(`/cases/${caseId}/files`),
+  /** Every file a chat can draw on: its own uploads and, inside a case, the case's. */
+  listConversationFiles: (conversationId: string) =>
+    request<{ items: UserFile[] }>(`/conversations/${conversationId}/files`),
   fileStatus: (id: string) => request<UserFile>(`/files/${id}/status`),
   downloadUrl: (id: string) => request<{ url: string }>(`/files/${id}/download-url`, { method: 'POST' }),
   deleteFile: (id: string) => request<UserFile>(`/files/${id}`, { method: 'DELETE' }),
   reindexFile: (id: string) => request<UserFile>(`/files/${id}/reindex`, { method: 'POST' }),
 
-  /** Intent → direct Storage upload with the user's JWT → server-side verification job. */
-  async uploadFile(caseId: string, file: File, mediaType: FileMediaType): Promise<UserFile> {
-    const intent = await request<UploadIntent>(`/cases/${caseId}/files/upload-intent`, {
-      method: 'POST',
-      body: { filename: file.name, media_type: mediaType, size_bytes: file.size },
-    });
-    const supabase = getSupabase();
-    if (!supabase) throw new ApiError(401, 'authentication_required');
-    try {
-      const { error } = await supabase.storage
-        .from(intent.upload.bucket)
-        .upload(intent.upload.path, file, { contentType: mediaType, upsert: false });
-      if (error) throw new ApiError(503, 'storage_temporarily_unavailable');
-    } catch {
-      // The intent reserves quota. Queue deletion even when Storage rejected the upload;
-      // the worker treats an absent object as already deleted.
-      await request<UserFile>(`/files/${intent.file.id}`, { method: 'DELETE' }).catch(() => {});
-      throw new ApiError(503, 'storage_temporarily_unavailable');
-    }
-    return request<UserFile>(`/files/${intent.file.id}/complete`, { method: 'POST' });
-  },
+  uploadFile: (caseId: string, file: File, mediaType: FileMediaType) =>
+    uploadVia(`/cases/${caseId}/files/upload-intent`, file, mediaType),
+  /** Inside a case the file joins the case; otherwise it belongs to this chat only. */
+  uploadConversationFile: (conversationId: string, file: File, mediaType: FileMediaType) =>
+    uploadVia(`/conversations/${conversationId}/files/upload-intent`, file, mediaType),
 
   search: (payload: { query: string; include_doctrine: boolean; limit?: number }, signal?: AbortSignal) =>
     request<SearchResponse>('/search', {
@@ -146,3 +135,25 @@ export const api = {
       signal,
     }),
 };
+
+/** Intent → direct Storage upload with the user's JWT → server-side verification job. */
+async function uploadVia(intentPath: string, file: File, mediaType: FileMediaType): Promise<UserFile> {
+  const intent = await request<UploadIntent>(intentPath, {
+    method: 'POST',
+    body: { filename: file.name, media_type: mediaType, size_bytes: file.size },
+  });
+  const supabase = getSupabase();
+  if (!supabase) throw new ApiError(401, 'authentication_required');
+  try {
+    const { error } = await supabase.storage
+      .from(intent.upload.bucket)
+      .upload(intent.upload.path, file, { contentType: mediaType, upsert: false });
+    if (error) throw new ApiError(503, 'storage_temporarily_unavailable');
+  } catch {
+    // The intent reserves quota. Queue deletion even when Storage rejected the upload;
+    // the worker treats an absent object as already deleted.
+    await request<UserFile>(`/files/${intent.file.id}`, { method: 'DELETE' }).catch(() => {});
+    throw new ApiError(503, 'storage_temporarily_unavailable');
+  }
+  return request<UserFile>(`/files/${intent.file.id}/complete`, { method: 'POST' });
+}

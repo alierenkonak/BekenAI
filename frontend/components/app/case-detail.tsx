@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
-import { CASE_FILE_MAX_BYTES } from '@/lib/config';
+import { FILE_ACCEPT, SAMPLE_FILE_URL, TRANSIENT_STATUSES, fileDetail, mediaTypeOf, uploadProblem } from '@/lib/files';
 import { describeError, formatBytes, formatRelativeDay, isRetryableIngestFailure } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
-import type { Conversation, FileMediaType, LegalCase, UserFile } from '@/lib/types';
+import type { Conversation, LegalCase, UserFile } from '@/lib/types';
 
 type LocalUpload = { key: string; name: string; size: number; error: string | null };
 
@@ -22,30 +22,6 @@ const FILE_STATUS: Record<UserFile['status'], { label: string; tone: 'ok' | 'acc
   delete_pending: { label: 'Siliniyor', tone: 'neutral' },
   deleted: { label: 'Silindi', tone: 'neutral' },
 };
-
-const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-// The worker moves these on its own; the list follows them until they settle.
-const TRANSIENT_STATUSES = new Set<UserFile['status']>(['verifying', 'uploaded', 'indexing', 'delete_pending']);
-
-function mediaTypeOf(file: File): FileMediaType | null {
-  const name = file.name.toLowerCase();
-  if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'application/pdf';
-  if (file.type === DOCX_TYPE || name.endsWith('.docx')) return DOCX_TYPE;
-  if (file.type === 'text/plain' || name.endsWith('.txt')) return 'text/plain';
-  return null;
-}
-
-function fileDetail(file: UserFile): string {
-  if (file.status === 'failed') return describeError(file.safe_error_code ?? 'job_failed');
-  const parts = [formatBytes(file.verified_size_bytes ?? file.expected_size_bytes)];
-  if (file.status === 'indexing') {
-    parts.push(file.chunks_total ? `${file.chunks_done ?? 0}/${file.chunks_total} parça işlendi` : 'metin çıkarılıyor');
-  } else if (file.status === 'ready') {
-    if (file.page_count) parts.push(`${file.page_count} sayfa`);
-    if (file.unreadable_page_count) parts.push(`${file.unreadable_page_count} sayfa okunamadı`);
-  }
-  return parts.join(' · ');
-}
 
 export function CaseDetail({ caseId }: { caseId: string }) {
   const now = useNow(60_000);
@@ -94,15 +70,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const upload = async (file: File) => {
     const key = `${file.name}-${file.size}-${file.lastModified}`;
     const mediaType = mediaTypeOf(file);
-    const problem = file.name.toLowerCase().endsWith('.doc')
-      ? 'Eski Word (.doc) biçimi desteklenmiyor; belgeyi DOCX olarak kaydedip yükleyin.'
-      : !mediaType
-        ? 'Yalnızca PDF, Word (DOCX) ve TXT dosyaları yüklenebilir.'
-        : file.size > CASE_FILE_MAX_BYTES
-        ? 'Dosya 50 MB sınırını aşıyor.'
-        : file.size === 0
-          ? 'Dosya boş.'
-          : null;
+    const problem = uploadProblem(file);
     setUploads((current) => [...current.filter((item) => item.key !== key), { key, name: file.name, size: file.size, error: problem }]);
     if (problem || !mediaType) return;
     try {
@@ -322,11 +290,14 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                 </button>
               </span>
               <span className="text-[12.5px] text-fg3">PDF, Word (DOCX) veya TXT · dosya başına en fazla 50 MB</span>
+              <a href={SAMPLE_FILE_URL} download className="text-[12.5px] font-medium text-file underline">
+                Elinizde dosya yok mu? Kurgusal örnek dava dosyasını indirin
+              </a>
               <input
                 ref={inputRef}
                 type="file"
                 multiple
-                accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept={FILE_ACCEPT}
                 className="sr-only"
                 onChange={(event) => {
                   onFiles(event.target.files);
