@@ -17,8 +17,10 @@ Environment=HF_HUB_DISABLE_IMPLICIT_TOKEN=1
 Environment=HF_HUB_OFFLINE=1
 Environment=TRANSFORMERS_OFFLINE=1
 Environment=TOKENIZERS_PARALLELISM=false
-Environment=OMP_NUM_THREADS=2
-Environment=OPENBLAS_NUM_THREADS=2
+# One inference thread per OCPU of the A1 shape (4 OCPU / 24 GB since 2026-09-27).
+# Inference is the only CPU-heavy service on the VM; update this when resizing.
+Environment=OMP_NUM_THREADS=4
+Environment=OPENBLAS_NUM_THREADS=4
 ExecStart=/opt/bekenai/venv/bin/uvicorn beken_retrieval.model_service:create_app --factory --host 127.0.0.1 --port 8081 --workers 1 --no-access-log --limit-concurrency 8
 Restart=on-failure
 RestartSec=10

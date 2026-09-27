@@ -29,6 +29,9 @@ class CrossEncoderReranker:
                 trust_remote_code=False,
                 token=False,
                 model_kwargs={"use_safetensors": True},
+                # Without a cap the tokenizer allows 8,192 tokens, and on CPU a batch
+                # costs as much as its longest passage.
+                max_length=spec.max_tokens,
             )
         self.model_key = spec.key
 

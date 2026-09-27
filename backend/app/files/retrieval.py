@@ -13,9 +13,10 @@ from beken_retrieval.remote_inference import RemoteInferenceClient
 from app.files.chunking import location_label
 from app.files.vectors import PrivateFileVectorStore
 
-# Candidates per ranker before fusion, and passages kept after reranking. Eight
-# passages of ~1,400 characters stay well inside the file share of the context.
-CANDIDATES = 20
+# Candidates per ranker before fusion (and reranked after it), and passages kept.
+# Reranking is the slow step on CPU, so the pool stays small; eight passages of
+# ~1,400 characters stay well inside the file share of the context.
+CANDIDATES = 12
 RESULT_LIMIT = 8
 RRF_K = 60
 
