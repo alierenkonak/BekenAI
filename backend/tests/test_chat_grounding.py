@@ -417,13 +417,58 @@ async def test_without_any_source_the_model_explains_that_instead_of_guessing() 
         PermanentLLMError("output_truncated"),
     ],
 )
-async def test_primary_model_failures_fall_back_and_are_logged(error, caplog) -> None:
+async def test_primary_model_failures_fall_back_and_are_logged(error, caplog, monkeypatch) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 0)
     provider = FakeProvider(MIXED, primary_error=error)
     with caplog.at_level(logging.WARNING, logger="bekenai.chat"):
         result = await ask(service(provider))
 
     assert result.fallback_used and result.actual_model == "gemini-fallback"
     assert f"{type(error).__name__}: {error}" in caplog.text
+
+
+class FlakyPrimary(FakeProvider):
+    """The primary model fails a set number of times before answering."""
+
+    def __init__(self, answer, *, failures: int, error: Exception) -> None:
+        super().__init__(answer)
+        self.failures = failures
+        self.error = error
+
+    async def structured_output(self, *, model: str, prompt: str, schema):
+        if schema is ChatAnswer and model == "gemini-primary" and self.failures:
+            self.failures -= 1
+            self.calls.append(f"{model}:{schema.__name__}")
+            raise self.error
+        return await super().structured_output(model=model, prompt=prompt, schema=schema)
+
+
+def _status_error(status: int) -> TransientLLMError:
+    error = TransientLLMError("provider_temporarily_unavailable")
+    error.status_code = status
+    return error
+
+
+@pytest.mark.asyncio
+async def test_an_overloaded_primary_model_is_retried_once_before_falling_back(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 0)
+    provider = FlakyPrimary(MIXED, failures=1, error=_status_error(503))
+    result = await ask(service(provider))
+
+    assert not result.fallback_used and result.actual_model == "gemini-primary"
+    assert provider.calls.count("gemini-primary:ChatAnswer") == 2
+
+
+@pytest.mark.asyncio
+async def test_a_quota_error_falls_back_without_waiting(monkeypatch) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 60)
+    provider = FlakyPrimary(MIXED, failures=1, error=_status_error(429))
+    result = await ask(service(provider))
+
+    assert result.fallback_used
+    assert provider.calls.count("gemini-primary:ChatAnswer") == 1
 
 
 @pytest.mark.asyncio
