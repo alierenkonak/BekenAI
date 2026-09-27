@@ -108,6 +108,41 @@ class PrivateFileVectorStore:
                 wait=True,
             )
 
+    def search(
+        self,
+        *,
+        workspace_id: UUID,
+        file_ids: Sequence[UUID],
+        vector: list[float],
+        limit: int,
+    ) -> list[tuple[UUID, float]]:
+        """Nearest chunks among the given files of one workspace; nothing else is reachable."""
+        if not file_ids:
+            return []
+        query_filter = models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="workspace_id", match=models.MatchValue(value=str(workspace_id))
+                ),
+                models.FieldCondition(
+                    key="file_id",
+                    match=models.MatchAny(any=[str(file_id) for file_id in file_ids]),
+                ),
+            ]
+        )
+        with _transient():
+            if not self.client.collection_exists(self.collection):
+                return []
+            points = self.client.query_points(
+                collection_name=self.collection,
+                query=vector,
+                query_filter=query_filter,
+                limit=limit,
+                with_payload=False,
+                with_vectors=False,
+            ).points
+        return [(UUID(str(point.id)), float(point.score)) for point in points]
+
     def delete_file(self, *, workspace_id: UUID, file_id: UUID) -> None:
         with _transient():
             if not self.client.collection_exists(self.collection):

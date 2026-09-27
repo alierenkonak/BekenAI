@@ -73,3 +73,34 @@ def test_deleting_from_a_missing_collection_is_a_no_op() -> None:
 
     store.delete_file(workspace_id=uuid4(), file_id=uuid4())
     assert store.count_file_points(workspace_id=uuid4(), file_id=uuid4()) == 0
+
+
+def test_search_only_reaches_the_allowed_files_of_one_workspace() -> None:
+    client = QdrantClient(url=os.getenv("QDRANT_URL", "http://localhost:6333"), timeout=10)
+    store = PrivateFileVectorStore(
+        client, dimensions=4, collection=f"beken_private_search_{uuid4().hex}"
+    )
+    workspace, other_workspace = uuid4(), uuid4()
+    allowed, not_ready = uuid4(), uuid4()
+    try:
+        store.ensure_collection()
+        owners = ((workspace, allowed), (workspace, not_ready), (other_workspace, allowed))
+        for owner, file_id in owners:
+            store.upsert(
+                workspace_id=owner,
+                file_id=file_id,
+                case_id=None,
+                conversation_id=uuid4(),
+                embedding_model="fake",
+                points=_points(2),
+            )
+
+        hits = store.search(
+            workspace_id=workspace, file_ids=[allowed], vector=[1.0, 0.0, 0.0, 0.5], limit=10
+        )
+
+        assert len(hits) == 2
+        assert all(-1.0 <= score <= 1.0 for _, score in hits)
+        assert store.search(workspace_id=workspace, file_ids=[], vector=[1.0] * 4, limit=5) == []
+    finally:
+        client.delete_collection(store.collection)

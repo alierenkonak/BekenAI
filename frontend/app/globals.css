@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /* BekenAI tokens. Color carries meaning only: blue = primary sources and
-   interaction, amber = doctrine, green = verified content. */
+   interaction, amber = doctrine, violet = the user's own files, green = verified content. */
 :root {
   color-scheme: light;
   --bg: #fcfcfb;
@@ -23,6 +23,9 @@
   --doc: #a7520a;
   --doc-bg: #fdf3e7;
   --doc-line: #efcfa6;
+  --file: #6b3fbf;
+  --file-bg: #f4effc;
+  --file-line: #d8c8f2;
   --ok: #1f7a45;
   --ok-bg: #eaf6ef;
   --err: #b42318;
@@ -56,6 +59,9 @@
   --doc: #f0b060;
   --doc-bg: #2a2013;
   --doc-line: #56401f;
+  --file: #c2a5ff;
+  --file-bg: #211a35;
+  --file-line: #45366c;
   --ok: #5cc98b;
   --ok-bg: #12281c;
   --err: #f58a8a;
@@ -87,6 +93,9 @@
   --color-doc: var(--doc);
   --color-doc-bg: var(--doc-bg);
   --color-doc-line: var(--doc-line);
+  --color-file: var(--file);
+  --color-file-bg: var(--file-bg);
+  --color-file-line: var(--file-line);
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
   --color-err: var(--err);

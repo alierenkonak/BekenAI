@@ -194,7 +194,7 @@ async def test_worker_retries_transient_model_service_failure():
 
 
 class _StageReportingService:
-    def __init__(self, *_args) -> None:
+    def __init__(self, *_args, **_kwargs) -> None:
         pass
 
     async def answer(self, *, on_stage, **_kwargs):
@@ -209,9 +209,13 @@ def _chat_worker(monkeypatch, set_generation_stage: AsyncMock) -> worker_module.
     monkeypatch.setattr(worker_module, "get_llm_provider", lambda: None)
     worker = worker_module.Worker.__new__(worker_module.Worker)
     worker.settings = SimpleNamespace()
+    worker.private_retriever = None
     worker.repository = SimpleNamespace(
         get_chat_work=AsyncMock(
             return_value={
+                "workspace_id": "workspace-id",
+                "conversation_id": "conversation-id",
+                "case_id": None,
                 "user_message": "Fesih nasıl yapılır?",
                 "retrieval_query": "fesih nasıl yapılır",
                 "domain_code": "labour_law",

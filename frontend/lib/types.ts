@@ -3,7 +3,7 @@
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type GenerationStage = 'retrieving' | 'generating' | 'verifying';
 export type AnswerStatus = 'answered' | 'insufficient_evidence';
-export type SourceChannel = 'primary' | 'doctrine';
+export type SourceChannel = 'primary' | 'doctrine' | 'file';
 
 export interface Page<T> {
   items: T[];
@@ -32,11 +32,12 @@ export interface Conversation {
   updated_at: string;
 }
 
+/** Global snapshots point into the legal corpus; private ones into the user's own file. */
 export interface SourceSnapshot {
   source_id: string;
-  document_id: string;
-  parse_id: string;
-  chunk_id: string;
+  document_id: string | null;
+  parse_id: string | null;
+  chunk_id: string | null;
   source_scope: 'global' | 'private';
   source_channel: SourceChannel;
   title: string;
@@ -51,9 +52,15 @@ export interface SourceSnapshot {
   breadcrumb: string[];
   exact_passage: string;
   source_url: string | null;
-  corpus_version: string;
-  retrieval_scope_version: string;
+  corpus_version: string | null;
+  retrieval_scope_version: string | null;
   index_version: string;
+  file_id?: string;
+  file_chunk_id?: string;
+  section_title?: string | null;
+  location_label?: string;
+  /** Set once the file was deleted: the passage and file name are gone. */
+  redacted?: boolean;
 }
 
 export interface Citation {
@@ -81,6 +88,8 @@ export interface AnswerSection {
 
 export interface StructuredAnswer {
   answer_status: AnswerStatus;
+  /** Absent on answers produced before users could upload files. */
+  file_answer?: AnswerSection | null;
   primary_answer: AnswerSection | null;
   doctrine_answer: AnswerSection | null;
   limitations: string[];

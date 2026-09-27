@@ -23,6 +23,8 @@ class AnswerSection(BaseModel):
 
 class GroundedAnswer(BaseModel):
     answer_status: Literal["answered", "insufficient_evidence"]
+    # What the user's own documents state, kept apart from what the law says.
+    file_answer: AnswerSection | None = None
     primary_answer: AnswerSection | None = None
     doctrine_answer: AnswerSection | None = None
     limitations: list[str] = Field(default_factory=list, max_length=20)

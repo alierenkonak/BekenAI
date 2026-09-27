@@ -84,6 +84,7 @@ const MESSAGES: Record<string, string> = {
   file_content_changed: 'Dosya içeriği doğrulanan sürümle eşleşmiyor; yeniden yükleyin.',
   vector_store_temporarily_unavailable: 'Arama dizini geçici olarak kullanılamıyor.',
   file_not_reindexable: 'Bu dosya yeniden işlenemez; dosyayı yeniden yükleyin.',
+  files_processing: 'Dosyalar işleniyor; tamamlanınca soru sorabilirsiniz.',
 };
 
 const VERIFICATION_FAILURES = new Set([

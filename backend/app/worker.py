@@ -11,7 +11,11 @@ from functools import cached_property
 
 from beken_retrieval.config import get_settings as get_retrieval_settings
 from beken_retrieval.model_catalog import ModelCatalog, ModelSpec
-from beken_retrieval.remote_inference import RemoteInferenceClient, TransientInferenceError
+from beken_retrieval.remote_inference import (
+    RemoteDenseEncoder,
+    RemoteInferenceClient,
+    TransientInferenceError,
+)
 from qdrant_client import QdrantClient
 
 from app.api.search import _load_search_coordinator
@@ -22,6 +26,7 @@ from app.core.repository import AppRepository, CitationIntegrityError, ConflictE
 from app.core.storage import StorageError, SupabaseStorage
 from app.files.extraction import detect_media_type as detect_file
 from app.files.ingestion import FileIngestionService, RemotePassageEmbedder
+from app.files.retrieval import PrivateFileRetriever, PrivateScope, RemotePassageReranker
 from app.files.vectors import PrivateFileVectorStore, VectorStoreUnavailable
 from app.llm.gemini import get_llm_provider
 from app.llm.provider import PermanentLLMError, TransientLLMError
@@ -72,14 +77,32 @@ class Worker:
             dimensions=int(self._embedding_spec.dimensions or 0),
         )
 
-    @cached_property
-    def file_ingestion(self) -> FileIngestionService:
+    @staticmethod
+    def _inference_client() -> RemoteInferenceClient:
+        # One client per lane: the two lanes call the model service from separate threads.
         settings = get_retrieval_settings()
-        client = RemoteInferenceClient(
+        return RemoteInferenceClient(
             base_url=settings.model_inference_base_url,
             token=settings.model_inference_secret,
             timeout_seconds=settings.model_inference_timeout_seconds,
         )
+
+    @cached_property
+    def private_retriever(self) -> PrivateFileRetriever:
+        client = self._inference_client()
+        catalog = ModelCatalog.load(get_retrieval_settings().retrieval_model_catalog)
+        return PrivateFileRetriever(
+            repository=self.repository,
+            vectors=self.private_vectors,
+            embedder=RemoteDenseEncoder(self._embedding_spec, client),
+            reranker=RemotePassageReranker(
+                catalog.get(self.settings.private_file_reranker_model), client
+            ),
+        )
+
+    @cached_property
+    def file_ingestion(self) -> FileIngestionService:
+        client = self._inference_client()
         return FileIngestionService(
             repository=self.repository,
             storage=self.storage,
@@ -160,7 +183,12 @@ class Worker:
 
     async def _chat(self, job: dict) -> None:
         work = await self.repository.get_chat_work(job["subject_id"])
-        service = GroundedChatService(_load_search_coordinator(), get_llm_provider(), self.settings)
+        service = GroundedChatService(
+            _load_search_coordinator(),
+            get_llm_provider(),
+            self.settings,
+            private_retriever=self.private_retriever,
+        )
 
         async def report_stage(stage: str) -> None:
             # Progress is display-only; a failed update must never fail the answer.
@@ -176,6 +204,11 @@ class Worker:
             include_doctrine=work["include_doctrine"],
             history=work["history"],
             on_stage=report_stage,
+            private_scope=PrivateScope(
+                workspace_id=work["workspace_id"],
+                conversation_id=work["conversation_id"],
+                case_id=work["case_id"],
+            ),
         )
         await self.repository.complete_generation(job["subject_id"], result)
 

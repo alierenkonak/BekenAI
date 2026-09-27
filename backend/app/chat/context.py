@@ -6,6 +6,12 @@ from urllib.parse import urlsplit
 
 from beken_retrieval.models import SearchHit
 
+from app.files.retrieval import PrivateHit
+
+# File passages go in first, but may take at most this share of the context so the
+# law they are compared against always fits too.
+FILE_CONTEXT_TOKENS = 16_000
+
 
 def estimate_tokens(text: str) -> int:
     # Conservative Turkish-text estimate. The hard budget must remain below the
@@ -19,6 +25,21 @@ class EvidenceSource:
     channel: Literal["primary", "doctrine"]
     hit: SearchHit
     index_version: str
+
+    @property
+    def passage(self) -> str:
+        return self.hit.record.text
+
+    def citation_reference(self) -> dict:
+        record = self.hit.record
+        return {
+            "source_scope": "global",
+            "document_id": record.document_id,
+            "parse_id": record.parse_id,
+            "chunk_id": record.chunk_id,
+            "file_id": None,
+            "file_chunk_id": None,
+        }
 
     @property
     def prompt_block(self) -> str:
@@ -67,6 +88,78 @@ class EvidenceSource:
         }
 
 
+@dataclass(frozen=True)
+class FileEvidenceSource:
+    """A passage of the user's own case file: evidence of what the file says, not of law."""
+
+    source_id: str
+    hit: PrivateHit
+    index_version: str
+    channel: Literal["file"] = "file"
+
+    @property
+    def passage(self) -> str:
+        return self.hit.text
+
+    def citation_reference(self) -> dict:
+        return {
+            "source_scope": "private",
+            "document_id": None,
+            "parse_id": None,
+            "chunk_id": None,
+            "file_id": str(self.hit.file_id),
+            "file_chunk_id": str(self.hit.chunk_id),
+        }
+
+    @property
+    def prompt_block(self) -> str:
+        hit = self.hit
+        metadata = [
+            f"source_id={self.source_id}",
+            "channel=file",
+            # File names are user input; keep them on one metadata line.
+            f"file_name={' '.join(hit.file_name.split())}",
+            f"location={hit.location_label}",
+            f"section={' '.join((hit.section_title or '').split())}",
+        ]
+        return "\n".join(metadata) + f"\n<case_file_passage>\n{hit.text}\n</case_file_passage>"
+
+    def snapshot(self) -> dict:
+        hit = self.hit
+        return {
+            "source_id": self.source_id,
+            "source_scope": "private",
+            "source_channel": "file",
+            "file_id": str(hit.file_id),
+            "file_chunk_id": str(hit.chunk_id),
+            "title": hit.file_name,
+            "section_title": hit.section_title,
+            "page_start": hit.page_start,
+            "page_end": hit.page_end,
+            "paragraph_start": hit.paragraph_start,
+            "paragraph_end": hit.paragraph_end,
+            "location_label": hit.location_label,
+            "exact_passage": hit.text,
+            "index_version": self.index_version,
+            # Shape shared with global snapshots so every client can render either.
+            "document_id": None,
+            "parse_id": None,
+            "chunk_id": None,
+            "authority": None,
+            "decision_metadata": {
+                "chamber": None,
+                "case_number": None,
+                "decision_number": None,
+                "document_date": None,
+            },
+            "page_number": hit.page_start,
+            "breadcrumb": [hit.section_title] if hit.section_title else [],
+            "source_url": None,
+            "corpus_version": None,
+            "retrieval_scope_version": None,
+        }
+
+
 def select_history(messages: list[dict], *, maximum_tokens: int = 16_000) -> list[dict]:
     selected: list[dict] = []
     used = 0
@@ -86,9 +179,18 @@ def select_sources(
     base_tokens: int,
     target_tokens: int,
     hard_tokens: int,
-) -> list[EvidenceSource]:
-    selected: list[EvidenceSource] = []
+    files: list[FileEvidenceSource] | None = None,
+    file_tokens: int = FILE_CONTEXT_TOKENS,
+) -> list[EvidenceSource | FileEvidenceSource]:
+    selected: list[EvidenceSource | FileEvidenceSource] = []
     used = base_tokens
+    file_limit = min(target_tokens, base_tokens + file_tokens)
+    for source in files or []:
+        cost = estimate_tokens(source.prompt_block)
+        if used + cost > file_limit:
+            continue
+        selected.append(source)
+        used += cost
     for source in primary:
         cost = estimate_tokens(source.prompt_block)
         if used + cost > target_tokens:
