@@ -6,8 +6,13 @@ import logging
 import signal
 import socket
 import time
+from collections.abc import Sequence
+from functools import cached_property
 
-from beken_retrieval.remote_inference import TransientInferenceError
+from beken_retrieval.config import get_settings as get_retrieval_settings
+from beken_retrieval.model_catalog import ModelCatalog, ModelSpec
+from beken_retrieval.remote_inference import RemoteInferenceClient, TransientInferenceError
+from qdrant_client import QdrantClient
 
 from app.api.search import _load_search_coordinator
 from app.chat.grounded import GroundedChatService
@@ -15,26 +20,34 @@ from app.core.config import get_settings
 from app.core.database import get_database
 from app.core.repository import AppRepository, CitationIntegrityError, ConflictError
 from app.core.storage import StorageError, SupabaseStorage
+from app.files.extraction import detect_media_type as detect_file
+from app.files.ingestion import FileIngestionService, RemotePassageEmbedder
+from app.files.vectors import PrivateFileVectorStore, VectorStoreUnavailable
 from app.llm.gemini import get_llm_provider
 from app.llm.provider import PermanentLLMError, TransientLLMError
 
 logger = logging.getLogger("bekenai.worker")
 
-
-def detect_file(data: bytes, declared: str) -> str:
-    if declared == "application/pdf":
-        if b"%PDF-" not in data[:1024]:
-            raise ValueError("invalid_pdf_signature")
-        return "application/pdf"
-    if declared == "text/plain":
-        if b"\x00" in data:
-            raise ValueError("invalid_text_file")
-        try:
-            data.decode("utf-8")
-        except UnicodeDecodeError as exc:
-            raise ValueError("invalid_text_encoding") from exc
-        return "text/plain"
-    raise ValueError("unsupported_media_type")
+# Two lanes share one process: a long document never holds up a chat answer.
+INTERACTIVE_JOB_KINDS = ("chat_generation", "file_verification", "file_deletion")
+INGEST_JOB_KINDS = ("file_ingest",)
+_SAFE_FILE_ERRORS = frozenset(
+    {
+        "invalid_pdf_signature",
+        "invalid_text_file",
+        "invalid_text_encoding",
+        "invalid_docx",
+        "unsupported_media_type",
+        "file_size_mismatch",
+        "file_content_changed",
+        "encrypted_pdf",
+        "unreadable_pdf",
+        "scanned_pdf_not_supported",
+        "empty_document",
+        "too_many_pages",
+        "document_too_large",
+    }
+)
 
 
 class Worker:
@@ -45,18 +58,59 @@ class Worker:
         self.worker_id = f"{socket.gethostname()}:{id(self)}"
         self.stopping = asyncio.Event()
 
+    @cached_property
+    def _embedding_spec(self) -> ModelSpec:
+        catalog = ModelCatalog.load(get_retrieval_settings().retrieval_model_catalog)
+        return catalog.get(self.settings.private_file_embedding_model)
+
+    @cached_property
+    def private_vectors(self) -> PrivateFileVectorStore:
+        # Deletion needs only Qdrant, so it keeps working without the model service.
+        settings = get_retrieval_settings()
+        return PrivateFileVectorStore(
+            QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_secret, timeout=30),
+            dimensions=int(self._embedding_spec.dimensions or 0),
+        )
+
+    @cached_property
+    def file_ingestion(self) -> FileIngestionService:
+        settings = get_retrieval_settings()
+        client = RemoteInferenceClient(
+            base_url=settings.model_inference_base_url,
+            token=settings.model_inference_secret,
+            timeout_seconds=settings.model_inference_timeout_seconds,
+        )
+        return FileIngestionService(
+            repository=self.repository,
+            storage=self.storage,
+            embedder=RemotePassageEmbedder(self._embedding_spec, client),
+            vectors=self.private_vectors,
+        )
+
     async def run(self) -> None:
+        try:
+            resumed = await self.repository.resume_file_work()
+            if resumed:
+                logger.info("Queued %d unfinished file jobs", resumed)
+        except Exception as exc:
+            logger.warning("File job resume skipped (%s)", type(exc).__name__)
+        await asyncio.gather(
+            self._run_lane(INTERACTIVE_JOB_KINDS, recover_stale=True),
+            self._run_lane(INGEST_JOB_KINDS, recover_stale=False),
+        )
+
+    async def _run_lane(self, kinds: Sequence[str], *, recover_stale: bool) -> None:
         next_recovery = 0.0
         while not self.stopping.is_set():
             now = time.monotonic()
-            if now >= next_recovery:
+            if recover_stale and now >= next_recovery:
                 recovered = await self.repository.recover_stale_jobs(
                     self.settings.chat_worker_stale_minutes
                 )
                 if recovered:
                     logger.info("Recovered %d stale jobs", recovered)
                 next_recovery = now + 60.0
-            job = await self.repository.claim_job(self.worker_id)
+            job = await self.repository.claim_job(self.worker_id, kinds)
             if job is None:
                 try:
                     await asyncio.wait_for(
@@ -73,6 +127,8 @@ class Worker:
                 await self._chat(job)
             elif job["kind"] == "file_verification":
                 await self._verify_file(job)
+            elif job["kind"] == "file_ingest":
+                await self.file_ingestion.ingest(job)
             elif job["kind"] == "file_deletion":
                 await self._delete_file(job)
             else:
@@ -89,8 +145,15 @@ class Worker:
             await self.repository.fail_job(
                 job, error_code="storage_temporarily_unavailable", retryable=True
             )
+        except VectorStoreUnavailable:
+            await self.repository.fail_job(
+                job, error_code="vector_store_temporarily_unavailable", retryable=True
+            )
         except ConflictError:
             logger.info("Job %s was cancelled or superseded", job["id"])
+            # Without this the job would sit in processing until stale recovery
+            # re-ran it, only to hit the same conflict again.
+            await self.repository.cancel_job(job["id"])
         except Exception as exc:
             logger.warning("Job failed safely (%s)", type(exc).__name__)
             await self.repository.fail_job(job, error_code=self._safe_error(exc), retryable=False)
@@ -134,6 +197,12 @@ class Worker:
 
     async def _delete_file(self, job: dict) -> None:
         file = await self.repository.get_worker_file(job["subject_id"])
+        # Vectors first: once they are gone nothing can surface this file's text.
+        await asyncio.to_thread(
+            self.private_vectors.delete_file,
+            workspace_id=file["workspace_id"],
+            file_id=file["id"],
+        )
         await self.storage.delete(file["storage_path"])
         await self.repository.complete_file_deletion(job["id"], file["id"])
 
@@ -155,13 +224,8 @@ class Worker:
             )
         if isinstance(exc, CitationIntegrityError):
             return "citation_integrity_failed"
-        if isinstance(exc, ValueError) and str(exc) in {
-            "invalid_pdf_signature",
-            "invalid_text_file",
-            "invalid_text_encoding",
-            "unsupported_media_type",
-            "file_size_mismatch",
-        }:
+        # ExtractionError is a ValueError whose message is always a safe code.
+        if isinstance(exc, ValueError) and str(exc) in _SAFE_FILE_ERRORS:
             return str(exc)
         return "job_failed"
 
@@ -171,6 +235,8 @@ async def main() -> None:
     # HTTP client INFO records contain private Storage paths and request URLs.
     for name in ("httpx", "httpcore", "google_genai", "google.genai"):
         logging.getLogger(name).setLevel(logging.WARNING)
+    # pypdf reports every malformed object it recovers from; none of it is actionable.
+    logging.getLogger("pypdf").setLevel(logging.ERROR)
     worker = Worker()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGINT, signal.SIGTERM):

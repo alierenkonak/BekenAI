@@ -6,6 +6,9 @@ import pytest
 from beken_retrieval.remote_inference import TransientInferenceError
 
 from app import worker as worker_module
+from app.core.repository import ConflictError
+from app.files.extraction import ExtractionError
+from app.files.vectors import VectorStoreUnavailable
 
 
 @pytest.mark.asyncio
@@ -29,8 +32,127 @@ async def test_worker_recovers_jobs_that_become_stale_after_start(monkeypatch):
             worker.stopping.set()
 
     worker._process = process
-    await worker.run()
+    await worker._run_lane(worker_module.INTERACTIVE_JOB_KINDS, recover_stale=True)
     assert worker.repository.recover_stale_jobs.await_count == 2
+    worker.repository.claim_job.assert_awaited_with(
+        "test-worker", worker_module.INTERACTIVE_JOB_KINDS
+    )
+
+
+@pytest.mark.asyncio
+async def test_worker_runs_a_separate_ingest_lane_after_resuming_file_work():
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.settings = SimpleNamespace(chat_worker_stale_minutes=10, chat_worker_poll_seconds=0.01)
+    worker.stopping = asyncio.Event()
+    worker.worker_id = "test-worker"
+    claimed: list[tuple[str, ...]] = []
+
+    async def claim_job(worker_id, kinds):
+        claimed.append(tuple(kinds))
+        if len(claimed) >= 2:
+            worker.stopping.set()
+        return None
+
+    worker.repository = SimpleNamespace(
+        resume_file_work=AsyncMock(return_value=0),
+        recover_stale_jobs=AsyncMock(return_value=0),
+        claim_job=claim_job,
+    )
+
+    await worker.run()
+
+    worker.repository.resume_file_work.assert_awaited_once()
+    assert set(claimed) == {
+        worker_module.INTERACTIVE_JOB_KINDS,
+        worker_module.INGEST_JOB_KINDS,
+    }
+    # Only the interactive lane recovers stale jobs, so recovery never races itself.
+    assert worker.repository.recover_stale_jobs.await_count == 1
+
+
+def _file_worker(**repository) -> worker_module.Worker:
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.repository = SimpleNamespace(
+        fail_job=AsyncMock(), cancel_job=AsyncMock(), **repository
+    )
+    return worker
+
+
+@pytest.mark.asyncio
+async def test_ingest_jobs_go_to_the_ingestion_service():
+    worker = _file_worker()
+    worker.file_ingestion = SimpleNamespace(ingest=AsyncMock())
+    job = {"id": "job-id", "kind": "file_ingest", "attempt_count": 1}
+
+    await worker._process(job)
+
+    worker.file_ingestion.ingest.assert_awaited_once_with(job)
+    worker.repository.fail_job.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "code", "retryable"),
+    [
+        (ExtractionError("scanned_pdf_not_supported"), "scanned_pdf_not_supported", False),
+        (ExtractionError("encrypted_pdf"), "encrypted_pdf", False),
+        (VectorStoreUnavailable("down"), "vector_store_temporarily_unavailable", True),
+        (TransientInferenceError("busy"), "model_temporarily_unavailable", True),
+        (RuntimeError("secret detail"), "job_failed", False),
+    ],
+)
+async def test_ingest_failures_map_to_safe_codes(error, code, retryable):
+    worker = _file_worker()
+    worker.file_ingestion = SimpleNamespace(ingest=AsyncMock(side_effect=error))
+    job = {"id": "job-id", "kind": "file_ingest", "attempt_count": 1}
+
+    await worker._process(job)
+
+    worker.repository.fail_job.assert_awaited_once_with(
+        job, error_code=code, retryable=retryable
+    )
+
+
+@pytest.mark.asyncio
+async def test_superseded_jobs_are_closed_instead_of_left_processing():
+    worker = _file_worker()
+    worker.file_ingestion = SimpleNamespace(
+        ingest=AsyncMock(side_effect=ConflictError("file_not_indexing"))
+    )
+
+    await worker._process({"id": "job-id", "kind": "file_ingest", "attempt_count": 1})
+
+    worker.repository.cancel_job.assert_awaited_once_with("job-id")
+    worker.repository.fail_job.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_file_deletion_removes_vectors_before_the_stored_object():
+    order: list[str] = []
+    file = {
+        "id": "file-id",
+        "workspace_id": "workspace-id",
+        "storage_path": "user/workspace/case/file-id/dilekce.pdf",
+    }
+    worker = _file_worker(
+        get_worker_file=AsyncMock(return_value=file),
+        complete_file_deletion=AsyncMock(side_effect=lambda *_: order.append("row")),
+    )
+    deleted_vectors: list[dict] = []
+
+    def delete_vectors(**scope):
+        deleted_vectors.append(scope)
+        order.append("vectors")
+
+    worker.private_vectors = SimpleNamespace(delete_file=delete_vectors)
+    worker.storage = SimpleNamespace(
+        delete=AsyncMock(side_effect=lambda *_: order.append("object"))
+    )
+
+    await worker._delete_file({"id": "job-id", "subject_id": "file-id"})
+
+    assert deleted_vectors == [{"workspace_id": "workspace-id", "file_id": "file-id"}]
+    assert order == ["vectors", "object", "row"]
 
 
 @pytest.mark.asyncio

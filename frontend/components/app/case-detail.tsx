@@ -6,26 +6,45 @@ import { Icon, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { CASE_FILE_MAX_BYTES } from '@/lib/config';
-import { describeError, formatBytes, formatRelativeDay } from '@/lib/format';
+import { describeError, formatBytes, formatRelativeDay, isRetryableIngestFailure } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
-import type { Conversation, LegalCase, UserFile } from '@/lib/types';
+import type { Conversation, FileMediaType, LegalCase, UserFile } from '@/lib/types';
 
 type LocalUpload = { key: string; name: string; size: number; error: string | null };
 
 const FILE_STATUS: Record<UserFile['status'], { label: string; tone: 'ok' | 'accent' | 'neutral' | 'err' }> = {
   pending_upload: { label: 'Yükleme bekleniyor', tone: 'neutral' },
   verifying: { label: 'Doğrulanıyor', tone: 'accent' },
-  uploaded: { label: 'Hazır', tone: 'ok' },
+  uploaded: { label: 'Sırada', tone: 'neutral' },
+  indexing: { label: 'İşleniyor', tone: 'accent' },
+  ready: { label: 'Hazır', tone: 'ok' },
   failed: { label: 'Hata', tone: 'err' },
   delete_pending: { label: 'Siliniyor', tone: 'neutral' },
   deleted: { label: 'Silindi', tone: 'neutral' },
 };
 
-function mediaTypeOf(file: File): 'application/pdf' | 'text/plain' | null {
+const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+// The worker moves these on its own; the list follows them until they settle.
+const TRANSIENT_STATUSES = new Set<UserFile['status']>(['verifying', 'uploaded', 'indexing', 'delete_pending']);
+
+function mediaTypeOf(file: File): FileMediaType | null {
   const name = file.name.toLowerCase();
   if (file.type === 'application/pdf' || name.endsWith('.pdf')) return 'application/pdf';
+  if (file.type === DOCX_TYPE || name.endsWith('.docx')) return DOCX_TYPE;
   if (file.type === 'text/plain' || name.endsWith('.txt')) return 'text/plain';
   return null;
+}
+
+function fileDetail(file: UserFile): string {
+  if (file.status === 'failed') return describeError(file.safe_error_code ?? 'job_failed');
+  const parts = [formatBytes(file.verified_size_bytes ?? file.expected_size_bytes)];
+  if (file.status === 'indexing') {
+    parts.push(file.chunks_total ? `${file.chunks_done ?? 0}/${file.chunks_total} parça işlendi` : 'metin çıkarılıyor');
+  } else if (file.status === 'ready') {
+    if (file.page_count) parts.push(`${file.page_count} sayfa`);
+    if (file.unreadable_page_count) parts.push(`${file.unreadable_page_count} sayfa okunamadı`);
+  }
+  return parts.join(' · ');
 }
 
 export function CaseDetail({ caseId }: { caseId: string }) {
@@ -63,8 +82,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
     setFiles(page.items);
   }, [caseId]);
 
-  // Verification and deletion run in the worker; follow them until they settle.
-  const pending = files?.some((file) => file.status === 'verifying' || file.status === 'delete_pending') ?? false;
+  const pending = files?.some((file) => TRANSIENT_STATUSES.has(file.status)) ?? false;
   useEffect(() => {
     if (!pending) return;
     const interval = window.setInterval(() => {
@@ -76,9 +94,11 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const upload = async (file: File) => {
     const key = `${file.name}-${file.size}-${file.lastModified}`;
     const mediaType = mediaTypeOf(file);
-    const problem = !mediaType
-      ? 'Yalnızca PDF ve TXT dosyaları yüklenebilir.'
-      : file.size > CASE_FILE_MAX_BYTES
+    const problem = file.name.toLowerCase().endsWith('.doc')
+      ? 'Eski Word (.doc) biçimi desteklenmiyor; belgeyi DOCX olarak kaydedip yükleyin.'
+      : !mediaType
+        ? 'Yalnızca PDF, Word (DOCX) ve TXT dosyaları yüklenebilir.'
+        : file.size > CASE_FILE_MAX_BYTES
         ? 'Dosya 50 MB sınırını aşıyor.'
         : file.size === 0
           ? 'Dosya boş.'
@@ -106,6 +126,15 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (downloadError) {
       setError(describeError(downloadError));
+    }
+  };
+
+  const reindex = async (file: UserFile) => {
+    try {
+      const updated = await api.reindexFile(file.id);
+      setFiles((current) => current?.map((item) => (item.id === file.id ? updated : item)) ?? current);
+    } catch (reindexError) {
+      setError(describeError(reindexError));
     }
   };
 
@@ -292,12 +321,12 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                   bilgisayardan seçin
                 </button>
               </span>
-              <span className="text-[12.5px] text-fg3">PDF veya TXT · dosya başına en fazla 50 MB</span>
+              <span className="text-[12.5px] text-fg3">PDF, Word (DOCX) veya TXT · dosya başına en fazla 50 MB</span>
               <input
                 ref={inputRef}
                 type="file"
                 multiple
-                accept=".pdf,.txt,application/pdf,text/plain"
+                accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="sr-only"
                 onChange={(event) => {
                   onFiles(event.target.files);
@@ -335,16 +364,25 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                     <Icon name="file" size={18} strokeWidth={1.6} className={file.status === 'failed' ? 'text-err' : 'text-fg3'} />
                     <div className="flex min-w-0 grow flex-col">
                       <span className="truncate text-[13.5px] font-medium">{file.original_name}</span>
-                      <span className={`text-xs ${file.status === 'failed' ? 'text-err' : 'text-fg3'}`}>
-                        {file.status === 'failed' ? describeError(file.safe_error_code ?? 'job_failed') : formatBytes(file.verified_size_bytes ?? file.expected_size_bytes)}
-                      </span>
+                      <span className={`text-xs ${file.status === 'failed' ? 'text-err' : 'text-fg3'}`}>{fileDetail(file)}</span>
                     </div>
                     <Badge tone={status.tone}>
-                      {file.status === 'verifying' && <Spinner size={11} />}
-                      {file.status === 'uploaded' && <Icon name="check" size={12} strokeWidth={2.4} />}
+                      {(file.status === 'verifying' || file.status === 'indexing') && <Spinner size={11} />}
+                      {file.status === 'ready' && <Icon name="check" size={12} strokeWidth={2.4} />}
                       {status.label}
                     </Badge>
-                    {file.status === 'uploaded' && (
+                    {file.status === 'failed' && file.verified_size_bytes !== null && isRetryableIngestFailure(file.safe_error_code) && (
+                      <button
+                        type="button"
+                        onClick={() => void reindex(file)}
+                        aria-label={`${file.original_name} dosyasını yeniden işle`}
+                        title="Yeniden dene"
+                        className="flex size-7 items-center justify-center rounded-[7px] text-fg3 hover:bg-hover hover:text-fg"
+                      >
+                        <Icon name="refresh" size={14} />
+                      </button>
+                    )}
+                    {file.verified_size_bytes !== null && file.status !== 'delete_pending' && file.status !== 'deleted' && (
                       <button
                         type="button"
                         onClick={() => void download(file)}
@@ -354,7 +392,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                         <Icon name="download" size={14} />
                       </button>
                     )}
-                    {(file.status === 'uploaded' || file.status === 'failed' || file.status === 'pending_upload') && (
+                    {file.status !== 'verifying' && file.status !== 'delete_pending' && file.status !== 'deleted' && (
                       <button
                         type="button"
                         onClick={() => void remove(file)}

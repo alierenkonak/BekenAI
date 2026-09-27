@@ -133,21 +133,35 @@ export type FileStatus =
   | 'pending_upload'
   | 'verifying'
   | 'uploaded'
+  | 'indexing'
+  | 'ready'
   | 'failed'
   | 'delete_pending'
   | 'deleted';
 
+export type FileMediaType =
+  | 'application/pdf'
+  | 'text/plain'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 export interface UserFile {
   id: string;
-  case_id: string;
+  /** Exactly one of case_id / conversation_id is set while the file is live. */
+  case_id: string | null;
+  conversation_id: string | null;
   original_name: string;
   storage_bucket: string;
   storage_path: string;
-  declared_media_type: 'application/pdf' | 'text/plain';
+  declared_media_type: FileMediaType;
   expected_size_bytes: number;
   verified_size_bytes: number | null;
   status: FileStatus;
   safe_error_code: string | null;
+  page_count: number | null;
+  unreadable_page_count: number | null;
+  chunks_total: number | null;
+  chunks_done: number | null;
+  indexed_at: string | null;
   created_at: string;
   updated_at: string;
 }

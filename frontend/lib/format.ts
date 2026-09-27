@@ -71,9 +71,19 @@ const MESSAGES: Record<string, string> = {
   job_failed: 'Cevap oluşturulamadı.',
   invalid_pdf_signature: 'Dosya geçerli bir PDF değil.',
   invalid_text_file: 'Metin dosyası ikili veri içeriyor.',
-  invalid_text_encoding: 'Metin dosyası UTF-8 kodlamalı olmalı.',
-  unsupported_media_type: 'Desteklenmeyen dosya türü. Yalnızca PDF ve TXT yüklenebilir.',
+  invalid_text_encoding: 'Metin dosyasının karakter kodlaması okunamadı; UTF-8 olarak kaydedin.',
+  unsupported_media_type: 'Desteklenmeyen dosya türü. PDF, Word (DOCX) veya TXT yükleyin.',
   file_size_mismatch: 'Yüklenen dosyanın boyutu beyan edilenle eşleşmiyor.',
+  invalid_docx: 'Dosya geçerli bir Word (DOCX) belgesi değil.',
+  scanned_pdf_not_supported: 'Taranmış PDF desteklenmiyor: sayfalarda okunabilir metin yok.',
+  encrypted_pdf: 'PDF parola korumalı. Korumasız bir kopyasını yükleyin.',
+  unreadable_pdf: 'PDF okunamadı; dosya bozuk olabilir.',
+  empty_document: 'Belgede okunabilir metin bulunamadı.',
+  too_many_pages: 'Belge çok uzun; daha küçük parçalara bölüp yükleyin.',
+  document_too_large: 'Belgenin metni işlenemeyecek kadar büyük.',
+  file_content_changed: 'Dosya içeriği doğrulanan sürümle eşleşmiyor; yeniden yükleyin.',
+  vector_store_temporarily_unavailable: 'Arama dizini geçici olarak kullanılamıyor.',
+  file_not_reindexable: 'Bu dosya yeniden işlenemez; dosyayı yeniden yükleyin.',
 };
 
 const VERIFICATION_FAILURES = new Set([
@@ -97,6 +107,16 @@ export function describeError(error: unknown): string {
     return 'Model çıktısı güvenli biçimde doğrulanamadığı için cevap gösterilmedi.';
   }
   return MESSAGES[code] ?? 'Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.';
+}
+
+/** Indexing failures a new attempt can fix; format errors (a scanned PDF…) cannot. */
+export function isRetryableIngestFailure(code: string | null): boolean {
+  return (
+    code === 'model_temporarily_unavailable' ||
+    code === 'storage_temporarily_unavailable' ||
+    code === 'vector_store_temporarily_unavailable' ||
+    code === 'job_failed'
+  );
 }
 
 /** Transient failures are worth a retry; validation failures would fail the same way. */
