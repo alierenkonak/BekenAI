@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import Depends
@@ -12,7 +13,38 @@ from psycopg.types.json import Jsonb
 
 from app.core.database import AppDatabase, get_database
 
+if TYPE_CHECKING:
+    from app.files.chunking import FileChunk
+
 GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
+# Files past verification: their object size is known and their bytes are readable.
+VERIFIED_FILE_STATUSES = ("uploaded", "indexing", "ready")
+# Indexing failures a later attempt can fix; format errors (scanned PDF…) cannot.
+RETRYABLE_INGEST_ERRORS = frozenset(
+    {
+        "job_failed",
+        "model_temporarily_unavailable",
+        "storage_temporarily_unavailable",
+        "vector_store_temporarily_unavailable",
+    }
+)
+_QUEUE_FILE_DELETIONS = """
+with doomed as (
+  update public.user_files
+  set status_before_deletion = case
+        when status = 'delete_pending' then status_before_deletion else status end,
+      status = 'delete_pending',
+      updated_at = now()
+  where workspace_id = %(workspace_id)s and status <> 'deleted' and {scope}
+  returning id, workspace_id
+)
+insert into app_private.jobs (kind, workspace_id, subject_id, idempotency_key, payload)
+select 'file_deletion', workspace_id, id, 'file-delete:' || id::text, '{{}}'::jsonb from doomed
+on conflict (workspace_id, idempotency_key) do update
+set status='queued',attempt_count=0,available_at=now(),locked_at=null,
+    locked_by=null,safe_error_code=null,completed_at=null
+where app_private.jobs.status in ('failed','cancelled')
+"""
 
 
 class NotFoundError(RuntimeError):
@@ -190,6 +222,12 @@ class AppRepository:
                 where id=%s and workspace_id=%s""",
                 (case_id, current["workspace_id"]),
             )
+            # An archived case is gone for the user, so its documents and their
+            # private chunks and vectors must go too.
+            await conn.execute(
+                _QUEUE_FILE_DELETIONS.format(scope="case_id = %(case_id)s"),
+                {"workspace_id": current["workspace_id"], "case_id": case_id},
+            )
 
     async def create_conversation(
         self,
@@ -292,6 +330,12 @@ class AppRepository:
     async def delete_conversation(self, user_id: UUID, conversation_id: UUID) -> None:
         current = await self.get_conversation(user_id, conversation_id)
         async with await self.database.connect() as conn:
+            # Queue first: the delete below nulls these files' parent, which the
+            # single-parent check only allows once they are pending deletion.
+            await conn.execute(
+                _QUEUE_FILE_DELETIONS.format(scope="conversation_id = %(conversation_id)s"),
+                {"workspace_id": current["workspace_id"], "conversation_id": conversation_id},
+            )
             await conn.execute(
                 "delete from public.conversations where id=%s and workspace_id=%s",
                 (conversation_id, current["workspace_id"]),
@@ -554,7 +598,8 @@ class AppRepository:
         self,
         user_id: UUID,
         *,
-        case_id: UUID,
+        case_id: UUID | None = None,
+        conversation_id: UUID | None = None,
         original_name: str,
         safe_name: str,
         media_type: str,
@@ -563,18 +608,26 @@ class AppRepository:
         bucket: str,
         quota_bytes: int,
     ) -> dict[str, Any]:
+        if (case_id is None) == (conversation_id is None):
+            raise ValueError("file_parent_required")
         if reservation_bytes < size_bytes or reservation_bytes > quota_bytes:
             raise ValueError("invalid_file_reservation")
         async with await self.database.connect() as conn:
             workspace = await self._workspace(conn, user_id)
+            if conversation_id is not None:
+                conversation = await self._owned_conversation(
+                    conn, workspace["id"], conversation_id
+                )
+                # A chat inside a case shares its documents with the case's other chats.
+                if conversation["case_id"] is not None:
+                    case_id, conversation_id = conversation["case_id"], None
             await self._assert_case(conn, workspace["id"], case_id)
             await conn.execute("select pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
             usage = await (
                 await conn.execute(
-                    """select coalesce(sum(
-                         case when status='uploaded'
-                              then coalesce(verified_size_bytes,reserved_size_bytes)
-                              else reserved_size_bytes end),0)
+                    # Verified files are charged their real size; anything else may
+                    # still hold an object of up to the reserved size.
+                    """select coalesce(sum(coalesce(verified_size_bytes,reserved_size_bytes)),0)
                        as bytes from public.user_files
                        where workspace_id=%s and status<>'deleted'""",
                     (workspace["id"],),
@@ -583,17 +636,20 @@ class AppRepository:
             if int(usage["bytes"]) + size_bytes > quota_bytes:
                 raise ConflictError("user_file_quota_exceeded")
             file_id = uuid4()
-            storage_path = f"{user_id}/{workspace['id']}/{case_id}/{file_id}/{safe_name}"
+            parent = f"{case_id}" if case_id else f"conversations/{conversation_id}"
+            storage_path = f"{user_id}/{workspace['id']}/{parent}/{file_id}/{safe_name}"
             return await (
                 await conn.execute(
                     """insert into public.user_files
-                    (id,workspace_id,case_id,uploader_user_id,original_name,storage_bucket,
-                     storage_path,declared_media_type,expected_size_bytes,reserved_size_bytes)
-                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
+                    (id,workspace_id,case_id,conversation_id,uploader_user_id,original_name,
+                     storage_bucket,storage_path,declared_media_type,expected_size_bytes,
+                     reserved_size_bytes)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
                     (
                         file_id,
                         workspace["id"],
                         case_id,
+                        conversation_id,
                         user_id,
                         original_name,
                         bucket,
@@ -612,7 +668,7 @@ class AppRepository:
                 "select pg_advisory_xact_lock(hashtext(%s))", (f"file:{file_id}",)
             )
             file = await self._owned_file(conn, user_id, file_id)
-            if file["status"] == "uploaded":
+            if file["status"] in VERIFIED_FILE_STATUSES:
                 return file
             if file["status"] not in {"pending_upload", "verifying"}:
                 raise ConflictError("file_not_completable")
@@ -653,29 +709,93 @@ class AppRepository:
                 )
             ).fetchall()
 
+    async def list_conversation_files(
+        self, user_id: UUID, conversation_id: UUID
+    ) -> list[dict[str, Any]]:
+        """Every file a chat can draw on: its own uploads and, inside a case, the case's."""
+        async with await self.database.connect() as conn:
+            workspace = await self._workspace(conn, user_id)
+            conversation = await self._owned_conversation(conn, workspace["id"], conversation_id)
+            return await (
+                await conn.execute(
+                    """select * from public.user_files
+                    where workspace_id=%s and status<>'deleted'
+                      and (conversation_id=%s or (%s::uuid is not null and case_id=%s))
+                    order by created_at desc,id desc""",
+                    (
+                        workspace["id"],
+                        conversation_id,
+                        conversation["case_id"],
+                        conversation["case_id"],
+                    ),
+                )
+            ).fetchall()
+
     async def request_file_deletion(self, user_id: UUID, file_id: UUID) -> dict[str, Any]:
         async with await self.database.connect() as conn:
+            await conn.execute(
+                "select pg_advisory_xact_lock(hashtext(%s))", (f"file:{file_id}",)
+            )
             file = await self._owned_file(conn, user_id, file_id)
             if file["status"] == "deleted":
                 return file
+            await conn.execute(
+                _QUEUE_FILE_DELETIONS.format(scope="id = %(file_id)s"),
+                {"workspace_id": file["workspace_id"], "file_id": file_id},
+            )
+            return await self._owned_file(conn, user_id, file_id)
+
+    async def request_file_reindex(self, user_id: UUID, file_id: UUID) -> dict[str, Any]:
+        async with await self.database.connect() as conn:
+            await conn.execute(
+                "select pg_advisory_xact_lock(hashtext(%s))", (f"file:{file_id}",)
+            )
+            file = await self._owned_file(conn, user_id, file_id)
+            if file["status"] in {"indexing", "ready"}:
+                return file
+            if (
+                file["status"] != "failed"
+                or file["verified_size_bytes"] is None
+                or file["safe_error_code"] not in RETRYABLE_INGEST_ERRORS
+            ):
+                raise ConflictError("file_not_reindexable")
             file = await (
                 await conn.execute(
-                    """update public.user_files set status='delete_pending',updated_at=now()
+                    """update public.user_files
+                    set status='indexing',safe_error_code=null,chunks_done=null,
+                        chunks_total=null,updated_at=now()
                     where id=%s returning *""",
                     (file_id,),
                 )
             ).fetchone()
-            await conn.execute(
-                """insert into app_private.jobs
-                (kind,workspace_id,subject_id,idempotency_key,payload)
-                values ('file_deletion',%s,%s,%s,'{}'::jsonb)
-                on conflict (workspace_id,idempotency_key) do update
-                set status='queued',attempt_count=0,available_at=now(),locked_at=null,
-                    locked_by=null,safe_error_code=null,completed_at=null
-                where app_private.jobs.status='failed'""",
-                (file["workspace_id"], file_id, f"file-delete:{file_id}"),
-            )
+            await self._enqueue_ingest(conn, file["workspace_id"], file_id)
         return file
+
+    async def _owned_conversation(
+        self, conn: AsyncConnection, workspace_id: UUID, conversation_id: UUID
+    ) -> dict[str, Any]:
+        row = await (
+            await conn.execute(
+                "select id,case_id from public.conversations where id=%s and workspace_id=%s",
+                (conversation_id, workspace_id),
+            )
+        ).fetchone()
+        if not row:
+            raise NotFoundError("conversation_not_found")
+        return row
+
+    @staticmethod
+    async def _enqueue_ingest(conn: AsyncConnection, workspace_id: UUID, file_id: UUID) -> None:
+        await conn.execute(
+            """insert into app_private.jobs
+            (kind,workspace_id,subject_id,idempotency_key,payload)
+            values ('file_ingest',%s,%s,%s,'{}'::jsonb)
+            on conflict (workspace_id,idempotency_key) do update
+            set status='queued',attempt_count=0,available_at=now(),locked_at=null,
+                locked_by=null,safe_error_code=null,completed_at=null
+            where app_private.jobs.status in ('failed','cancelled','completed')""",
+            (workspace_id, file_id, f"file-ingest:{file_id}"),
+        )
 
     async def _owned_file(
         self, conn: AsyncConnection, user_id: UUID, file_id: UUID
@@ -714,14 +834,18 @@ class AppRepository:
                 )
         return len(rows)
 
-    async def claim_job(self, worker_id: str) -> dict[str, Any] | None:
+    async def claim_job(
+        self, worker_id: str, kinds: Sequence[str] | None = None
+    ) -> dict[str, Any] | None:
         async with await self.database.connect() as conn:
             job = await (
                 await conn.execute(
                     """select * from app_private.jobs
                     where status='queued' and available_at<=now()
+                      and (%s::text[] is null or kind=any(%s::text[]))
                     order by created_at,id
-                    for update skip locked limit 1"""
+                    for update skip locked limit 1""",
+                    (list(kinds) if kinds else None, list(kinds) if kinds else None),
                 )
             ).fetchone()
             if not job:
@@ -896,12 +1020,32 @@ class AppRepository:
                         updated_at=now() where id=%s and status='verifying'""",
                     (error_code, job["subject_id"]),
                 )
-            elif job["kind"] == "file_deletion" and not retry:
+            elif job["kind"] == "file_ingest" and not retry:
                 await conn.execute(
-                    """update public.user_files set status='uploaded',safe_error_code=%s,
-                        updated_at=now() where id=%s and status='delete_pending'""",
+                    """update public.user_files set status='failed',safe_error_code=%s,
+                        updated_at=now() where id=%s and status='indexing'""",
                     (error_code, job["subject_id"]),
                 )
+            elif job["kind"] == "file_deletion" and not retry:
+                # Give the file back in the state it had, so the user can retry. A file
+                # whose chat is already gone has no state to return to and stays queued.
+                await conn.execute(
+                    """update public.user_files
+                    set status=coalesce(status_before_deletion,'uploaded'),
+                        status_before_deletion=null,safe_error_code=%s,updated_at=now()
+                    where id=%s and status='delete_pending'
+                      and num_nonnulls(case_id,conversation_id)=1""",
+                    (error_code, job["subject_id"]),
+                )
+
+    async def cancel_job(self, job_id: UUID) -> None:
+        """Close a job whose subject moved on (cancelled chat, file deleted mid-way)."""
+        async with await self.database.connect() as conn:
+            await conn.execute(
+                """update app_private.jobs set status='cancelled',completed_at=now(),
+                    locked_at=null,locked_by=null where id=%s and status='processing'""",
+                (job_id,),
+            )
 
     async def get_worker_file(self, file_id: UUID) -> dict[str, Any]:
         async with await self.database.connect() as conn:
@@ -925,24 +1069,164 @@ class AppRepository:
             updated = await (
                 await conn.execute(
                     """update public.user_files
-                    set status='uploaded',verified_size_bytes=%s,detected_media_type=%s,
-                        content_hash=%s,safe_error_code=null,updated_at=now()
-                    where id=%s and status='verifying' returning id""",
+                    set status='indexing',verified_size_bytes=%s,detected_media_type=%s,
+                        content_hash=%s,safe_error_code=null,chunks_done=null,
+                        chunks_total=null,updated_at=now()
+                    where id=%s and status='verifying' returning id,workspace_id""",
                     (size, media_type, content_hash, file_id),
                 )
             ).fetchone()
             if not updated:
                 raise ConflictError("file_not_verifying")
+            await self._enqueue_ingest(conn, updated["workspace_id"], file_id)
             await conn.execute(
                 """update app_private.jobs set status='completed',completed_at=now(),
                     locked_at=null,locked_by=null where id=%s and status='processing'""",
                 (job_id,),
             )
 
+    async def report_file_progress(
+        self,
+        job_id: UUID,
+        file_id: UUID,
+        *,
+        chunks_done: int,
+        chunks_total: int | None = None,
+        page_count: int | None = None,
+        unreadable_page_count: int | None = None,
+    ) -> bool:
+        """Record indexing progress and heartbeat the job; False once the file moved on."""
+        async with await self.database.connect() as conn:
+            updated = await (
+                await conn.execute(
+                    """update public.user_files
+                    set chunks_done=%s,chunks_total=coalesce(%s,chunks_total),
+                        page_count=coalesce(%s,page_count),
+                        unreadable_page_count=coalesce(%s,unreadable_page_count),
+                        updated_at=now()
+                    where id=%s and status='indexing' returning id""",
+                    (chunks_done, chunks_total, page_count, unreadable_page_count, file_id),
+                )
+            ).fetchone()
+            # Long documents outlive the stale-job window; the heartbeat keeps another
+            # worker from recovering (and duplicating) a job that is still running.
+            await conn.execute(
+                """update app_private.jobs set locked_at=now()
+                where id=%s and status='processing'""",
+                (job_id,),
+            )
+        return updated is not None
+
+    async def complete_file_indexing(
+        self,
+        job_id: UUID,
+        file_id: UUID,
+        *,
+        chunks: Sequence[FileChunk],
+        chunk_ids: Sequence[UUID],
+        embedding_model: str,
+        page_count: int | None,
+        unreadable_page_count: int,
+    ) -> None:
+        async with await self.database.connect() as conn:
+            file = await (
+                await conn.execute(
+                    """select id,workspace_id,status from public.user_files
+                    where id=%s for update""",
+                    (file_id,),
+                )
+            ).fetchone()
+            if not file or file["status"] != "indexing":
+                raise ConflictError("file_not_indexing")
+            await conn.execute("delete from public.user_file_chunks where file_id=%s", (file_id,))
+            async with conn.cursor() as cursor:
+                await cursor.executemany(
+                    """insert into public.user_file_chunks
+                    (id,file_id,workspace_id,chunk_index,text,section_title,page_start,page_end,
+                     paragraph_start,paragraph_end,content_hash)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    [
+                        (
+                            chunk_id,
+                            file_id,
+                            file["workspace_id"],
+                            chunk.index,
+                            chunk.text,
+                            chunk.section_title,
+                            chunk.page_start,
+                            chunk.page_end,
+                            chunk.paragraph_start,
+                            chunk.paragraph_end,
+                            chunk.content_hash,
+                        )
+                        for chunk, chunk_id in zip(chunks, chunk_ids, strict=True)
+                    ],
+                )
+            await conn.execute(
+                """update public.user_files
+                set status='ready',indexed_at=now(),chunks_total=%s,chunks_done=%s,
+                    page_count=%s,unreadable_page_count=%s,embedding_model=%s,
+                    safe_error_code=null,updated_at=now()
+                where id=%s""",
+                (
+                    len(chunks),
+                    len(chunks),
+                    page_count,
+                    unreadable_page_count,
+                    embedding_model,
+                    file_id,
+                ),
+            )
+            await conn.execute(
+                """update app_private.jobs set status='completed',completed_at=now(),
+                    locked_at=null,locked_by=null where id=%s and status='processing'""",
+                (job_id,),
+            )
+
+    async def resume_file_work(self) -> int:
+        """Queue what an older worker or a crash left behind; safe to run on every start."""
+        async with await self.database.connect() as conn:
+            # Files verified before Stage 4 have never been indexed.
+            resumed = await (
+                await conn.execute(
+                    """with pending as (
+                      update public.user_files f
+                      set status='indexing',chunks_done=null,chunks_total=null,updated_at=now()
+                      where f.status='uploaded' and f.indexed_at is null
+                        and not exists (
+                          select 1 from app_private.jobs j
+                          where j.kind='file_ingest' and j.subject_id=f.id
+                        )
+                      returning f.id,f.workspace_id
+                    )
+                    insert into app_private.jobs
+                      (kind,workspace_id,subject_id,idempotency_key,payload)
+                    select 'file_ingest',workspace_id,id,'file-ingest:' || id::text,'{}'::jsonb
+                    from pending
+                    on conflict (workspace_id,idempotency_key) do nothing
+                    returning id"""
+                )
+            ).fetchall()
+            # Deletions of files whose chat is gone have no owner left to retry them.
+            retried = await (
+                await conn.execute(
+                    """update app_private.jobs j
+                    set status='queued',attempt_count=0,available_at=now(),locked_at=null,
+                        locked_by=null,safe_error_code=null,completed_at=null
+                    from public.user_files f
+                    where j.kind='file_deletion' and j.status='failed' and f.id=j.subject_id
+                      and f.status='delete_pending'
+                    returning j.id"""
+                )
+            ).fetchall()
+        return len(resumed) + len(retried)
+
     async def complete_file_deletion(self, job_id: UUID, file_id: UUID) -> None:
         async with await self.database.connect() as conn:
+            await conn.execute("delete from public.user_file_chunks where file_id=%s", (file_id,))
             await conn.execute(
-                """update public.user_files set status='deleted',updated_at=now()
+                """update public.user_files
+                set status='deleted',status_before_deletion=null,updated_at=now()
                 where id=%s and status='delete_pending'""",
                 (file_id,),
             )

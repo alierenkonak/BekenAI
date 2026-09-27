@@ -41,3 +41,26 @@ For local testing:
 ```bash
 ssh -N -L 8000:127.0.0.1:8000 -i /absolute/path/to/private.key ubuntu@SERVER_IP
 ```
+
+## Private file ingestion (Stage 4)
+
+The worker runs two lanes in one process: chat answers, verification and deletion in one,
+`file_ingest` in the other, so a long document never delays an answer. Ingestion extracts
+text (PDF via `pypdf`, DOCX and TXT via the standard library), chunks it, embeds each chunk
+through the model service and writes:
+
+- chunk text to `public.user_file_chunks` (no browser-role access; Turkish full-text index);
+- vectors to the private Qdrant collection `beken_private_files_bge_m3_v1`, created on first
+  use with payload indexes on `workspace_id` (tenant), `file_id`, `case_id` and
+  `conversation_id`. It never shares a collection with `beken_global_*` indexes.
+
+Deploy order: apply `20260927120000_add_private_file_ingestion.sql`, then restart the worker
+and API. On start the worker queues files an older worker verified but never indexed. Before
+restarting, confirm the worker venv can import the parser:
+
+```bash
+/opt/bekenai/venv/bin/python -c "import pypdf, qdrant_client"
+```
+
+Long documents heartbeat their job after every embedding batch, so stale-job recovery does
+not re-run an ingest that is still making progress.

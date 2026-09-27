@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     case_files_bucket: str = "case-files"
     case_file_max_bytes: int = 52_428_800
     user_file_quota_bytes: int = 104_857_600
+    # Must match the dense model of the global index so one query vector serves both.
+    private_file_embedding_model: str = "bge-m3"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

@@ -18,9 +18,9 @@ def isolated_backend(monkeypatch, tmp_path):
     def deny_network(*args, **kwargs):
         raise RuntimeError("Network access is disabled in backend unit tests")
 
-    # The explicit DB integration suite must reach the local Docker PostgreSQL
-    # service. Normal unit tests remain hermetic and cannot open any socket.
-    if os.getenv("BEKEN_RUN_DB_TESTS") != "1":
+    # The explicit DB and Qdrant integration suites must reach local Docker
+    # services. Normal unit tests remain hermetic and cannot open any socket.
+    if "1" not in (os.getenv("BEKEN_RUN_DB_TESTS"), os.getenv("BEKEN_RUN_QDRANT_TESTS")):
         for name in ("create_connection", "getaddrinfo"):
             monkeypatch.setattr(socket, name, deny_network)
         for name in ("connect", "connect_ex"):

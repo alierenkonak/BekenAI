@@ -5,6 +5,7 @@ import { getAccessToken, getSupabase } from './supabase';
 import type {
   ChatEnqueued,
   Conversation,
+  FileMediaType,
   GenerationDetail,
   LegalCase,
   Message,
@@ -114,9 +115,10 @@ export const api = {
   fileStatus: (id: string) => request<UserFile>(`/files/${id}/status`),
   downloadUrl: (id: string) => request<{ url: string }>(`/files/${id}/download-url`, { method: 'POST' }),
   deleteFile: (id: string) => request<UserFile>(`/files/${id}`, { method: 'DELETE' }),
+  reindexFile: (id: string) => request<UserFile>(`/files/${id}/reindex`, { method: 'POST' }),
 
   /** Intent → direct Storage upload with the user's JWT → server-side verification job. */
-  async uploadFile(caseId: string, file: File, mediaType: 'application/pdf' | 'text/plain'): Promise<UserFile> {
+  async uploadFile(caseId: string, file: File, mediaType: FileMediaType): Promise<UserFile> {
     const intent = await request<UploadIntent>(`/cases/${caseId}/files/upload-intent`, {
       method: 'POST',
       body: { filename: file.name, media_type: mediaType, size_bytes: file.size },

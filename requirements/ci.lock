@@ -1018,7 +1018,9 @@ pyparsing==3.3.2 \
 pypdf==6.18.0 \
     --hash=sha256:05b762b77bcb9dcb4a7c91fcf5dded585b25bee7269ab3d3001d7c55fa1b324b \
     --hash=sha256:ae58b7d93c22c169ffb02c3b06321c45c4f223b4916536568adb57d789d95d01
-    # via beken-ingestion (ingestion/pyproject.toml)
+    # via
+    #   beken-api (backend/pyproject.toml)
+    #   beken-ingestion (ingestion/pyproject.toml)
 pytest==9.1.1 \
     --hash=sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313 \
     --hash=sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c
@@ -1117,7 +1119,9 @@ pyyaml==6.0.3 \
 qdrant-client==1.15.1 \
     --hash=sha256:2b975099b378382f6ca1cfb43f0d59e541be6e16a5892f282a4b8de7eff5cb63 \
     --hash=sha256:631f1f3caebfad0fd0c1fba98f41be81d9962b7bf3ca653bed3b727c0e0cbe0e
-    # via beken-retrieval (retrieval/pyproject.toml)
+    # via
+    #   beken-api (backend/pyproject.toml)
+    #   beken-retrieval (retrieval/pyproject.toml)
 requests==2.34.2 \
     --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed

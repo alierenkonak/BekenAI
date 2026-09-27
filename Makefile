@@ -30,7 +30,7 @@ retrieval-help:
 
 db-test:
 	docker compose up -d --wait postgres
-	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest backend/tests/test_stage3_database_integration.py ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
+	BEKEN_RUN_DB_TESTS=1 .venv/bin/pytest backend/tests/test_stage3_database_integration.py backend/tests/test_stage4_database_integration.py ingestion/tests/test_database_integration.py retrieval/tests/test_postgres_integration.py
 
 test:
 	.venv/bin/pytest backend/tests ingestion/tests retrieval/tests
