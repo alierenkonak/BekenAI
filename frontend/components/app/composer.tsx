@@ -16,6 +16,7 @@ export function Composer({
   placeholder,
   extra,
   autoFocus = false,
+  locked = null,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -27,9 +28,11 @@ export function Composer({
   placeholder: string;
   extra?: ReactNode;
   autoFocus?: boolean;
+  /** Why sending is paused (files still processing); typing stays possible. */
+  locked?: string | null;
 }) {
   const length = value.trim().length;
-  const canSend = !busy && length >= 3 && value.length <= CHAT_MESSAGE_MAX;
+  const canSend = !busy && !locked && length >= 3 && value.length <= CHAT_MESSAGE_MAX;
   const nearLimit = value.length > CHAT_MESSAGE_MAX * 0.9;
 
   const submit = () => {
@@ -44,6 +47,12 @@ export function Composer({
       }}
       className={`flex flex-col border border-line-strong bg-surface shadow-soft ${variant === 'hero' ? 'rounded-2xl' : 'rounded-[14px]'}`}
     >
+      {locked && (
+        <p role="status" className="m-0 flex items-center gap-2 border-b border-line px-4 py-2.5 text-[12.5px] text-fg2">
+          <Spinner size={13} className="shrink-0 text-file" />
+          <span className="min-w-0">{locked}</span>
+        </p>
+      )}
       <label htmlFor={`composer-${variant}`} className="sr-only">
         Sorunuz
       </label>

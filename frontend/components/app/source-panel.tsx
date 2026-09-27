@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui';
+import { api } from '@/lib/api';
 import { sourceKind, sourceSubtitle, type SourceRef } from '@/lib/answer';
+import { describeError } from '@/lib/format';
 
 export function SourcePanel({
   selected,
@@ -17,6 +19,7 @@ export function SourcePanel({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
   const { snapshot } = selected;
   const doctrine = selected.channel === 'doctrine';
   const file = selected.channel === 'file';
@@ -33,6 +36,27 @@ export function SourcePanel({
   const allPartial = selected.claims.every((claim) => claim.status === 'partial');
   const claimNumbers = selected.claims.map((claim) => claim.number).join(', ');
   const others = sources.filter((source) => source.sourceId !== selected.sourceId);
+
+  // Signed links live for a minute, so one is fetched per click. The tab opens first,
+  // inside the click, so popup blockers let it through.
+  const openFile = async () => {
+    if (!snapshot.file_id) return;
+    setOpenError(null);
+    const tab = window.open('', '_blank');
+    try {
+      const { url } = await api.downloadUrl(snapshot.file_id);
+      const page = snapshot.title.toLowerCase().endsWith('.pdf') && snapshot.page_number ? `#page=${snapshot.page_number}` : '';
+      if (tab) {
+        tab.opener = null;
+        tab.location.href = url + page;
+      } else {
+        window.location.assign(url + page);
+      }
+    } catch (error) {
+      tab?.close();
+      setOpenError(describeError(error));
+    }
+  };
 
   const copyPassage = async () => {
     try {
@@ -116,6 +140,16 @@ export function SourcePanel({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {file && snapshot.file_id && !snapshot.redacted && (
+              <button
+                type="button"
+                onClick={() => void openFile()}
+                className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg hover:bg-hover"
+              >
+                <Icon name="ext" size={14} />
+                {snapshot.page_number ? `Dosyada aç · s. ${snapshot.page_number}` : 'Dosyayı aç'}
+              </button>
+            )}
             {snapshot.source_url && (
               <a
                 href={snapshot.source_url}
@@ -144,6 +178,7 @@ export function SourcePanel({
               </span>
             )}
           </div>
+          {openError && <p className="m-0 text-[12.5px] text-err">{openError}</p>}
         </section>
 
         {others.length > 0 && (

@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, Spinner } from '@/components/icons';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { renderAnswer, type RenderedAnswer } from '@/lib/answer';
 import { describeError } from '@/lib/format';
 import type { Conversation, GenerationSummary, Message } from '@/lib/types';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
+import { AttachButton, ChatFileTray, clearDraftHandoff, processingNote, readDraftHandoff, useChatFiles } from './chat-files';
 import { Composer } from './composer';
 import { useConversations } from './conversations';
 import { GenerationProgress } from './generation-progress';
@@ -51,7 +52,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [draft, setDraft] = useState('');
+  // A question typed on "new chat" before attaching a file continues here.
+  const [draft, setDraft] = useState(() => readDraftHandoff(conversationId));
   const [doctrineOverride, setDoctrineOverride] = useState<boolean | null>(null);
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -60,6 +62,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [activePrompt, setActivePrompt] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const chatFiles = useChatFiles(conversationId);
+  const lockNote = processingNote(chatFiles);
+
+  useEffect(() => clearDraftHandoff(conversationId), [conversationId]);
 
   useEffect(() => {
     let active = true;
@@ -206,6 +212,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
       refreshSidebar();
     } catch (error) {
       setActionError(describeError(error));
+      // Another tab (or the case page) may have added a file: show why we are waiting.
+      if (error instanceof ApiError && error.code === 'files_processing') void chatFiles.reload().catch(() => {});
     } finally {
       setSending(false);
     }
@@ -366,11 +374,12 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
         <div className="shrink-0 px-4 pb-4 pt-3 sm:px-6">
           <div className="mx-auto flex max-w-[640px] flex-col gap-2">
-            {actionError && (
+            {actionError && !(lockNote && actionError === describeError('files_processing')) && (
               <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">
                 {actionError}
               </p>
             )}
+            <ChatFileTray chatFiles={chatFiles} />
             <Composer
               variant="compact"
               value={draft}
@@ -379,7 +388,9 @@ export function ConversationView({ conversationId }: { conversationId: string })
               includeDoctrine={includeDoctrine}
               onDoctrineChange={changeDoctrine}
               busy={sending}
-              placeholder="Takip sorusu sorun…"
+              locked={lockNote}
+              placeholder={turns.length ? 'Takip sorusu sorun…' : 'Dosya ya da hukuki konu hakkında sorun…'}
+              extra={<AttachButton onFiles={(files) => files.forEach((file) => void chatFiles.upload(file))} />}
             />
             <p className="m-0 text-center text-[11.5px] text-fg3">BekenAI hukuki danışmanlık yerine geçmez.</p>
           </div>

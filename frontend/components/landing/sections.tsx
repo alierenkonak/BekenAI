@@ -5,6 +5,7 @@ import { Icon } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { SectionLabel } from '@/components/ui';
 import { GITHUB_URL, LINKEDIN_URL } from '@/lib/config';
+import { SAMPLE_FILE_URL } from '@/lib/files';
 import {
   ADRS,
   APPROACHES,
@@ -520,6 +521,17 @@ export function DemoNote() {
               </a>
             )}
           </div>
+          <a
+            href={SAMPLE_FILE_URL}
+            download
+            className="flex w-fit items-center gap-2 rounded-[10px] border border-dashed border-file-line bg-file-bg px-3.5 py-2.5 text-sm text-file no-underline"
+          >
+            <Icon name="download" size={15} />
+            <span>
+              <span className="font-medium">Örnek dava dosyası</span>
+              <span className="text-fg2"> · kurgusal işe iade dosyası; uygulamada sohbete ekleyip soru sorun</span>
+            </span>
+          </a>
         </div>
         <div className="flex flex-col gap-3.5">
           <h3 className="m-0 text-[15px] font-semibold">Bilinen sınırlar</h3>
