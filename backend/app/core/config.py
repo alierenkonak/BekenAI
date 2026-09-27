@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     user_file_quota_bytes: int = 104_857_600
     # Must match the dense model of the global index so one query vector serves both.
     private_file_embedding_model: str = "bge-m3"
+    private_file_reranker_model: str = "bge-reranker-v2-m3"
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),

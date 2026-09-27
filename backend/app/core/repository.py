@@ -15,6 +15,7 @@ from app.core.database import AppDatabase, get_database
 
 if TYPE_CHECKING:
     from app.files.chunking import FileChunk
+    from app.files.retrieval import PrivateScope
 
 GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
 # Files past verification: their object size is known and their bytes are readable.
@@ -28,6 +29,16 @@ RETRYABLE_INGEST_ERRORS = frozenset(
         "vector_store_temporarily_unavailable",
     }
 )
+# A chat waits for these: answering while a document is half-indexed would silently
+# ignore the part the user just uploaded. pending_upload is excluded because an
+# abandoned upload intent would otherwise lock the chat until it expires.
+FILES_IN_PROGRESS = ("verifying", "uploaded", "indexing")
+# Rows of one chat's scope: its own uploads, and inside a case the case's files.
+_SCOPE_FILES = """
+  f.workspace_id = %(workspace_id)s
+  and (f.conversation_id = %(conversation_id)s
+       or (%(case_id)s::uuid is not null and f.case_id = %(case_id)s::uuid))
+"""
 _QUEUE_FILE_DELETIONS = """
 with doomed as (
   update public.user_files
@@ -483,6 +494,21 @@ class AppRepository:
             if int(active["count"]) >= max_active_jobs:
                 raise CapacityExceededError("chat_capacity_exceeded")
 
+            busy = await (
+                await conn.execute(
+                    f"""select 1 from public.user_files f
+                    where {_SCOPE_FILES} and f.status = any(%(statuses)s) limit 1""",
+                    {
+                        "workspace_id": workspace["id"],
+                        "conversation_id": conversation["id"] if conversation else None,
+                        "case_id": conversation["case_id"] if conversation else case_id,
+                        "statuses": list(FILES_IN_PROGRESS),
+                    },
+                )
+            ).fetchone()
+            if busy:
+                raise ConflictError("files_processing")
+
             if conversation is None:
                 title = " ".join(message.split())[:80]
                 conversation = await (
@@ -883,7 +909,7 @@ class AppRepository:
         async with await self.database.connect() as conn:
             work = await (
                 await conn.execute(
-                    """select g.*,c.domain_code,u.content as user_message,
+                    """select g.*,c.domain_code,c.case_id,u.content as user_message,
                               u.created_at as user_created_at
                     from public.chat_generations g
                     join public.conversations c on c.id=g.conversation_id
@@ -915,7 +941,7 @@ class AppRepository:
             ).fetchone()
             if not generation or generation["status"] != "processing":
                 raise ConflictError("generation_not_processing")
-            await self._assert_citation_integrity(conn, result)
+            await self._assert_citation_integrity(conn, result, generation["workspace_id"])
             assistant = await (
                 await conn.execute(
                     """insert into public.messages
@@ -933,9 +959,9 @@ class AppRepository:
                 await conn.execute(
                     """insert into public.message_citations
                     (workspace_id,message_id,conversation_id,claim_id,source_id,source_scope,
-                     source_channel,document_id,parse_id,chunk_id,source_snapshot,
-                     integrity_status,support_status,support_reason,ordinal)
-                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                     source_channel,document_id,parse_id,chunk_id,file_id,file_chunk_id,
+                     source_snapshot,integrity_status,support_status,support_reason,ordinal)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         generation["workspace_id"],
                         assistant["id"],
@@ -947,6 +973,8 @@ class AppRepository:
                         citation["document_id"],
                         citation["parse_id"],
                         citation["chunk_id"],
+                        citation.get("file_id"),
+                        citation.get("file_chunk_id"),
                         Jsonb(citation["source_snapshot"]),
                         citation["integrity_status"],
                         citation["support_status"],
@@ -1224,6 +1252,17 @@ class AppRepository:
     async def complete_file_deletion(self, job_id: UUID, file_id: UUID) -> None:
         async with await self.database.connect() as conn:
             await conn.execute("delete from public.user_file_chunks where file_id=%s", (file_id,))
+            # Earlier answers keep their wording, but no longer carry the file's text:
+            # the quoted passage, the verifier's reason and the file name are removed.
+            await conn.execute(
+                """update public.message_citations
+                set source_snapshot = source_snapshot
+                      || jsonb_build_object('exact_passage','','title','Silinmiş dosya',
+                                            'section_title',null,'redacted',true),
+                    support_reason = null
+                where file_id=%s""",
+                (file_id,),
+            )
             await conn.execute(
                 """update public.user_files
                 set status='deleted',status_before_deletion=null,updated_at=now()
@@ -1256,10 +1295,15 @@ class AppRepository:
             raise NotFoundError("source_not_found")
         return row
 
-    async def _assert_citation_integrity(self, conn: AsyncConnection, result: Any) -> None:
-        citations = result.citations
-        if result.answer_status == "answered" and not citations:
+    async def _assert_citation_integrity(
+        self, conn: AsyncConnection, result: Any, workspace_id: UUID
+    ) -> None:
+        if result.answer_status == "answered" and not result.citations:
             raise CitationIntegrityError("citation_integrity_failed")
+        private = [item for item in result.citations if item["source_scope"] == "private"]
+        citations = [item for item in result.citations if item["source_scope"] != "private"]
+        if private:
+            await self._assert_private_citations(conn, private, workspace_id)
         if not citations:
             return
         chunk_ids = list({UUID(str(item["chunk_id"])) for item in citations})
@@ -1320,6 +1364,106 @@ class AppRepository:
                 or (document_id, parse_id, snapshot.get("corpus_version")) not in pins
             ):
                 raise CitationIntegrityError("citation_integrity_failed")
+
+    async def _assert_private_citations(
+        self, conn: AsyncConnection, citations: list[dict[str, Any]], workspace_id: UUID
+    ) -> None:
+        """A file citation must quote a ready file of this workspace, word for word."""
+        rows = await (
+            await conn.execute(
+                """select c.id,c.file_id,c.text,c.page_start,c.page_end,f.original_name
+                from public.user_file_chunks c
+                join public.user_files f on f.id=c.file_id
+                where c.id=any(%s) and c.workspace_id=%s and f.workspace_id=%s
+                  and f.status='ready'""",
+                (
+                    list({UUID(str(item["file_chunk_id"])) for item in citations}),
+                    workspace_id,
+                    workspace_id,
+                ),
+            )
+        ).fetchall()
+        by_chunk = {row["id"]: row for row in rows}
+        for citation in citations:
+            snapshot = citation["source_snapshot"]
+            row = by_chunk.get(UUID(str(citation["file_chunk_id"])))
+            if (
+                citation["source_channel"] != "file"
+                or row is None
+                or row["file_id"] != UUID(str(citation["file_id"]))
+                or any(citation.get(key) is not None for key in ("document_id", "parse_id"))
+                or str(snapshot.get("file_chunk_id")) != str(row["id"])
+                or str(snapshot.get("file_id")) != str(row["file_id"])
+                or snapshot.get("exact_passage") != row["text"]
+                or snapshot.get("title") != row["original_name"]
+                or snapshot.get("page_start") != row["page_start"]
+                or snapshot.get("page_end") != row["page_end"]
+            ):
+                raise CitationIntegrityError("citation_integrity_failed")
+
+    async def ready_file_ids(self, scope: PrivateScope) -> list[UUID]:
+        async with await self.database.connect() as conn:
+            rows = await (
+                await conn.execute(
+                    f"select f.id from public.user_files f where {_SCOPE_FILES} "
+                    "and f.status='ready'",
+                    {
+                        "workspace_id": scope.workspace_id,
+                        "conversation_id": scope.conversation_id,
+                        "case_id": scope.case_id,
+                    },
+                )
+            ).fetchall()
+        return [row["id"] for row in rows]
+
+    async def search_file_chunks(
+        self, workspace_id: UUID, file_ids: Sequence[UUID], query: str, *, limit: int
+    ) -> list[UUID]:
+        """Turkish full-text ranking where any term may match.
+
+        The snowball stemmer folds some inflections differently ("gerekçesi" and
+        "gerekçeleri"), so requiring every term would drop relevant passages; the
+        dense ranker and the reranker take care of precision.
+        """
+        if not file_ids:
+            return []
+        async with await self.database.connect() as conn:
+            rows = await (
+                await conn.execute(
+                    """with q as (
+                      select nullif(
+                        replace(plainto_tsquery('turkish', %s)::text, ' & ', ' | '), ''
+                      )::tsquery as terms
+                    )
+                    select c.id from public.user_file_chunks c, q
+                    where q.terms is not null and c.workspace_id=%s and c.file_id=any(%s)
+                      and c.search_vector @@ q.terms
+                    order by ts_rank_cd(c.search_vector, q.terms) desc, c.id
+                    limit %s""",
+                    (query, workspace_id, list(file_ids), limit),
+                )
+            ).fetchall()
+        return [row["id"] for row in rows]
+
+    async def get_file_chunks(
+        self, workspace_id: UUID, file_ids: Sequence[UUID], chunk_ids: Sequence[UUID]
+    ) -> dict[UUID, dict[str, Any]]:
+        if not chunk_ids:
+            return {}
+        async with await self.database.connect() as conn:
+            rows = await (
+                await conn.execute(
+                    """select c.id,c.file_id,c.chunk_index,c.text,c.section_title,
+                              c.page_start,c.page_end,c.paragraph_start,c.paragraph_end,
+                              f.original_name
+                    from public.user_file_chunks c
+                    join public.user_files f on f.id=c.file_id
+                    where c.id=any(%s) and c.workspace_id=%s and f.workspace_id=%s
+                      and c.file_id=any(%s) and f.status='ready'""",
+                    (list(chunk_ids), workspace_id, workspace_id, list(file_ids)),
+                )
+            ).fetchall()
+        return {row["id"]: row for row in rows}
 
     async def _assert_case(
         self, conn: AsyncConnection, workspace_id: UUID, case_id: UUID | None

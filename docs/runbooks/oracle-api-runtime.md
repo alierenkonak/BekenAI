@@ -64,3 +64,10 @@ restarting, confirm the worker venv can import the parser:
 
 Long documents heartbeat their job after every embedding batch, so stale-job recovery does
 not re-run an ingest that is still making progress.
+
+Chat answers search the chat's ready files alongside the global corpus: Qdrant (filtered to
+the workspace and to the ready file ids the database returns) and Turkish full text over
+`user_file_chunks`, fused with RRF and reranked by `bge-reranker-v2-m3`. File passages become
+`SOURCE_FILE_*` evidence that only the answer's `file_answer` section may cite. While a file
+in the chat's scope is still being verified or indexed, `POST /chat` returns
+`409 files_processing`. Deleting a file redacts the passages earlier answers quoted from it.

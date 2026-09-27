@@ -3,10 +3,18 @@
 import { useState } from 'react';
 import { LogoMark } from '@/components/brand';
 import { Icon } from '@/components/icons';
-import { Badge, CitationChip } from '@/components/ui';
+import { Badge, CitationChip, type ChipTone } from '@/components/ui';
 import type { RenderedAnswer, RenderedClaim } from '@/lib/answer';
 import { describeError, formatSeconds, isRetryableFailure } from '@/lib/format';
 import type { GenerationSummary, StructuredAnswer } from '@/lib/types';
+
+const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipTone; selected: ChipTone; partial: ChipTone }> = {
+  primary: { base: 'primary', selected: 'selected', partial: 'partial' },
+  doctrine: { base: 'doctrine', selected: 'doctrineSelected', partial: 'doctrine' },
+  file: { base: 'file', selected: 'fileSelected', partial: 'filePartial' },
+};
+
+const CHIP_NAME = { primary: 'Kaynak', doctrine: 'Doktrin kaynağı', file: 'Dosya pasajı' } as const;
 
 function ClaimParagraph({
   claim,
@@ -21,24 +29,15 @@ function ClaimParagraph({
     <p className="m-0 text-[15px] leading-[1.65] [text-wrap:pretty]">
       {claim.text}
       {claim.chips.map((chip) => {
-        const doctrine = chip.label.startsWith('D');
-        const selected = chip.sourceId === selectedSourceId;
-        const tone = doctrine
-          ? selected
-            ? 'doctrineSelected'
-            : 'doctrine'
-          : selected
-            ? 'selected'
-            : chip.partial
-              ? 'partial'
-              : 'primary';
+        const tones = CHIP_TONE[chip.channel];
+        const tone = chip.sourceId === selectedSourceId ? tones.selected : chip.partial ? tones.partial : tones.base;
         return (
           <CitationChip
             key={chip.sourceId}
             label={chip.label}
             tone={tone}
             onClick={() => onSelect(chip.sourceId)}
-            ariaLabel={`${doctrine ? 'Doktrin kaynağı' : 'Kaynak'} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
+            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
           />
         );
       })}
@@ -60,20 +59,34 @@ export function AnswerView({
   onSelectSource: (sourceId: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const primaryCount = rendered.sources.filter((source) => source.channel === 'primary').length;
-  const doctrineCount = rendered.sources.length - primaryCount;
+  const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
+  const fileCount = count('file');
+  const primaryCount = count('primary');
+  const doctrineCount = count('doctrine');
+  const sourceSummary = [
+    fileCount ? `${fileCount} dosya pasajı` : null,
+    primaryCount ? `${primaryCount} birincil${doctrineCount || fileCount ? '' : ' kaynak'}` : null,
+    doctrineCount ? `${doctrineCount} doktrin kaynağı` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const seconds = formatSeconds(generation?.latency_ms ?? null);
   const corpus = generation?.corpus_versions?.['labour_law:primary'];
   const index = generation?.index_versions?.['labour_law:primary'];
 
   const copy = async () => {
     const lines = [
+      ...(rendered.file.length ? ['Dosyadaki bilgiler:', ...rendered.file.map((claim) => claim.text), ''] : []),
+      ...(rendered.file.length && rendered.primary.length ? ['Mevzuat ve içtihat:'] : []),
       ...rendered.primary.map((claim) => claim.text),
       ...(rendered.doctrine.length ? ['', 'Doktrin ve yardımcı kaynaklar:', ...rendered.doctrine.map((claim) => claim.text)] : []),
       ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
       '',
       'Kaynaklar:',
-      ...rendered.sources.map((source) => `[${source.label}] ${source.snapshot.title}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}`),
+      ...rendered.sources.map(
+        (source) =>
+          `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}`,
+      ),
     ];
     try {
       await navigator.clipboard.writeText(lines.join('\n'));
@@ -94,16 +107,37 @@ export function AnswerView({
           Doğrulandı
         </Badge>
         <span className="text-[12.5px] text-fg3">
-          {primaryCount} birincil{doctrineCount ? ` · ${doctrineCount} doktrin kaynağı` : ' kaynak'}
+          {sourceSummary}
           {seconds ? ` · ${seconds}` : ''}
         </span>
       </div>
 
-      <div className="flex flex-col gap-2.5">
-        {rendered.primary.map((claim) => (
-          <ClaimParagraph key={claim.number} claim={claim} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
-        ))}
-      </div>
+      {rendered.file.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+            <span className="size-2 rounded-[2px] bg-file" />
+            <span className="font-semibold">Dosyadaki bilgiler</span>
+            <span className="text-fg3">Yüklediğiniz belgelerde yazanlar; hukuki değerlendirme değildir</span>
+          </div>
+          {rendered.file.map((claim) => (
+            <ClaimParagraph key={claim.number} claim={claim} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
+          ))}
+        </div>
+      )}
+
+      {rendered.primary.length > 0 && (
+        <div className={`flex flex-col gap-2.5 ${rendered.file.length ? 'border-t border-line pt-3.5' : ''}`}>
+          {rendered.file.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+              <span className="size-2 rounded-[2px] bg-accent" />
+              <span className="font-semibold">Mevzuat ve içtihat</span>
+            </div>
+          )}
+          {rendered.primary.map((claim) => (
+            <ClaimParagraph key={claim.number} claim={claim} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
+          ))}
+        </div>
+      )}
 
       {rendered.doctrine.length > 0 && (
         <div className="flex flex-col gap-2 border-t border-line pt-3.5">

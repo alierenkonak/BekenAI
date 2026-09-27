@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import psycopg
@@ -8,8 +9,9 @@ import pytest
 
 from app.core.config import Settings
 from app.core.database import AppDatabase
-from app.core.repository import AppRepository, ConflictError
+from app.core.repository import AppRepository, CitationIntegrityError, ConflictError
 from app.files.chunking import FileChunk
+from app.files.retrieval import PrivateScope
 
 pytestmark = pytest.mark.skipif(
     os.getenv("BEKEN_RUN_DB_TESTS") != "1",
@@ -386,4 +388,238 @@ def test_a_live_file_must_have_exactly_one_parent() -> None:
                      declared_media_type,expected_size_bytes,status)
                     values (%s,%s,'a.txt',%s,'text/plain',1,'ready')""",
                     (workspace_id, user_id, f"{user_id}/{uuid4()}/a.txt"),
+                )
+
+
+async def _ready_file(
+    repository: AppRepository, user_id: UUID, texts: list[str], **parent
+) -> dict:
+    file = await _intent(repository, user_id, **parent)
+    await _verified(repository, user_id, file)
+    await _indexed(repository, user_id, file, texts)
+    return await repository.get_file(user_id, file["id"])
+
+
+def _scope(conversation: dict) -> PrivateScope:
+    return PrivateScope(
+        workspace_id=conversation["workspace_id"],
+        conversation_id=conversation["id"],
+        case_id=conversation["case_id"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_chat_reads_only_ready_files_of_its_own_case_or_chat() -> None:
+    user_id, other_user = uuid4(), uuid4()
+    repository = _repository()
+    try:
+        await repository.bootstrap(user_id, "scope@example.test")
+        await repository.bootstrap(other_user, "scope-other@example.test")
+        case = await repository.create_case(user_id, "Dava", None)
+        other_case = await repository.create_case(user_id, "Başka dava", None)
+        in_case = await repository.create_conversation(
+            user_id, title="Davada", domain_code="labour_law", case_id=case["id"],
+            doctrine_enabled=False,
+        )
+        loose = await repository.create_conversation(
+            user_id, title="Serbest", domain_code="labour_law", case_id=None,
+            doctrine_enabled=False,
+        )
+        case_file = await _ready_file(repository, user_id, ["Fesih metni."], case_id=case["id"])
+        indexing = await _intent(repository, user_id, case_id=case["id"])
+        await _verified(repository, user_id, indexing)
+        await _ready_file(repository, user_id, ["Başka dava."], case_id=other_case["id"])
+        loose_file = await _ready_file(
+            repository, user_id, ["Serbest sohbet."], conversation_id=loose["id"]
+        )
+        other_case_of_other_user = await repository.create_case(other_user, "Yabancı", None)
+        await _ready_file(
+            repository, other_user, ["Yabancı."], case_id=other_case_of_other_user["id"]
+        )
+
+        assert await repository.ready_file_ids(_scope(in_case)) == [case_file["id"]]
+        assert await repository.ready_file_ids(_scope(loose)) == [loose_file["id"]]
+        # Another workspace with the same chat id shape sees nothing of ours.
+        foreign = PrivateScope(
+            workspace_id=other_case_of_other_user["workspace_id"],
+            conversation_id=loose["id"],
+            case_id=case["id"],
+        )
+        assert await repository.ready_file_ids(foreign) == []
+    finally:
+        _cleanup(user_id, other_user)
+
+
+@pytest.mark.asyncio
+async def test_full_text_search_matches_any_term_and_hydrates_only_ready_files() -> None:
+    user_id = uuid4()
+    repository = _repository()
+    try:
+        await repository.bootstrap(user_id, "fts@example.test")
+        case = await repository.create_case(user_id, "FTS", None)
+        file = await _ready_file(
+            repository,
+            user_id,
+            [
+                "İşveren fesih gerekçesi olarak performans düşüklüğünü göstermiştir.",
+                "Tanık beyanları bordro kayıtlarıyla uyumludur.",
+            ],
+            case_id=case["id"],
+        )
+        workspace_id = file["workspace_id"]
+
+        # "gerekçeleri" stems differently from the stored "gerekçesi"; OR still matches.
+        found = await repository.search_file_chunks(
+            workspace_id, [file["id"]], "işverenin fesih gerekçeleri nelerdir", limit=5
+        )
+        assert len(found) == 1
+        assert await repository.search_file_chunks(
+            workspace_id, [uuid4()], "fesih", limit=5
+        ) == []
+        assert await repository.search_file_chunks(workspace_id, [file["id"]], "ve", limit=5) == []
+
+        rows = await repository.get_file_chunks(workspace_id, [file["id"]], found)
+        assert rows[found[0]]["original_name"] == "Dilekçe.pdf"
+        await repository.request_file_deletion(user_id, file["id"])
+        assert await repository.get_file_chunks(workspace_id, [file["id"]], found) == {}
+    finally:
+        _cleanup(user_id)
+
+
+@pytest.mark.asyncio
+async def test_a_chat_waits_while_its_files_are_processing() -> None:
+    user_id = uuid4()
+    repository = _repository()
+    try:
+        await repository.bootstrap(user_id, "lock@example.test")
+        case = await repository.create_case(user_id, "Kilit", None)
+        file = await _intent(repository, user_id, case_id=case["id"])
+        await _verified(repository, user_id, file)
+
+        def ask(key: str, case_id):
+            return repository.enqueue_chat(
+                user_id,
+                idempotency_key=key,
+                conversation_id=None,
+                case_id=case_id,
+                message="İşveren fesih gerekçesi olarak ne göstermiş?",
+                domain_code="labour_law",
+                include_doctrine=False,
+                retrieval_query="işveren fesih gerekçesi",
+                requested_model="fixture-model",
+            )
+
+        with pytest.raises(ConflictError, match="files_processing"):
+            await ask("lock-fixture-case", case["id"])
+        # A chat outside the case is not affected by the case's files.
+        assert (await ask("lock-fixture-loose", None))["status"] == "queued"
+
+        await _indexed(repository, user_id, file, ["Fesih metni."])
+        assert (await ask("lock-fixture-ready", case["id"]))["status"] == "queued"
+    finally:
+        _cleanup(user_id)
+
+
+@pytest.mark.asyncio
+async def test_file_citations_must_quote_a_ready_file_and_are_redacted_on_deletion() -> None:
+    user_id = uuid4()
+    repository = _repository()
+    try:
+        await repository.bootstrap(user_id, "file-citations@example.test")
+        case = await repository.create_case(user_id, "Atıf", None)
+        passage = "İşveren fesih gerekçesi olarak performans düşüklüğünü göstermiştir."
+        file = await _ready_file(repository, user_id, [passage], case_id=case["id"])
+        workspace_id = file["workspace_id"]
+        [chunk_id] = await repository.search_file_chunks(
+            workspace_id, [file["id"]], "fesih", limit=1
+        )
+        queued = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="file-citation-fixture",
+            conversation_id=None,
+            case_id=case["id"],
+            message="İşveren fesih gerekçesi olarak ne göstermiş?",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="işveren fesih gerekçesi",
+            requested_model="fixture-model",
+        )
+        _job("chat_generation", queued["generation_id"])
+        with psycopg.connect(database_url()) as conn:
+            conn.execute(
+                "update public.chat_generations set status='processing' where id=%s",
+                (queued["generation_id"],),
+            )
+
+        def result(exact_passage: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                answer_status="answered",
+                content="Dosyadaki bilgiler",
+                structured_content={},
+                actual_model="fixture",
+                verifier_model="fixture",
+                fallback_used=False,
+                input_tokens=1,
+                output_tokens=1,
+                latency_ms=1,
+                corpus_versions={},
+                index_versions={"private:file": "beken_private_files_bge_m3_v1"},
+                citations=[
+                    {
+                        "claim_id": "F1",
+                        "source_id": "SOURCE_FILE_01",
+                        "source_scope": "private",
+                        "source_channel": "file",
+                        "document_id": None,
+                        "parse_id": None,
+                        "chunk_id": None,
+                        "file_id": str(file["id"]),
+                        "file_chunk_id": str(chunk_id),
+                        "source_snapshot": {
+                            "file_id": str(file["id"]),
+                            "file_chunk_id": str(chunk_id),
+                            "title": "Dilekçe.pdf",
+                            "page_start": 1,
+                            "page_end": 1,
+                            "exact_passage": exact_passage,
+                        },
+                        "integrity_status": "valid",
+                        "support_status": "supported",
+                        "support_reason": "Pasaj gerekçeyi aynen belirtiyor.",
+                        "ordinal": 1,
+                    }
+                ],
+            )
+
+        with pytest.raises(CitationIntegrityError, match="citation_integrity_failed"):
+            await repository.complete_generation(queued["generation_id"], result("Uydurma."))
+        await repository.complete_generation(queued["generation_id"], result(passage))
+
+        await repository.request_file_deletion(user_id, file["id"])
+        job = _job("file_deletion", file["id"])
+        await repository.complete_file_deletion(job["id"], file["id"])
+        with psycopg.connect(database_url(), row_factory=psycopg.rows.dict_row) as conn:
+            citation = conn.execute(
+                "select source_snapshot,support_reason from public.message_citations "
+                "where file_id=%s",
+                (file["id"],),
+            ).fetchone()
+        assert citation["source_snapshot"]["exact_passage"] == ""
+        assert citation["source_snapshot"]["title"] == "Silinmiş dosya"
+        assert citation["source_snapshot"]["redacted"] is True
+        assert citation["support_reason"] is None
+    finally:
+        _cleanup(user_id)
+
+
+def test_a_citation_is_either_global_or_a_private_file_never_both() -> None:
+    with psycopg.connect(database_url()) as conn:
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    """insert into public.message_citations
+                    (workspace_id,message_id,conversation_id,claim_id,source_id,source_scope,
+                     source_channel,source_snapshot,integrity_status,support_status,ordinal)
+                    values (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'F1',
+                            'SOURCE_FILE_01','global','file','{}','valid','supported',1)"""
                 )

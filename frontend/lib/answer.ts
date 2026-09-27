@@ -18,24 +18,27 @@ export interface SourceRef {
 export interface RenderedClaim {
   number: number;
   text: string;
-  chips: { sourceId: string; label: string; partial: boolean }[];
+  chips: { sourceId: string; label: string; channel: SourceChannel; partial: boolean }[];
 }
 
 export interface RenderedAnswer {
+  file: RenderedClaim[];
   primary: RenderedClaim[];
   doctrine: RenderedClaim[];
   sources: SourceRef[];
 }
 
+const LABEL_PREFIX: Record<SourceChannel, string> = { primary: '', doctrine: 'D', file: 'F' };
+
 /**
- * Numbers sources by first appearance (primary 1, 2…; doctrine D1, D2…) and joins each
- * claim–source pair to its persisted citation so chips carry the verifier's verdict.
+ * Numbers sources by first appearance per channel (file F1, F2…; primary 1, 2…;
+ * doctrine D1, D2…) and joins each claim–source pair to its persisted citation so
+ * chips carry the verifier's verdict.
  */
 export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): RenderedAnswer {
   const citationByPair = new Map(citations.map((citation) => [`${citation.claim_id}::${citation.source_id}`, citation]));
   const sources = new Map<string, SourceRef>();
-  let primaryCount = 0;
-  let doctrineCount = 0;
+  const counts: Record<SourceChannel, number> = { primary: 0, doctrine: 0, file: 0 };
   let claimNumber = 0;
 
   const renderSection = (claims: StructuredAnswer['primary_answer']): RenderedClaim[] =>
@@ -48,35 +51,40 @@ export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): R
         if (!citation) continue;
         let ref = sources.get(sourceId);
         if (!ref) {
-          const doctrine = citation.source_channel === 'doctrine';
-          if (doctrine) doctrineCount += 1;
-          else primaryCount += 1;
+          const channel = citation.source_channel;
+          counts[channel] += 1;
           ref = {
             sourceId,
-            label: doctrine ? `D${doctrineCount}` : String(primaryCount),
-            channel: citation.source_channel,
+            label: `${LABEL_PREFIX[channel]}${counts[channel]}`,
+            channel,
             snapshot: citation.source_snapshot,
             claims: [],
           };
           sources.set(sourceId, ref);
         }
         ref.claims.push({ number, text: claim.text, status: citation.support_status, reason: citation.support_reason });
-        chips.push({ sourceId, label: ref.label, partial: citation.support_status === 'partial' });
+        chips.push({ sourceId, label: ref.label, channel: ref.channel, partial: citation.support_status === 'partial' });
       }
       return { number, text: claim.text, chips };
     });
 
+  // Facts from the user's file come first, then the law they are weighed against.
+  const file = renderSection(answer.file_answer ?? null);
   const primary = renderSection(answer.primary_answer);
   const doctrine = renderSection(answer.doctrine_answer);
-  return { primary, doctrine, sources: [...sources.values()] };
+  return { file, primary, doctrine, sources: [...sources.values()] };
 }
 
 export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel): string {
+  if (channel === 'file') return 'Dosya';
   if (channel === 'doctrine') return 'Doktrin';
   return snapshot.decision_metadata.case_number || snapshot.decision_metadata.decision_number ? 'İçtihat' : 'Mevzuat';
 }
 
 export function sourceSubtitle(snapshot: SourceSnapshot): string {
+  if (snapshot.source_scope === 'private') {
+    return [snapshot.location_label, snapshot.section_title].filter(Boolean).join(' · ');
+  }
   const decision = snapshot.decision_metadata;
   const parts: string[] = [];
   if (decision.case_number) parts.push(`E. ${decision.case_number}`);

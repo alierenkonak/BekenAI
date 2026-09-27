@@ -39,13 +39,22 @@ class FileChunk:
 
     @property
     def location_label(self) -> str:
-        if self.page_start is not None:
-            if self.page_start == self.page_end:
-                return f"s. {self.page_start}"
-            return f"s. {self.page_start}–{self.page_end}"
-        if self.paragraph_start == self.paragraph_end:
-            return f"¶ {self.paragraph_start}"
-        return f"¶ {self.paragraph_start}–{self.paragraph_end}"
+        return location_label(
+            self.page_start, self.page_end, self.paragraph_start, self.paragraph_end
+        )
+
+
+def location_label(
+    page_start: int | None, page_end: int | None, paragraph_start: int, paragraph_end: int
+) -> str:
+    """Where a passage sits: pages for PDFs, paragraphs where pages are unknowable."""
+    if page_start is not None:
+        if page_start == page_end:
+            return f"s. {page_start}"
+        return f"s. {page_start}–{page_end}"
+    if paragraph_start == paragraph_end:
+        return f"¶ {paragraph_start}"
+    return f"¶ {paragraph_start}–{paragraph_end}"
 
 
 @dataclass(frozen=True)

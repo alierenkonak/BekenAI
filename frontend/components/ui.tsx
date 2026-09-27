@@ -34,7 +34,15 @@ export function DoctrineSwitch({
   );
 }
 
-export type ChipTone = 'primary' | 'selected' | 'partial' | 'doctrine' | 'doctrineSelected';
+export type ChipTone =
+  | 'primary'
+  | 'selected'
+  | 'partial'
+  | 'doctrine'
+  | 'doctrineSelected'
+  | 'file'
+  | 'fileSelected'
+  | 'filePartial';
 
 const CHIP_TONES: Record<ChipTone, string> = {
   primary: 'border-accent-line bg-accent-bg text-accent',
@@ -42,6 +50,9 @@ const CHIP_TONES: Record<ChipTone, string> = {
   partial: 'border-dashed border-accent bg-transparent text-accent',
   doctrine: 'border-doc-line bg-doc-bg text-doc',
   doctrineSelected: 'border-doc bg-doc text-inv-fg',
+  file: 'border-file-line bg-file-bg text-file',
+  fileSelected: 'border-file bg-file text-inv-fg',
+  filePartial: 'border-dashed border-file bg-transparent text-file',
 };
 
 export function CitationChip({
@@ -67,13 +78,14 @@ export function CitationChip({
   );
 }
 
-export function Badge({ tone, children }: { tone: 'ok' | 'accent' | 'neutral' | 'err' | 'doc'; children: ReactNode }) {
+export function Badge({ tone, children }: { tone: 'ok' | 'accent' | 'neutral' | 'err' | 'doc' | 'file'; children: ReactNode }) {
   const tones = {
     ok: 'bg-ok-bg text-ok',
     accent: 'bg-accent-bg text-accent',
     neutral: 'bg-muted text-fg2',
     err: 'bg-err-bg text-err',
     doc: 'bg-doc-bg text-doc',
+    file: 'bg-file-bg text-file',
   };
   return (
     <span className={`inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-xs font-medium ${tones[tone]}`}>
