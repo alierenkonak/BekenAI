@@ -247,6 +247,7 @@ class Worker:
                 if str(exc)
                 in {
                     "invalid_structured_output",
+                    "output_truncated",
                     "invalid_support_output",
                     "incomplete_support_output",
                     "invalid_source_id",

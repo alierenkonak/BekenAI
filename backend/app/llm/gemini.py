@@ -138,6 +138,10 @@ class GeminiProvider:
                     contents=prompt,
                     config=self._config(schema),
                 )
+            candidate = response.candidates[0] if response.candidates else None
+            if getattr(candidate, "finish_reason", None) == types.FinishReason.MAX_TOKENS:
+                # Usually thinking used up the output budget before the JSON finished.
+                raise PermanentLLMError("output_truncated")
             parsed = response.parsed
             if isinstance(parsed, schema):
                 value = parsed
@@ -154,6 +158,8 @@ class GeminiProvider:
             )
         except (ValidationError, json.JSONDecodeError) as exc:
             raise PermanentLLMError("invalid_structured_output") from exc
+        except PermanentLLMError:
+            raise
         except Exception as exc:
             self._raise_safe(exc)
 
@@ -161,9 +167,14 @@ class GeminiProvider:
     def _raise_safe(exc: Exception) -> None:
         if isinstance(exc, errors.APIError):
             code = getattr(exc, "code", None)
+            error: Exception
             if code == 429 or isinstance(code, int) and code >= 500:
-                raise TransientLLMError("provider_temporarily_unavailable") from None
-            raise PermanentLLMError("provider_request_failed") from None
+                error = TransientLLMError("provider_temporarily_unavailable")
+            else:
+                error = PermanentLLMError("provider_request_failed")
+            # The status alone (429 quota, 503 overload…) is safe to log; bodies are not.
+            error.status_code = code  # type: ignore[attr-defined]
+            raise error from None
         if isinstance(
             exc,
             (TimeoutError, ConnectionError, httpx.TimeoutException, httpx.NetworkError),

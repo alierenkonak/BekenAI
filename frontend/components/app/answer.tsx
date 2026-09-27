@@ -4,9 +4,17 @@ import { useState } from 'react';
 import { LogoMark } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { Badge, CitationChip, type ChipTone } from '@/components/ui';
-import type { RenderedAnswer, RenderedClaim } from '@/lib/answer';
+import {
+  isConversational,
+  type Chip,
+  type RenderedAnswer,
+  type RenderedClaim,
+  type RenderedConversation,
+  type RenderedLegacyAnswer,
+  type RenderedSentence,
+} from '@/lib/answer';
 import { describeError, formatSeconds, isRetryableFailure } from '@/lib/format';
-import type { GenerationSummary, StructuredAnswer } from '@/lib/types';
+import type { ConversationalAnswer, GenerationSummary, LegacyAnswer, StructuredAnswer } from '@/lib/types';
 
 const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipTone; selected: ChipTone; partial: ChipTone }> = {
   primary: { base: 'primary', selected: 'selected', partial: 'partial' },
@@ -54,6 +62,254 @@ export function AnswerView({
 }: {
   answer: StructuredAnswer;
   rendered: RenderedAnswer;
+  generation: GenerationSummary | null;
+  selectedSourceId: string | null;
+  onSelectSource: (sourceId: string) => void;
+}) {
+  if (rendered.kind === 'conversational' && isConversational(answer)) {
+    return (
+      <ConversationalAnswerView
+        answer={answer}
+        rendered={rendered}
+        generation={generation}
+        selectedSourceId={selectedSourceId}
+        onSelectSource={onSelectSource}
+      />
+    );
+  }
+  if (rendered.kind === 'legacy' && !isConversational(answer)) {
+    return (
+      <LegacyAnswerView answer={answer} rendered={rendered} generation={generation} selectedSourceId={selectedSourceId} onSelectSource={onSelectSource} />
+    );
+  }
+  return null;
+}
+
+/** Renders **bold** spans the model sometimes uses; everything else stays plain text. */
+function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.startsWith('**') && part.endsWith('**') && part.length > 4 ? <strong key={index}>{part.slice(2, -2)}</strong> : part,
+      )}
+    </>
+  );
+}
+
+function Sentence({
+  sentence,
+  selectedSourceId,
+  onSelect,
+}: {
+  sentence: RenderedSentence;
+  selectedSourceId: string | null;
+  onSelect: (sourceId: string) => void;
+}) {
+  return (
+    <span>
+      {sentence.unverified ? (
+        <span
+          title="Bu ifade kaynaklarla doğrulanamadı"
+          className="underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]"
+        >
+          <InlineText text={sentence.text} />
+        </span>
+      ) : (
+        <InlineText text={sentence.text} />
+      )}
+      {sentence.unverified && (
+        <span className="ml-1.5 inline-flex h-[18px] items-center rounded-[5px] border border-dashed border-err-line px-1.5 align-[1px] text-[10.5px] font-medium text-err">
+          doğrulanamadı
+        </span>
+      )}
+      <Chips chips={sentence.chips} selectedSourceId={selectedSourceId} onSelect={onSelect} />{' '}
+    </span>
+  );
+}
+
+function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
+  return (
+    <>
+      {chips.map((chip) => {
+        const tones = CHIP_TONE[chip.channel];
+        const tone = chip.sourceId === selectedSourceId ? tones.selected : chip.partial ? tones.partial : tones.base;
+        return (
+          <CitationChip
+            key={chip.sourceId}
+            label={chip.label}
+            tone={tone}
+            onClick={() => onSelect(chip.sourceId)}
+            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function ConversationalAnswerView({
+  answer,
+  rendered,
+  generation,
+  selectedSourceId,
+  onSelectSource,
+}: {
+  answer: ConversationalAnswer;
+  rendered: RenderedConversation;
+  generation: GenerationSummary | null;
+  selectedSourceId: string | null;
+  onSelectSource: (sourceId: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
+  const sourceSummary = [
+    count('file') ? `${count('file')} dosya pasajı` : null,
+    count('primary') ? `${count('primary')} birincil kaynak` : null,
+    count('doctrine') ? `${count('doctrine')} doktrin kaynağı` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const seconds = formatSeconds(generation?.latency_ms ?? null);
+  const corpus = generation?.corpus_versions?.['labour_law:primary'];
+  const index = generation?.index_versions?.['labour_law:primary'];
+  const status =
+    answer.answer_status === 'insufficient_evidence'
+      ? { tone: 'neutral' as const, icon: 'searchX' as const, label: 'Kaynak bulunamadı' }
+      : rendered.unverifiedCount > 0
+        ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
+        : rendered.sources.length > 0
+          ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
+          : null;
+
+  const copy = async () => {
+    const text = rendered.blocks
+      .map((block) =>
+        block.kind === 'bullets'
+          ? block.sentences.map((sentence) => `- ${sentence.text} ${sentence.chips.map((chip) => `[${chip.label}]`).join('')}`.trimEnd()).join('\n')
+          : block.sentences.map((sentence) => `${sentence.text}${sentence.chips.map((chip) => ` [${chip.label}]`).join('')}`).join(' '),
+      )
+      .join('\n\n');
+    const lines = [
+      text,
+      ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
+      ...(rendered.sources.length
+        ? [
+            '',
+            'Kaynaklar:',
+            ...rendered.sources.map(
+              (source) =>
+                `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}`,
+            ),
+          ]
+        : []),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <article className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <LogoMark size={22} />
+        <span className="text-[13.5px] font-semibold">BekenAI</span>
+        {status && (
+          <Badge tone={status.tone}>
+            <Icon name={status.icon} size={13} strokeWidth={2} />
+            {status.label}
+          </Badge>
+        )}
+        <span className="text-[12.5px] text-fg3">
+          {sourceSummary}
+          {sourceSummary && seconds ? ' · ' : ''}
+          {seconds}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-3 text-[15px] leading-[1.7] [text-wrap:pretty]">
+        {rendered.blocks.map((block, blockIndex) => {
+          if (block.kind === 'heading') {
+            return (
+              <h3 key={blockIndex} className="m-0 mt-1.5 text-[15.5px] font-semibold leading-snug">
+                {block.sentences.map((sentence) => sentence.text).join(' ')}
+              </h3>
+            );
+          }
+          if (block.kind === 'bullets') {
+            return (
+              <ul key={blockIndex} className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-fg3">
+                {block.sentences.map((sentence) => (
+                  <li key={sentence.number}>
+                    <Sentence sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
+                  </li>
+                ))}
+              </ul>
+            );
+          }
+          return (
+            <p key={blockIndex} className="m-0">
+              {block.sentences.map((sentence) => (
+                <Sentence key={sentence.number} sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
+              ))}
+            </p>
+          );
+        })}
+      </div>
+
+      {rendered.unverifiedCount > 0 && (
+        <p className="m-0 flex items-start gap-2 rounded-xl border border-dashed border-err-line px-3.5 py-2.5 text-[12.5px] leading-normal text-fg2">
+          <Icon name="alert" size={14} className="mt-0.5 shrink-0 text-err" />
+          {rendered.unverifiedCount === 1 ? 'Bir ifade' : `${rendered.unverifiedCount} ifade`} kaynaklarla doğrulanamadı. İşaretli
+          cümleleri bir kaynağa bakmadan kullanmayın.
+        </p>
+      )}
+
+      {answer.limitations.length > 0 && (
+        <div className="flex flex-col gap-1.5 rounded-xl bg-muted px-3.5 py-3">
+          <span className="text-[12.5px] font-semibold text-fg2">Sınırlamalar</span>
+          <ul className="m-0 flex flex-col gap-1 pl-[18px] text-[13px] leading-normal text-fg2">
+            {answer.limitations.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12.5px] text-fg2 hover:bg-hover hover:text-fg"
+        >
+          <Icon name={copied ? 'check' : 'copy'} size={14} />
+          {copied ? 'Kopyalandı' : 'Kopyala'}
+        </button>
+        <span className="grow" />
+        {corpus && (
+          <span className="font-mono text-[11px] text-fg3" title="Cevabın üretildiği kaynak ve dizin sürümü">
+            {corpus}
+            {index ? ` · ${index}` : ''}
+          </span>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function LegacyAnswerView({
+  answer,
+  rendered,
+  generation,
+  selectedSourceId,
+  onSelectSource,
+}: {
+  answer: LegacyAnswer;
+  rendered: RenderedLegacyAnswer;
   generation: GenerationSummary | null;
   selectedSourceId: string | null;
   onSelectSource: (sourceId: string) => void;

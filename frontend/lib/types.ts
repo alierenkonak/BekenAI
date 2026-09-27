@@ -86,7 +86,9 @@ export interface AnswerSection {
   claims: Claim[];
 }
 
-export interface StructuredAnswer {
+/** Answers written before the conversational format: separate claim lists per source kind. */
+export interface LegacyAnswer {
+  format?: undefined;
   answer_status: AnswerStatus;
   /** Absent on answers produced before users could upload files. */
   file_answer?: AnswerSection | null;
@@ -94,6 +96,35 @@ export interface StructuredAnswer {
   doctrine_answer: AnswerSection | null;
   limitations: string[];
 }
+
+/**
+ * verified/partial: at least one cited source passed verification.
+ * unverified: its sources failed verification, or it states a specific rule, period
+ * or amount without a source. plain: explanation that needs no source.
+ */
+export type SentenceVerification = 'verified' | 'partial' | 'unverified' | 'plain';
+
+export interface AnswerSentence {
+  id: string;
+  text: string;
+  source_ids: string[];
+  verification: SentenceVerification;
+}
+
+export interface AnswerBlock {
+  kind: 'paragraph' | 'heading' | 'bullets';
+  sentences: AnswerSentence[];
+}
+
+export interface ConversationalAnswer {
+  format: 'conversational-v1';
+  answer_status: AnswerStatus;
+  blocks: AnswerBlock[];
+  limitations: string[];
+  unverified_count: number;
+}
+
+export type StructuredAnswer = LegacyAnswer | ConversationalAnswer;
 
 export interface GenerationSummary {
   id: string;

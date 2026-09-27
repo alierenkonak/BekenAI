@@ -5,10 +5,19 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
-class GeneratedClaim(BaseModel):
-    claim_id: str = Field(pattern=r"^[A-Za-z0-9_-]{1,80}$")
-    text: str = Field(min_length=1, max_length=4000)
-    source_ids: list[str] = Field(min_length=1, max_length=10)
+class QueryPlan(BaseModel):
+    """How to search for the latest message, given the conversation so far."""
+
+    intent: Literal["legal", "conversation"]
+    # A standalone search query; empty when the message needs no sources. Clipped to
+    # the 500-character search limit in code, so a verbose model is not rejected.
+    search_query: str = Field(default="", max_length=4000)
+
+
+class AnswerSentence(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    # Sources the sentence rests on; empty for explanation, transitions and guidance.
+    source_ids: list[str] = Field(default_factory=list, max_length=8)
 
     @field_validator("source_ids")
     @classmethod
@@ -16,18 +25,17 @@ class GeneratedClaim(BaseModel):
         return list(dict.fromkeys(value))
 
 
-class AnswerSection(BaseModel):
-    summary: str = Field(min_length=1, max_length=8000)
-    claims: list[GeneratedClaim] = Field(default_factory=list, max_length=30)
+class AnswerBlock(BaseModel):
+    kind: Literal["paragraph", "heading", "bullets"]
+    sentences: list[AnswerSentence] = Field(min_length=1, max_length=25)
 
 
-class GroundedAnswer(BaseModel):
+class ChatAnswer(BaseModel):
+    """A conversational answer written as blocks of sentences, each citing its sources."""
+
     answer_status: Literal["answered", "insufficient_evidence"]
-    # What the user's own documents state, kept apart from what the law says.
-    file_answer: AnswerSection | None = None
-    primary_answer: AnswerSection | None = None
-    doctrine_answer: AnswerSection | None = None
-    limitations: list[str] = Field(default_factory=list, max_length=20)
+    blocks: list[AnswerBlock] = Field(min_length=1, max_length=40)
+    limitations: list[str] = Field(default_factory=list, max_length=5)
 
 
 class SupportAssessment(BaseModel):

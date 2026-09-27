@@ -121,7 +121,7 @@ export function SourcePanel({
             <div className="flex items-center gap-2 text-[12.5px]">
               <span className="font-semibold">Doğrulama</span>
               <span className="grow" />
-              <span className="text-fg3">İddia {claimNumbers}</span>
+              <span className="text-fg3">İfade {claimNumbers}</span>
               {allPartial ? (
                 <span className="rounded-full border border-dashed border-line-strong px-2 py-px text-[11.5px] text-fg2">Kısmen destekliyor</span>
               ) : (
@@ -133,9 +133,9 @@ export function SourcePanel({
             </div>
             {selected.claims.map((claim) => (
               <p key={claim.number} className="m-0 text-[12.5px] leading-normal text-fg2">
-                <span className="font-medium text-fg">İddia {claim.number}:</span>{' '}
+                <span className="font-medium text-fg">İfade {claim.number}:</span>{' '}
                 {claim.status === 'partial' ? 'Kısmen destekliyor. ' : ''}
-                {claim.reason || 'Pasaj bu iddiayı destekliyor.'}
+                {claim.reason || 'Pasaj bu ifadeyi destekliyor.'}
               </p>
             ))}
           </div>
