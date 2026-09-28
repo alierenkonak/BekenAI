@@ -14,7 +14,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from beken_retrieval.dense import DenseEncoder, create_dense_encoder
 from beken_retrieval.model_catalog import ModelCatalog
-from beken_retrieval.reranking import CrossEncoderReranker
+from beken_retrieval.reranking import PassageScorer, create_reranker
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,8 @@ class ModelServiceSettings(BaseSettings):
     model_catalog_path: Path = Path("retrieval/config/models.json")
     dense_model_key: str = "bge-m3"
     reranker_model_key: str = "bge-reranker-v2-m3"
+    # Converted artifacts (the ONNX reranker) live in the service's state directory.
+    model_artifact_dir: Path = Path("/var/lib/bekenai-model-service/artifacts")
 
     model_config = SettingsConfigDict(case_sensitive=False, extra="ignore")
 
@@ -87,12 +89,14 @@ class ModelRuntime:
         self.dense_spec = self.catalog.get(settings.dense_model_key)
         self.reranker_spec = self.catalog.get(settings.reranker_model_key)
         self.dense: DenseEncoder | None = None
-        self.reranker: CrossEncoderReranker | None = None
+        self.reranker: PassageScorer | None = None
         self.inference_lock = threading.Lock()
 
     def load(self) -> None:
         self.dense = create_dense_encoder(self.dense_spec)
-        self.reranker = CrossEncoderReranker(self.reranker_spec)
+        self.reranker = create_reranker(
+            self.reranker_spec, artifact_dir=self.settings.model_artifact_dir
+        )
 
     def ready(self) -> bool:
         return self.dense is not None and self.reranker is not None
