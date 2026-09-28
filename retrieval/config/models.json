@@ -30,7 +30,8 @@
     "model_id": "BAAI/bge-reranker-v2-m3",
     "revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
     "max_tokens": 512,
-    "backend": "torch",
-    "safe_artifact": "model.safetensors"
+    "backend": "onnx",
+    "safe_artifact": "bge-reranker-v2-m3/int8/model.onnx",
+    "artifact_sha256": "f29320dc69837e0a2e54b9e03ee1ca7fc10f94bcec3eaed6326d78d73670951f"
   }
 }

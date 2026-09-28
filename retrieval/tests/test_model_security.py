@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 import traceback
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -69,7 +70,14 @@ def load(kind):
     if kind == "dense":
         return SentenceTransformerDenseEncoder(catalog.get("multilingual-e5-base"))
     if kind == "reranker":
-        return CrossEncoderReranker(catalog.get("bge-reranker-v2-m3"))
+        # Production serves an ONNX export; the PyTorch loader stays for evaluation.
+        torch_spec = replace(
+            catalog.get("bge-reranker-v2-m3"),
+            backend="torch",
+            safe_artifact="model.safetensors",
+            artifact_sha256=None,
+        )
+        return CrossEncoderReranker(torch_spec)
     return OnnxDenseEncoder(catalog.get("bge-m3"))
 
 

@@ -17,6 +17,9 @@ class ModelSpec:
     max_tokens: int | None = None
     query_prefix: str = ""
     passage_prefix: str = ""
+    # Set for artifacts we convert ourselves (e.g. an ONNX export of a Hub model):
+    # they live outside the Hub cache, so their bytes are pinned by hash instead.
+    artifact_sha256: str | None = None
 
 
 class ModelCatalog:

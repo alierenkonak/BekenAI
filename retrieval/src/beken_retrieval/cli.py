@@ -23,6 +23,7 @@ from beken_retrieval.evaluation import (
 )
 from beken_retrieval.model_catalog import ModelCatalog
 from beken_retrieval.models import ChunkRecord, SearchFilters
+from beken_retrieval.onnx_export import export_reranker
 from beken_retrieval.postgres import PostgresCorpusRepository
 from beken_retrieval.profile import RetrievalProfileCatalog
 from beken_retrieval.qdrant_store import (
@@ -589,11 +590,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     benchmark.set_defaults(handler=evaluate_index)
 
+    export = subparsers.add_parser(
+        "export-reranker-onnx",
+        help="Convert the pinned reranker to int8 ONNX for the model service",
+    )
+    export.add_argument("--model", default="bge-reranker-v2-m3")
+    export.add_argument("--out", type=Path, required=True)
+    export.set_defaults(handler=export_reranker_onnx)
+
     gate = subparsers.add_parser("quality-gate")
     gate.add_argument("--report", action="append", required=True)
     gate.add_argument("--output", type=Path)
     gate.set_defaults(handler=check_quality_gate)
     return parser
+
+
+def export_reranker_onnx(args: argparse.Namespace, settings: RetrievalSettings) -> int:
+    spec = ModelCatalog.load(settings.retrieval_model_catalog).get(args.model)
+    path, digest = export_reranker(spec, args.out)
+    # The catalog pins this path (relative to the artifact directory) and hash.
+    print(json.dumps({"safe_artifact": path.relative_to(args.out).as_posix(), "sha256": digest}))
+    return 0
 
 
 def main() -> int:
