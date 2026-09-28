@@ -7,7 +7,8 @@ import { Icon, Spinner } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
 import { isConversational, renderAnswer, type RenderedAnswer } from '@/lib/answer';
 import { describeError } from '@/lib/format';
-import type { ChatCapabilities, Conversation, GenerationSummary, Message, SearchMode } from '@/lib/types';
+import type { Conversation, GenerationSummary, Message, SearchMode } from '@/lib/types';
+import { readWebSearch, rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
 import { AttachButton, ChatFileTray, clearDraftHandoff, processingNote, readDraftHandoff, useChatFiles } from './chat-files';
 import { Composer } from './composer';
@@ -44,16 +45,6 @@ function isActive(generation: GenerationSummary | null): boolean {
   return generation?.status === 'queued' || generation?.status === 'processing';
 }
 
-// Server features do not change while the app is open; ask once, retry after a failure.
-let capabilities: Promise<ChatCapabilities> | null = null;
-function loadCapabilities(): Promise<ChatCapabilities> {
-  capabilities ??= api.chatCapabilities().catch((error) => {
-    capabilities = null;
-    throw error;
-  });
-  return capabilities;
-}
-
 /** The web search offer stays until the same question has been searched on the web. */
 function offersWebSearch(turns: Turn[], index: number): boolean {
   const turn = turns[index];
@@ -81,25 +72,14 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [cancelling, setCancelling] = useState(false);
   const [selected, setSelected] = useState<{ messageId: string; sourceId: string } | null>(null);
   const [activePrompt, setActivePrompt] = useState(0);
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const webSearchAvailable = useWebSearchAvailable();
+  const [webSearchOn, setWebSearchOn] = useState(() => readWebSearch(conversationId));
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const chatFiles = useChatFiles(conversationId);
   const lockNote = processingNote(chatFiles);
 
   useEffect(() => clearDraftHandoff(conversationId), [conversationId]);
-
-  useEffect(() => {
-    let active = true;
-    loadCapabilities()
-      .then((loaded) => {
-        if (active) setWebSearchEnabled(loaded.web_search);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -266,6 +246,11 @@ export function ConversationView({ conversationId }: { conversationId: string })
     }
   };
 
+  const changeWebSearch = (value: boolean) => {
+    setWebSearchOn(value);
+    rememberWebSearch(conversationId, value);
+  };
+
   const changeDoctrine = (value: boolean) => {
     setDoctrineOverride(value);
     void api.updateConversation(conversationId, { include_doctrine: value }).catch(() => {});
@@ -375,7 +360,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
                       {webTurn && (
                         <span className="flex items-center gap-1 text-xs font-medium text-web">
                           <Icon name="globe" size={13} />
-                          Web&apos;de arandı
+                          Web araması açık
                         </span>
                       )}
                       <div className="whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">
@@ -396,7 +381,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
                         selectedSourceId={selected?.messageId === turn.assistant?.id ? selected?.sourceId ?? null : null}
                         onSelectSource={(sourceId) => turn.assistant && setSelected({ messageId: turn.assistant.id, sourceId })}
                         onWebSearch={
-                          webSearchEnabled && offersWebSearch(turns, index) ? () => void send(turn.user.content, 'web') : undefined
+                          webSearchAvailable && offersWebSearch(turns, index) ? () => void send(turn.user.content, 'web') : undefined
                         }
                         webSearchBusy={sending || Boolean(lockNote)}
                       />
@@ -436,9 +421,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
               variant="compact"
               value={draft}
               onChange={setDraft}
-              onSubmit={() => void send(draft)}
+              onSubmit={() => void send(draft, webSearchAvailable && webSearchOn ? 'web' : 'corpus')}
               includeDoctrine={includeDoctrine}
               onDoctrineChange={changeDoctrine}
+              webSearch={webSearchAvailable ? { checked: webSearchOn, onChange: changeWebSearch } : undefined}
               busy={sending}
               locked={lockNote}
               placeholder={turns.length ? 'Takip sorusu sorun…' : 'Dosya ya da hukuki konu hakkında sorun…'}

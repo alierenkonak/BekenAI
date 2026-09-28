@@ -72,11 +72,13 @@ the workspace and to the ready file ids the database returns) and Turkish full t
 in the chat's scope is still being verified or indexed, `POST /chat` returns
 `409 files_processing`. Deleting a file redacts the passages earlier answers quoted from it.
 
-## Web search fallback
+## Web search
 
-When the corpus has no source for a legal question, the answer offers a web search (see
-ADR 0004). It needs one secret in `/etc/bekenai/api.env`, read by both the API (to offer
-and accept web requests) and the worker (to search):
+Users can turn on web search in the composer, and an answer the corpus could not ground
+offers it too (see ADR 0004). The usual answer is written as always; the web is searched
+alongside and what it says is added after the answer as a labelled section. It needs one
+secret in `/etc/bekenai/api.env`, read by both the API (to offer and accept web requests)
+and the worker (to search):
 
 ```bash
 TAVILY_API_KEY=tvly-...
@@ -85,8 +87,9 @@ TAVILY_API_KEY=tvly-...
 Restart `bekenai-api` and `bekenai-worker` after adding it; `GET /chat/capabilities` then
 returns `{"web_search": true}`. Without the key the option stays hidden. Optional settings:
 `WEB_SEARCH_DEPTH` (`advanced`, 2 credits; `basic`, 1 credit), `WEB_SEARCH_MAX_RESULTS` (8)
-and `WEB_SEARCH_TIMEOUT_SECONDS` (30). The free plan has 1,000 credits a month; a spent plan
-fails web answers with `web_search_quota_exceeded` until it renews.
+and `WEB_SEARCH_TIMEOUT_SECONDS` (30). The free plan has 1,000 credits a month. A failed or
+spent search never fails the answer: it arrives without the web section, which instead says
+why (`web_search_status` in the answer records it).
 
 Deploy order: apply `20260928154731_add_web_search_citations.sql` (adds
 `chat_generations.search_mode` and the `web` citation scope), then restart the API and worker.

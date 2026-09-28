@@ -13,11 +13,12 @@ const CORPUS_STEPS = [
   { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
 ];
 
+// With web search on, the usual search runs and the web is searched alongside it.
 const WEB_STEPS = [
   CORPUS_STEPS[0],
-  { title: 'Web\'de aranıyor', detail: 'Soru genel bir arama sorgusuna çevrilip web sayfaları taranıyor' },
-  { title: 'Cevap hazırlanıyor', detail: 'Yalnızca bulunan sayfalardaki alıntılarla taslak yazılıyor' },
-  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı sayfa alıntısıyla ayrıca karşılaştırılıyor' },
+  { title: 'Kaynaklar ve web aranıyor', detail: 'Mevzuat, Yargıtay kararları ve web sayfaları taranıyor' },
+  { title: 'Cevap hazırlanıyor', detail: 'Cevap kaynaklarla, en alttaki web bölümü bulunan sayfalarla yazılıyor' },
+  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ya da sayfa alıntısıyla karşılaştırılıyor' },
 ];
 
 function currentStep(generation: GenerationSummary): number {

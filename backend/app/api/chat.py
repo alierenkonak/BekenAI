@@ -22,7 +22,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=3, max_length=4000)
     domain: Literal["labour_law"] = "labour_law"
     include_doctrine: bool = False
-    # "web" is offered only after the corpus found nothing, and only when configured.
+    # "web": the usual answer plus a labelled web section after it (the composer switch or
+    # the offer under a sourceless answer). Accepted only when a search key is configured.
     search_mode: Literal["corpus", "web"] = "corpus"
 
     @field_validator("message")

@@ -133,6 +133,10 @@ export interface ConversationalAnswer {
   unverified_count: number;
   /** Absent on answers written before web search existed (they are corpus answers). */
   search_mode?: SearchMode;
+  /** With web search on: what web pages confirm, add or contradict, shown after the answer. */
+  web_blocks?: AnswerBlock[];
+  /** found, empty, or why the web search failed; null without one. */
+  web_search_status?: string | null;
   /** The corpus found nothing for this legal question; the user may search the web. */
   web_search_offered?: boolean;
 }

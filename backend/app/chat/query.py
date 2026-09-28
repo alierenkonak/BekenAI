@@ -58,7 +58,7 @@ def derive_retrieval_query(message: str, *, maximum: int = 500) -> str:
 _HISTORY_CHARS = 2_500
 
 
-def fallback_plan(message: str, history: list[dict]) -> QueryPlan:
+def fallback_plan(message: str, history: list[dict], *, for_web: bool = False) -> QueryPlan:
     """Without the planner, pair the message with the previous question for context."""
     previous = next(
         (item["content"] for item in reversed(history) if item["role"] == "user"), ""
@@ -66,13 +66,24 @@ def fallback_plan(message: str, history: list[dict]) -> QueryPlan:
     # A web search repeats the question it follows; pairing it with itself adds nothing.
     repeated = " ".join(previous.split()) == " ".join(message.split())
     combined = f"{previous} {message}" if previous and not repeated else message
-    return QueryPlan(intent="legal", search_query=derive_retrieval_query(combined))
+    return QueryPlan(
+        intent="legal",
+        search_query=derive_retrieval_query(combined),
+        # Only the user's own words go to the web, never earlier (file-derived) turns.
+        web_query=derive_retrieval_query(message) if for_web else "",
+    )
+
+
+def _web_query(candidate: str, message: str) -> str:
+    query = derive_retrieval_query(candidate) if candidate.strip() else ""
+    return query if len(query) >= 3 else derive_retrieval_query(message)
 
 
 _WEB_QUERY_RULE = """
-- Sorgu genel bir web arama motoruna gidecek: kişi ve şirket adlarını, tarihleri ve dosyadaki
-  kimlik bilgilerini sorguya koyma; olayı genel hukuki kavramlarla anlat ve Türk iş hukuku
-  bağlamını belirt."""
+- Kullanıcı web aramasını da açtı. web_query alanına aynı soruyu genel bir web arama motoru
+  için yaz: kişi ve şirket adlarını, tarihleri ve dosyadaki kimlik bilgilerini koyma; olayı
+  genel hukuki kavramlarla anlat ve Türk iş hukuku bağlamını belirt. search_query'yi her
+  zamanki gibi doldur."""
 
 
 async def plan_query(
@@ -111,13 +122,17 @@ anlaşılır bir arama sorgusuna dönüştür.
         result = await provider.structured_output(model=model, prompt=prompt, schema=QueryPlan)
     except (TransientLLMError, PermanentLLMError) as exc:
         logger.warning("Query planner unavailable (%s: %s)", type(exc).__name__, exc)
-        return fallback_plan(message, history)
+        return fallback_plan(message, history, for_web=for_web)
     plan = result.value
     if not isinstance(plan, QueryPlan):
-        return fallback_plan(message, history)
+        return fallback_plan(message, history, for_web=for_web)
     if plan.intent == "legal":
         query = derive_retrieval_query(plan.search_query) if plan.search_query.strip() else ""
         if len(query) < 3:
-            return fallback_plan(message, history)
-        return QueryPlan(intent="legal", search_query=query)
+            return fallback_plan(message, history, for_web=for_web)
+        return QueryPlan(
+            intent="legal",
+            search_query=query,
+            web_query=_web_query(plan.web_query, message) if for_web else "",
+        )
     return QueryPlan(intent="conversation", search_query="")

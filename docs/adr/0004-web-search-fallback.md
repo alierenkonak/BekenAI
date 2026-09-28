@@ -43,3 +43,25 @@ kanıtı olur ve mevzuat pasajlarıyla aynı cümle bazlı doğrulamadan geçer.
 dış servis ve anahtardır. `TAVILY_API_KEY` tanımlı değilken seçenek görünmez ve `POST /chat`
 web isteğini `503 web_search_unavailable` ile reddeder. Aylık kota dolarsa iş
 `web_search_quota_exceeded` ile biter.
+
+## Güncelleme (2026-09-29): web, cevabın yerine değil sonuna
+
+Deploy sonrası görüldü ki arama her soruda 25 aday getirdiği için model çoğu zaman kısmen
+ilgili pasajlara dayanıp "cevapladım" diyor; "Web'de ara" teklifi pratikte nadiren çıkıyordu.
+Davranış şöyle değişti:
+
+- Sohbet kutusuna doktrin anahtarı gibi bir "Web araması" anahtarı eklendi. Üstüne gelince ne
+  yaptığını anlatan bir açıklama çıkar. Anahtar kapatılana kadar o sohbette açık kalır; yeni
+  sohbet kapalı başlar. Kaynaksız cevabın altındaki teklif de duruyor.
+- `search_mode=web` artık web'i kaynaklarımızın yerine koymaz. Her zamanki arama, cevap ve
+  doğrulama aynen çalışır; web araması paralel yapılır. Model, ana cevabı (`blocks`) yalnız
+  mevzuat, içtihat, doktrin ve dosya kaynaklarına, en alttaki web bölümünü (`web_blocks`) yalnız
+  web sayfalarına dayandırır. Bu bölüm web'in ana cevabı destekleyip desteklemediğini, ondan
+  farklı ya da onunla çelişen bir şey söyleyip söylemediğini yazar. Her iki taraftaki yabancı
+  kaynak kimlikleri kodda atılır; iki bölüm de cümle cümle doğrulanır.
+- Planlayıcı, bizim arama sorgusundan ayrı olarak kişi, şirket adı ve tarih içermeyen bir web
+  sorgusu yazar. Planlayıcı düşerse web'e yalnız kullanıcının kendi mesajı gider.
+- Web araması başarısız olursa ya da kota dolarsa cevap yine gelir, web bölümü nedenini
+  söyleyen kısa bir not olur. Web'de bir şey çıkmazsa da bunu söyleyen bir not görünür.
+- Ek Gemini çağrısı yoktur: iki bölüm tek cevap çağrısında yazılır.
+
