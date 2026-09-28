@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import { SAMPLE_FILE_URL, SAMPLE_QUESTIONS, mediaTypeOf, uploadProblem } from '@/lib/files';
 import { describeError } from '@/lib/format';
 import type { LegalCase } from '@/lib/types';
+import { rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AttachButton, saveDraftHandoff } from './chat-files';
 import { Composer } from './composer';
 import { useConversations } from './conversations';
@@ -25,6 +26,9 @@ export function NewChat() {
   const { refresh } = useConversations();
   const [draft, setDraft] = useState(() => searchParams.get('q') ?? '');
   const [includeDoctrine, setIncludeDoctrine] = useState(false);
+  const webSearchAvailable = useWebSearchAvailable();
+  const [webSearch, setWebSearch] = useState(false);
+  const withWeb = webSearchAvailable && webSearch;
   const [caseId, setCaseId] = useState(() => searchParams.get('dava') ?? '');
   const [cases, setCases] = useState<LegalCase[]>([]);
   const [sending, setSending] = useState(false);
@@ -53,9 +57,11 @@ export function NewChat() {
     setError(null);
     try {
       const queued = await api.sendChat(
-        { message, include_doctrine: includeDoctrine, case_id: caseId || null },
+        { message, include_doctrine: includeDoctrine, case_id: caseId || null, search_mode: withWeb ? 'web' : 'corpus' },
         crypto.randomUUID(),
       );
+      // The switch stays on for the rest of this chat.
+      if (withWeb) rememberWebSearch(queued.conversation_id, true);
       refresh();
       router.push(`/sohbet/${queued.conversation_id}`);
     } catch (sendError) {
@@ -87,6 +93,7 @@ export function NewChat() {
         files.map((file) => api.uploadConversationFile(targetId, file, mediaTypeOf(file) ?? 'application/pdf')),
       );
       saveDraftHandoff(targetId, draft);
+      if (withWeb) rememberWebSearch(targetId, true);
       refresh();
       router.push(`/sohbet/${targetId}`);
     } catch (attachError) {
@@ -142,6 +149,7 @@ export function NewChat() {
             onSubmit={() => void send(draft)}
             includeDoctrine={includeDoctrine}
             onDoctrineChange={setIncludeDoctrine}
+            webSearch={webSearchAvailable ? { checked: webSearch, onChange: setWebSearch } : undefined}
             busy={sending || attaching}
             autoFocus
             placeholder="Örneğin: İşveren ihbar süresine uymadan sözleşmemi feshetti. Hangi alacaklarımı talep edebilirim?"

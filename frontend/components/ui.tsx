@@ -1,11 +1,52 @@
 import type { ReactNode } from 'react';
 
-export function DoctrineSwitch({
+const SWITCH_TONES = {
+  doc: { on: 'border-doc-line bg-doc-bg font-medium text-doc', track: 'bg-doc' },
+  web: { on: 'border-web-line bg-web-bg font-medium text-web', track: 'bg-web' },
+} as const;
+
+function Switch({
   checked,
   onChange,
-  label = 'Doktrin kaynakları',
+  label,
+  tone,
   compact = false,
   disabled = false,
+  describedBy,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  tone: keyof typeof SWITCH_TONES;
+  compact?: boolean;
+  disabled?: boolean;
+  describedBy?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-describedby={describedBy}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`flex items-center gap-2 rounded-lg border px-2.5 text-[13px] transition-colors disabled:opacity-50 ${
+        compact ? 'h-[30px]' : 'h-8'
+      } ${checked ? SWITCH_TONES[tone].on : 'border-line bg-transparent text-fg2 hover:bg-hover'}`}
+    >
+      <span
+        className={`flex h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors ${checked ? `justify-end ${SWITCH_TONES[tone].track}` : 'justify-start bg-line-strong'}`}
+      >
+        <span className="size-3 rounded-full bg-surface" />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+export function DoctrineSwitch({
+  label = 'Doktrin kaynakları',
+  ...props
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
@@ -13,24 +54,39 @@ export function DoctrineSwitch({
   compact?: boolean;
   disabled?: boolean;
 }) {
+  return <Switch {...props} label={label} tone="doc" />;
+}
+
+/**
+ * The web search switch with a hint shown on hover or keyboard focus. The hint is
+ * positioned against the nearest positioned ancestor (the composer), so it never
+ * spills off a narrow screen.
+ */
+export function WebSearchSwitch({
+  hintId,
+  hint,
+  label = 'Web araması',
+  ...props
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  hintId: string;
+  hint: ReactNode;
+  label?: string;
+  compact?: boolean;
+  disabled?: boolean;
+}) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`flex items-center gap-2 rounded-lg border px-2.5 text-[13px] transition-colors disabled:opacity-50 ${
-        compact ? 'h-[30px]' : 'h-8'
-      } ${checked ? 'border-doc-line bg-doc-bg font-medium text-doc' : 'border-line bg-transparent text-fg2 hover:bg-hover'}`}
-    >
+    <span className="group flex">
+      <Switch {...props} label={label} tone="web" describedBy={hintId} />
       <span
-        className={`flex h-4 w-7 shrink-0 rounded-full p-0.5 transition-colors ${checked ? 'justify-end bg-doc' : 'justify-start bg-line-strong'}`}
+        role="tooltip"
+        id={hintId}
+        className="pointer-events-none invisible absolute bottom-full left-3 z-30 mb-2 w-[min(360px,calc(100%-24px))] rounded-[10px] bg-inv px-3.5 py-2.5 text-[12.5px] font-normal leading-normal text-inv-fg opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
       >
-        <span className="size-3 rounded-full bg-surface" />
+        {hint}
       </span>
-      {label}
-    </button>
+    </span>
   );
 }
 

@@ -12,6 +12,9 @@ class QueryPlan(BaseModel):
     # A standalone search query; empty when the message needs no sources. Clipped to
     # the 500-character search limit in code, so a verbose model is not rejected.
     search_query: str = Field(default="", max_length=4000)
+    # Only when the user turned web search on: the same question for a public search
+    # engine, without names, companies, dates or case details. Clipped like search_query.
+    web_query: str = Field(default="", max_length=4000)
 
 
 class AnswerSentence(BaseModel):
@@ -35,6 +38,9 @@ class ChatAnswer(BaseModel):
 
     answer_status: Literal["answered", "insufficient_evidence"]
     blocks: list[AnswerBlock] = Field(min_length=1, max_length=40)
+    # Only when the user turned web search on: what web pages confirm, add to or
+    # contradict in the answer above. Cites web pages only; shown after the answer.
+    web_blocks: list[AnswerBlock] = Field(default_factory=list, max_length=10)
     limitations: list[str] = Field(default_factory=list, max_length=5)
 
 

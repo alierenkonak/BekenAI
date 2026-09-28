@@ -24,7 +24,7 @@ from app.llm.models import (
     SupportReport,
 )
 from app.llm.provider import PermanentLLMError, StructuredResult, TransientLLMError
-from app.web.search import WebHit, WebSearchError
+from app.web.search import TransientWebSearchError, WebHit, WebSearchError
 
 P, D, F, W = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01", "SOURCE_WEB_01"
 SCOPE = PrivateScope(workspace_id=uuid4(), conversation_id=uuid4(), case_id=uuid4())
@@ -533,93 +533,185 @@ def web_hit(text: str = "Uzaktan çalışana yemek yardımı işyeri uygulaması
 class FakeWebSearch:
     index_version = "tavily-advanced"
 
-    def __init__(self, hits: list[WebHit] | None = None) -> None:
+    def __init__(self, hits: list[WebHit] | None = None, *, error: Exception | None = None):
         self.hits = [web_hit()] if hits is None else hits
+        self.error = error
         self.queries: list[str] = []
 
     async def search(self, query: str) -> list[WebHit]:
         self.queries.append(query)
+        if self.error:
+            raise self.error
         return self.hits
 
 
-WEB_ANSWER = chat_answer(
-    paragraph(
-        ("Bu soruya web kaynaklarına göre cevap veriyorum.", []),
-        ("Yemek yardımı işyeri uygulamasına bağlı olarak ödenebilir.", [W]),
-        ("Dosyada sizden savunma istenmediği yazıyor.", [F]),
-    )
+WEB_QUERY = "uzaktan çalışan işçi yemek yardımı zorunlu mu Türk iş hukuku"
+WEB_PLAN = QueryPlan(intent="legal", search_query=REWRITTEN, web_query=WEB_QUERY)
+WEB_ANSWER = ChatAnswer(
+    answer_status="answered",
+    blocks=[
+        paragraph(
+            ("Verim nedeniyle fesihte önce savunma alınmalıdır.", [P, W]),
+            ("Dosyada sizden savunma istenmediği yazıyor.", [F]),
+        )
+    ],
+    web_blocks=[
+        paragraph(
+            ("Web'deki bir hukuk sitesi de savunma alınmasını şart görüyor.", [W, P]),
+        )
+    ],
 )
 
 
+def web_sentences(result) -> list[dict]:
+    return [s for block in result.structured_content["web_blocks"] for s in block["sentences"]]
+
+
 @pytest.mark.asyncio
-async def test_a_web_answer_searches_the_web_not_the_corpus_and_cites_pages() -> None:
-    provider = FakeProvider(WEB_ANSWER)
+async def test_web_search_adds_a_labelled_section_after_the_corpus_answer() -> None:
+    provider = FakeProvider(WEB_ANSWER, plan=WEB_PLAN)
     web = FakeWebSearch()
     chat = service(provider, web=web)
 
-    result = await ask(chat, search_mode="web", include_doctrine=True)
+    result = await ask(chat, search_mode="web")
 
-    assert chat.coordinator.searches == []
-    assert web.queries == [REWRITTEN]
-    # The user's files still supply the facts; their passages never leave for the web.
+    # Our usual search runs as always; the web gets only the planner's general query.
+    assert chat.coordinator.searches == [(REWRITTEN, "primary")]
     assert chat.private_retriever.calls == [(REWRITTEN, SCOPE)]
-    assert "genel bir web arama motoruna" in provider.prompts["QueryPlan"]
+    assert web.queries == [WEB_QUERY]
+    assert "web_query alanına" in provider.prompts["QueryPlan"]
     prompt = provider.prompts["ChatAnswer"]
-    assert "web sayfalarına dayanarak" in prompt and "<web_evidence>" in prompt
-    assert "site=hukuk.example.com" in prompt and "published=2025-02-01" in prompt
-    assert "<evidence>" not in prompt and "SOURCE_DOCTRINE_*" not in prompt
+    assert "<evidence>" in prompt and "<web_evidence>" in prompt
+    assert "Web araması (kullanıcı açtı)" in prompt and "site=hukuk.example.com" in prompt
 
-    web_citation = next(c for c in result.citations if c["source_channel"] == "web")
-    assert web_citation["source_scope"] == "web" and web_citation["source_id"] == W
-    assert web_citation["document_id"] is None and web_citation["file_chunk_id"] is None
-    snapshot = web_citation["source_snapshot"]
-    assert snapshot["source_url"] == "https://hukuk.example.com/uzaktan-calisma"
-    assert snapshot["exact_passage"] == web_hit().text and snapshot["site"] == "hukuk.example.com"
-    assert result.structured_content["search_mode"] == "web"
-    assert result.structured_content["web_search_offered"] is False
-    assert result.index_versions == {
-        "web:web": "tavily-advanced",
-        "private:file": "beken_private_files_bge_m3_v1",
+    # Neither section may borrow the other's sources.
+    [rule, fact] = sentences(result)
+    [web_claim] = web_sentences(result)
+    assert rule["source_ids"] == [P] and fact["source_ids"] == [F]
+    assert web_claim["source_ids"] == [W] and web_claim["verification"] == "verified"
+    channels = {(c["claim_id"], c["source_channel"], c["source_scope"]) for c in result.citations}
+    assert channels == {
+        ("S1", "primary", "global"),
+        ("S2", "file", "private"),
+        ("S3", "web", "web"),
     }
-    assert result.corpus_versions == {}
+    snapshot = next(c for c in result.citations if c["source_id"] == W)["source_snapshot"]
+    assert snapshot["source_url"] == "https://hukuk.example.com/uzaktan-calisma"
+
+    structured = result.structured_content
+    assert structured["search_mode"] == "web" and structured["web_search_status"] == "found"
+    assert structured["web_search_offered"] is False
+    assert "Web araması (resmî kaynak değildir)" in result.content
+    assert result.index_versions == {
+        "labour_law:primary": "primary-index",
+        "private:file": "beken_private_files_bge_m3_v1",
+        "web:web": "tavily-advanced",
+    }
 
 
 @pytest.mark.asyncio
-async def test_web_passages_are_verified_like_any_other_source() -> None:
-    provider = FakeProvider(WEB_ANSWER, support={W: "unsupported"})
+async def test_web_sentences_are_verified_like_any_other() -> None:
+    provider = FakeProvider(WEB_ANSWER, plan=WEB_PLAN, support={W: "unsupported"})
     result = await ask(service(provider, web=FakeWebSearch()), search_mode="web")
 
-    claim = sentences(result)[1]
-    assert claim["verification"] == "unverified" and claim["source_ids"] == []
+    [web_claim] = web_sentences(result)
+    assert web_claim["verification"] == "unverified" and web_claim["source_ids"] == []
     assert all(c["source_channel"] != "web" for c in result.citations)
+    assert result.structured_content["unverified_count"] == 1
 
 
 @pytest.mark.asyncio
-async def test_a_requested_web_search_runs_even_for_a_short_follow_up() -> None:
-    provider = FakeProvider(WEB_ANSWER, plan=QueryPlan(intent="conversation"))
-    web = FakeWebSearch()
-    await ask(service(provider, web=web), search_mode="web", message="Peki web'de?")
+async def test_an_empty_web_search_leaves_a_short_note() -> None:
+    provider = FakeProvider(MIXED, plan=WEB_PLAN)
+    result = await ask(service(provider, web=FakeWebSearch([])), search_mode="web")
 
-    assert web.queries and web.queries[0].startswith("İşveren fesih gerekçesi")
+    assert "web_blocks alanını boş bırak" in provider.prompts["ChatAnswer"]
+    [note] = web_sentences(result)
+    assert note["text"] == "Web aramasında bu soruyla ilgili bir sayfa bulunamadı."
+    assert note["verification"] == "plain" and note["source_ids"] == []
+    # The note gets its own id after the answer's sentences.
+    assert note["id"] == f"S{len(sentences(result)) + 1}"
+    assert result.structured_content["web_search_status"] == "empty"
 
 
 @pytest.mark.asyncio
-async def test_an_empty_web_search_says_so_instead_of_guessing() -> None:
-    answer = chat_answer(
-        paragraph(("Web'de de bu konuda bir kaynak bulamadım.", [])),
-        status="insufficient_evidence",
+async def test_a_web_section_the_model_left_empty_still_says_so() -> None:
+    result = await ask(
+        service(FakeProvider(MIXED, plan=WEB_PLAN), web=FakeWebSearch()), search_mode="web"
     )
-    provider = FakeProvider(answer)
-    result = await ask(service(provider, files=[], web=FakeWebSearch([])), search_mode="web")
-
-    assert "web araması da ilgili bir sayfa bulamadı" in provider.prompts["ChatAnswer"]
-    assert result.structured_content["web_search_offered"] is False
+    [note] = web_sentences(result)
+    assert note["text"] == "Web'de bulunan sayfalar bu cevaba ek bir bilgi getirmedi."
 
 
 @pytest.mark.asyncio
-async def test_web_mode_without_a_configured_search_fails_with_a_safe_code() -> None:
-    with pytest.raises(WebSearchError, match="web_search_unavailable"):
-        await ask(service(FakeProvider(WEB_ANSWER)), search_mode="web")
+@pytest.mark.parametrize(
+    ("web", "status", "note"),
+    [
+        (
+            FakeWebSearch(error=TransientWebSearchError("web_search_temporarily_unavailable")),
+            "web_search_temporarily_unavailable",
+            "Web araması şu an yapılamadı",
+        ),
+        (
+            FakeWebSearch(error=WebSearchError("web_search_quota_exceeded")),
+            "web_search_quota_exceeded",
+            "Bu ayın web araması hakkı dolduğu için",
+        ),
+        (None, "web_search_unavailable", "Web araması şu an yapılamadı"),
+    ],
+)
+async def test_a_failed_web_search_still_answers_from_our_sources(web, status, note) -> None:
+    result = await ask(service(FakeProvider(MIXED, plan=WEB_PLAN), web=web), search_mode="web")
+
+    assert result.answer_status == "answered"
+    assert {c["source_channel"] for c in result.citations} == {"primary", "file"}
+    assert result.structured_content["web_search_status"] == status
+    assert web_sentences(result)[0]["text"].startswith(note)
+
+
+@pytest.mark.asyncio
+async def test_small_talk_with_web_search_on_searches_nothing() -> None:
+    answer = chat_answer(paragraph(("Rica ederim!", [])))
+    provider = FakeProvider(answer, plan=QueryPlan(intent="conversation"))
+    web = FakeWebSearch()
+    chat = service(provider, web=web)
+
+    result = await ask(chat, search_mode="web", message="Teşekkürler")
+
+    assert chat.coordinator.searches == [] and web.queries == []
+    assert result.structured_content["web_blocks"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_corpus_answer_drops_any_web_section_the_model_wrote() -> None:
+    result = await ask(service(FakeProvider(WEB_ANSWER), web=FakeWebSearch()))
+
+    assert result.structured_content["web_blocks"] == []
+    assert sentences(result)[0]["source_ids"] == [P]
+
+
+@pytest.mark.asyncio
+async def test_the_web_query_leaves_out_what_only_the_conversation_knows() -> None:
+    history = [{"role": "user", "content": "Ahmet Yılmaz'ın fesih bildirimi ne diyor?"}]
+    planned = await plan_query(
+        FakeProvider(MIXED, plan=WEB_PLAN), model="m", message="x", history=history, for_web=True
+    )
+    assert planned.web_query == WEB_QUERY and planned.search_query == REWRITTEN
+
+    # A planner that forgot the web query falls back to the user's own words.
+    bare = await plan_query(
+        FakeProvider(MIXED),
+        model="m",
+        message="Yemek ücreti zorunlu mu?",
+        history=history,
+        for_web=True,
+    )
+    assert bare.web_query == "Yemek ücreti zorunlu mu?"
+
+    fallback = fallback_plan("Yemek ücreti zorunlu mu?", history, for_web=True)
+    assert fallback.web_query == "Yemek ücreti zorunlu mu?"
+    assert "Ahmet" in fallback.search_query
+    assert fallback_plan("Yemek ücreti zorunlu mu?", history).web_query == ""
 
 
 @pytest.mark.asyncio

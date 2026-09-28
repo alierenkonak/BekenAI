@@ -2,8 +2,9 @@
 
 import type { ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
-import { DoctrineSwitch } from '@/components/ui';
+import { DoctrineSwitch, WebSearchSwitch } from '@/components/ui';
 import { CHAT_MESSAGE_MAX } from '@/lib/config';
+import { WEB_SEARCH_HINT } from '@/lib/web-search';
 
 export function Composer({
   value,
@@ -11,6 +12,7 @@ export function Composer({
   onSubmit,
   includeDoctrine,
   onDoctrineChange,
+  webSearch,
   busy = false,
   variant,
   placeholder,
@@ -23,6 +25,8 @@ export function Composer({
   onSubmit: () => void;
   includeDoctrine: boolean;
   onDoctrineChange: (value: boolean) => void;
+  /** Present only when the server can search the web. */
+  webSearch?: { checked: boolean; onChange: (value: boolean) => void };
   busy?: boolean;
   variant: 'hero' | 'compact';
   placeholder: string;
@@ -45,7 +49,7 @@ export function Composer({
         event.preventDefault();
         submit();
       }}
-      className={`flex flex-col border border-line-strong bg-surface shadow-soft ${variant === 'hero' ? 'rounded-2xl' : 'rounded-[14px]'}`}
+      className={`relative flex flex-col border border-line-strong bg-surface shadow-soft ${variant === 'hero' ? 'rounded-2xl' : 'rounded-[14px]'}`}
     >
       {locked && (
         <p role="status" className="m-0 flex items-center gap-2 border-b border-line px-4 py-2.5 text-[12.5px] text-fg2">
@@ -82,6 +86,16 @@ export function Composer({
           </span>
         )}
         <DoctrineSwitch checked={includeDoctrine} onChange={onDoctrineChange} compact={variant === 'compact'} label={variant === 'hero' ? 'Doktrin kaynakları' : 'Doktrin'} />
+        {webSearch && (
+          <WebSearchSwitch
+            checked={webSearch.checked}
+            onChange={webSearch.onChange}
+            compact={variant === 'compact'}
+            label={variant === 'hero' ? 'Web araması' : 'Web'}
+            hintId={`web-search-hint-${variant}`}
+            hint={WEB_SEARCH_HINT}
+          />
+        )}
         {extra}
         <span className="grow" />
         <span className={`font-mono text-[11.5px] ${nearLimit ? 'text-err' : 'text-fg3'}`} aria-live="polite">

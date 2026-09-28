@@ -174,7 +174,6 @@ function ConversationalAnswerView({
   webSearchBusy: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const web = answer.search_mode === 'web';
   const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
   const sourceSummary = [
     count('file') ? `${count('file')} dosya pasajı` : null,
@@ -186,29 +185,32 @@ function ConversationalAnswerView({
     .join(' · ');
   const seconds = formatSeconds(generation?.latency_ms ?? null);
   const corpus = generation?.corpus_versions?.['labour_law:primary'];
-  const index = generation?.index_versions?.['labour_law:primary'] ?? generation?.index_versions?.['web:web'];
+  const index = generation?.index_versions?.['labour_law:primary'];
+  // The badge speaks for the answer itself; the web section is labelled on its own.
+  const answerSources = rendered.sources.filter((source) => source.channel !== 'web');
+  const answerUnverified = rendered.blocks.some((block) => block.sentences.some((sentence) => sentence.unverified));
   const status =
     answer.answer_status === 'insufficient_evidence'
       ? { tone: 'neutral' as const, icon: 'searchX' as const, label: 'Kaynak bulunamadı' }
-      : web
-        ? { tone: 'web' as const, icon: 'globe' as const, label: 'Web kaynaklı' }
-        : rendered.unverifiedCount > 0
-          ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
-          : rendered.sources.length > 0
-            ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
-            : null;
+      : answerUnverified
+        ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
+        : answerSources.length > 0
+          ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
+          : null;
 
   const copy = async () => {
-    const text = rendered.blocks
-      .map((block) =>
-        block.kind === 'bullets'
-          ? block.sentences.map((sentence) => `- ${sentence.text} ${sentence.chips.map((chip) => `[${chip.label}]`).join('')}`.trimEnd()).join('\n')
-          : block.sentences.map((sentence) => `${sentence.text}${sentence.chips.map((chip) => ` [${chip.label}]`).join('')}`).join(' '),
-      )
-      .join('\n\n');
+    const text = (blocks: RenderedConversation['blocks']) =>
+      blocks
+        .map((block) =>
+          block.kind === 'bullets'
+            ? block.sentences.map((sentence) => `- ${sentence.text} ${sentence.chips.map((chip) => `[${chip.label}]`).join('')}`.trimEnd()).join('\n')
+            : block.sentences.map((sentence) => `${sentence.text}${sentence.chips.map((chip) => ` [${chip.label}]`).join('')}`).join(' '),
+        )
+        .join('\n\n');
     const lines = [
-      text,
+      text(rendered.blocks),
       ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
+      ...(rendered.webBlocks.length ? ['', 'Web araması (resmî kaynak değildir):', text(rendered.webBlocks)] : []),
       ...(rendered.sources.length
         ? [
             '',
@@ -247,46 +249,7 @@ function ConversationalAnswerView({
         </span>
       </div>
 
-      {web && (
-        <p className="m-0 flex items-start gap-2 rounded-xl border border-web-line bg-web-bg px-3.5 py-2.5 text-[12.5px] leading-normal text-fg2">
-          <Icon name="globe" size={14} className="mt-0.5 shrink-0 text-web" />
-          <span>
-            Bu cevap BekenAI&apos;nin mevzuat ve içtihat kaynaklarından değil, isteğiniz üzerine yapılan web aramasından
-            derlendi. Web sayfaları resmî kaynak değildir; önemli bilgileri mevzuattan veya Yargıtay kararlarından kontrol
-            edin.
-          </span>
-        </p>
-      )}
-
-      <div className="flex flex-col gap-3 text-[15px] leading-[1.7] [text-wrap:pretty]">
-        {rendered.blocks.map((block, blockIndex) => {
-          if (block.kind === 'heading') {
-            return (
-              <h3 key={blockIndex} className="m-0 mt-1.5 text-[15.5px] font-semibold leading-snug">
-                {block.sentences.map((sentence) => sentence.text).join(' ')}
-              </h3>
-            );
-          }
-          if (block.kind === 'bullets') {
-            return (
-              <ul key={blockIndex} className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-fg3">
-                {block.sentences.map((sentence) => (
-                  <li key={sentence.number}>
-                    <Sentence sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
-                  </li>
-                ))}
-              </ul>
-            );
-          }
-          return (
-            <p key={blockIndex} className="m-0">
-              {block.sentences.map((sentence) => (
-                <Sentence key={sentence.number} sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
-              ))}
-            </p>
-          );
-        })}
-      </div>
+      <Blocks blocks={rendered.blocks} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
 
       {rendered.unverifiedCount > 0 && (
         <p className="m-0 flex items-start gap-2 rounded-xl border border-dashed border-err-line px-3.5 py-2.5 text-[12.5px] leading-normal text-fg2">
@@ -307,6 +270,17 @@ function ConversationalAnswerView({
         </div>
       )}
 
+      {rendered.webBlocks.length > 0 && (
+        <section aria-label="Web araması" className="flex flex-col gap-2.5 rounded-xl border border-web-line px-4 py-3.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
+            <Icon name="globe" size={14} className="text-web" />
+            <span className="font-semibold text-web">Web&apos;de ne deniyor?</span>
+            <span className="text-fg3">Resmî kaynak değildir; yukarıdaki cevaptan ayrı değerlendirin.</span>
+          </div>
+          <Blocks blocks={rendered.webBlocks} selectedSourceId={selectedSourceId} onSelect={onSelectSource} compact />
+        </section>
+      )}
+
       {onWebSearch && <WebSearchOffer onSearch={onWebSearch} busy={webSearchBusy} />}
 
       <div className="flex flex-wrap items-center gap-1">
@@ -319,13 +293,58 @@ function ConversationalAnswerView({
           {copied ? 'Kopyalandı' : 'Kopyala'}
         </button>
         <span className="grow" />
-        {(corpus || index) && (
+        {corpus && (
           <span className="font-mono text-[11px] text-fg3" title="Cevabın üretildiği kaynak ve dizin sürümü">
-            {[corpus, index].filter(Boolean).join(' · ')}
+            {corpus}
+            {index ? ` · ${index}` : ''}
           </span>
         )}
       </div>
     </article>
+  );
+}
+
+function Blocks({
+  blocks,
+  selectedSourceId,
+  onSelect,
+  compact = false,
+}: {
+  blocks: RenderedConversation['blocks'];
+  selectedSourceId: string | null;
+  onSelect: (sourceId: string) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`flex flex-col [text-wrap:pretty] ${compact ? 'gap-2 text-[14px] leading-[1.65]' : 'gap-3 text-[15px] leading-[1.7]'}`}>
+      {blocks.map((block, blockIndex) => {
+        if (block.kind === 'heading') {
+          return (
+            <h3 key={blockIndex} className="m-0 mt-1.5 text-[15.5px] font-semibold leading-snug">
+              {block.sentences.map((sentence) => sentence.text).join(' ')}
+            </h3>
+          );
+        }
+        if (block.kind === 'bullets') {
+          return (
+            <ul key={blockIndex} className="m-0 flex list-disc flex-col gap-1.5 pl-5 marker:text-fg3">
+              {block.sentences.map((sentence) => (
+                <li key={sentence.number}>
+                  <Sentence sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelect} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return (
+          <p key={blockIndex} className="m-0">
+            {block.sentences.map((sentence) => (
+              <Sentence key={sentence.number} sentence={sentence} selectedSourceId={selectedSourceId} onSelect={onSelect} />
+            ))}
+          </p>
+        );
+      })}
+    </div>
   );
 }
 
@@ -334,8 +353,8 @@ function WebSearchOffer({ onSearch, busy }: { onSearch: () => void; busy: boolea
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-center">
       <p className="m-0 grow text-[13px] leading-normal text-fg2">
-        BekenAI&apos;nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web&apos;de arayabilirim; web sonuçları ayrıca
-        etiketlenir ve resmî kaynak yerine geçmez.
+        BekenAI&apos;nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web&apos;de de arayabilirim; bulunanlar cevabın
+        sonuna ayrı ve etiketli bir bölüm olarak eklenir.
       </p>
       <button
         type="button"

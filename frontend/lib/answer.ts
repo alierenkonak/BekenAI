@@ -57,6 +57,8 @@ export interface RenderedLegacyAnswer {
 export interface RenderedConversation {
   kind: 'conversational';
   blocks: RenderedBlock[];
+  /** The labelled web section after the answer; empty without web search. */
+  webBlocks: RenderedBlock[];
   sources: SourceRef[];
   unverifiedCount: number;
 }
@@ -106,19 +108,23 @@ export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): R
 function renderConversation(answer: ConversationalAnswer, citations: Citation[]): RenderedConversation {
   const { chipsFor, sources } = createNumbering(citations);
   let number = 0;
-  const blocks = answer.blocks.map((block) => ({
-    kind: block.kind,
-    sentences: block.sentences.map((sentence) => {
-      number += 1;
-      return {
-        number,
-        text: sentence.text,
-        chips: chipsFor(sentence.id, number, sentence.text, sentence.source_ids),
-        unverified: sentence.verification === 'unverified',
-      };
-    }),
-  }));
-  return { kind: 'conversational', blocks, sources: sources(), unverifiedCount: answer.unverified_count ?? 0 };
+  const render = (items: AnswerBlock[]): RenderedBlock[] =>
+    items.map((block) => ({
+      kind: block.kind,
+      sentences: block.sentences.map((sentence) => {
+        number += 1;
+        return {
+          number,
+          text: sentence.text,
+          chips: chipsFor(sentence.id, number, sentence.text, sentence.source_ids),
+          unverified: sentence.verification === 'unverified',
+        };
+      }),
+    }));
+  // Numbered in reading order: the answer first, then the web section.
+  const blocks = render(answer.blocks);
+  const webBlocks = render(answer.web_blocks ?? []);
+  return { kind: 'conversational', blocks, webBlocks, sources: sources(), unverifiedCount: answer.unverified_count ?? 0 };
 }
 
 function renderLegacy(answer: LegacyAnswer, citations: Citation[]): RenderedLegacyAnswer {
