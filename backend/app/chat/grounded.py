@@ -69,6 +69,17 @@ class CompletedAnswer:
     corpus_versions: dict[str, str]
     index_versions: dict[str, str]
     retrieval_query: str | None = None
+    thinking_tokens: int | None = None
+
+
+@dataclass(frozen=True)
+class PreparedTurn:
+    message: str
+    history: list[dict]
+    include_doctrine: bool
+    plan: QueryPlan
+    sources: list[Source]
+    started: float
 
 
 class GroundedChatService:
@@ -96,6 +107,29 @@ class GroundedChatService:
         on_stage: StageCallback | None = None,
         private_scope: PrivateScope | None = None,
     ) -> CompletedAnswer:
+        turn = await self.prepare(
+            message=message,
+            retrieval_query=retrieval_query,
+            domain=domain,
+            include_doctrine=include_doctrine,
+            history=history,
+            on_stage=on_stage,
+            private_scope=private_scope,
+        )
+        return await self.respond(turn, on_stage=on_stage)
+
+    async def prepare(
+        self,
+        *,
+        message: str,
+        retrieval_query: str,
+        domain: str,
+        include_doctrine: bool,
+        history: list[dict],
+        on_stage: StageCallback | None = None,
+        private_scope: PrivateScope | None = None,
+    ) -> PreparedTurn:
+        """Plan the search and gather evidence; separate so evaluations can reuse it."""
         started = monotonic()
         await self._report(on_stage, "retrieving")
         selected_history = select_history(history)
@@ -116,11 +150,25 @@ class GroundedChatService:
                 + sum(estimate_tokens(item["content"]) for item in selected_history)
                 + 3_000,
             )
-        prompt = self._answer_prompt(
+        return PreparedTurn(
             message=message,
             history=selected_history,
-            sources=sources,
             include_doctrine=include_doctrine,
+            plan=plan,
+            sources=sources,
+            started=started,
+        )
+
+    async def respond(
+        self, turn: PreparedTurn, *, on_stage: StageCallback | None = None
+    ) -> CompletedAnswer:
+        """Write the answer for prepared evidence, then verify it sentence by sentence."""
+        started, plan, sources = turn.started, turn.plan, turn.sources
+        prompt = self._answer_prompt(
+            message=turn.message,
+            history=turn.history,
+            sources=sources,
+            include_doctrine=turn.include_doctrine,
             plan=plan,
         )
         await self._report(on_stage, "generating")
@@ -171,6 +219,7 @@ class GroundedChatService:
             verifier_model=self.settings.gemini_claim_support_model if pairs else None,
             input_tokens=generated.input_tokens,
             output_tokens=generated.output_tokens,
+            thinking_tokens=generated.thinking_tokens,
             latency_ms=int((monotonic() - started) * 1000),
             corpus_versions={
                 f"{source.hit.record.domain_code}:{source.channel}": (
@@ -264,7 +313,10 @@ class GroundedChatService:
         for attempt in (1, 2):
             try:
                 result = await self.provider.structured_output(
-                    model=self.settings.gemini_primary_model, prompt=prompt, schema=ChatAnswer
+                    model=self.settings.gemini_primary_model,
+                    prompt=prompt,
+                    schema=ChatAnswer,
+                    thinking_level=self.settings.gemini_answer_thinking_level,
                 )
                 return result, False
             except (TransientLLMError, PermanentLLMError) as exc:
@@ -346,6 +398,7 @@ class GroundedChatService:
             model=self.settings.gemini_claim_support_model,
             prompt=prompt,
             schema=SupportReport,
+            temperature=self.settings.gemini_verifier_temperature,
         )
         report = result.value
         if not isinstance(report, SupportReport):

@@ -116,10 +116,12 @@ class FakeProvider:
         self.primary_error = primary_error
         self.calls: list[str] = []
         self.prompts: dict[str, str] = {}
+        self.options: dict[str, dict] = {}
 
-    async def structured_output(self, *, model: str, prompt: str, schema):
+    async def structured_output(self, *, model: str, prompt: str, schema, **options):
         self.calls.append(f"{model}:{schema.__name__}")
         self.prompts[schema.__name__] = prompt
+        self.options[f"{model}:{schema.__name__}"] = options
         if schema is QueryPlan:
             if isinstance(self.plan, Exception):
                 raise self.plan
@@ -213,17 +215,17 @@ def test_retrieval_query_is_deterministic_and_at_most_500_characters() -> None:
     assert "işe iade" in first
 
 
-def test_chat_message_limit_is_1500_characters() -> None:
-    ChatRequest(message="x" * 1500)
+def test_chat_message_limit_is_4000_characters() -> None:
+    ChatRequest(message="x" * 4000)
     with pytest.raises(ValidationError):
-        ChatRequest(message="x" * 1501)
+        ChatRequest(message="x" * 4001)
 
 
-def test_target_context_cannot_exceed_128k_hard_limit() -> None:
+def test_target_context_cannot_exceed_the_hard_limit() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, gemini_target_input_tokens=128_000, gemini_max_input_tokens=64_000)
     with pytest.raises(ValidationError):
-        Settings(_env_file=None, gemini_max_input_tokens=128_001)
+        Settings(_env_file=None, gemini_max_input_tokens=192_001)
 
 
 def test_history_keeps_only_last_12_messages() -> None:
@@ -435,12 +437,14 @@ class FlakyPrimary(FakeProvider):
         self.failures = failures
         self.error = error
 
-    async def structured_output(self, *, model: str, prompt: str, schema):
+    async def structured_output(self, *, model: str, prompt: str, schema, **options):
         if schema is ChatAnswer and model == "gemini-primary" and self.failures:
             self.failures -= 1
             self.calls.append(f"{model}:{schema.__name__}")
             raise self.error
-        return await super().structured_output(model=model, prompt=prompt, schema=schema)
+        return await super().structured_output(
+            model=model, prompt=prompt, schema=schema, **options
+        )
 
 
 def _status_error(status: int) -> TransientLLMError:
@@ -487,3 +491,18 @@ async def test_answer_reports_pipeline_stages_in_order() -> None:
 
     await ask(service(FakeProvider(MIXED)), on_stage=record)
     assert stages == ["retrieving", "generating", "verifying"]
+
+
+@pytest.mark.asyncio
+async def test_the_answer_thinks_hard_and_the_verifier_is_deterministic(monkeypatch) -> None:
+    monkeypatch.setattr("app.chat.grounded.PRIMARY_RETRY_DELAY_SECONDS", 0)
+    provider = FakeProvider(MIXED)
+    await ask(service(provider))
+
+    assert provider.options["gemini-primary:ChatAnswer"] == {"thinking_level": "high"}
+    assert provider.options["gemini-support:SupportReport"] == {"temperature": 0.0}
+
+    fallback = FakeProvider(MIXED, primary_error=PermanentLLMError("output_truncated"))
+    await ask(service(fallback))
+    # The fallback model keeps its own defaults; it may not support the thinking setting.
+    assert fallback.options["gemini-fallback:ChatAnswer"] == {}

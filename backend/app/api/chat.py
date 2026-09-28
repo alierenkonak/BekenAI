@@ -18,7 +18,8 @@ router = APIRouter(tags=["chat"])
 class ChatRequest(BaseModel):
     conversation_id: UUID | None = None
     case_id: UUID | None = None
-    message: str = Field(min_length=3, max_length=1500)
+    # Room for a pasted fact pattern; whole documents belong in an uploaded file.
+    message: str = Field(min_length=3, max_length=4000)
     domain: Literal["labour_law"] = "labour_law"
     include_doctrine: bool = False
 

@@ -89,11 +89,23 @@ class GeminiProvider:
         self.maximum_output_tokens = settings.gemini_max_output_tokens
         self.timeout_ms = int(settings.gemini_timeout_seconds * 1000)
 
-    def _config(self, schema: type[BaseModel] | None = None) -> types.GenerateContentConfig:
+    def _config(
+        self,
+        schema: type[BaseModel] | None = None,
+        *,
+        temperature: float | None = None,
+        thinking_level: str | None = None,
+    ) -> types.GenerateContentConfig:
         return types.GenerateContentConfig(
             max_output_tokens=self.maximum_output_tokens,
             response_mime_type="application/json" if schema else None,
             response_json_schema=_gemini_json_schema(schema) if schema else None,
+            temperature=temperature,
+            thinking_config=(
+                types.ThinkingConfig(thinking_level=types.ThinkingLevel(thinking_level.upper()))
+                if thinking_level
+                else None
+            ),
         )
 
     def _client(self) -> genai.Client:
@@ -129,14 +141,22 @@ class GeminiProvider:
             self._raise_safe(exc)
 
     async def structured_output(
-        self, *, model: str, prompt: str, schema: type[T]
+        self,
+        *,
+        model: str,
+        prompt: str,
+        schema: type[T],
+        temperature: float | None = None,
+        thinking_level: str | None = None,
     ) -> StructuredResult:
         try:
             async with self._client().aio as client:
                 response = await client.models.generate_content(
                     model=model,
                     contents=prompt,
-                    config=self._config(schema),
+                    config=self._config(
+                        schema, temperature=temperature, thinking_level=thinking_level
+                    ),
                 )
             candidate = response.candidates[0] if response.candidates else None
             if getattr(candidate, "finish_reason", None) == types.FinishReason.MAX_TOKENS:
@@ -155,6 +175,7 @@ class GeminiProvider:
                 model=model,
                 input_tokens=getattr(usage, "prompt_token_count", None),
                 output_tokens=getattr(usage, "candidates_token_count", None),
+                thinking_tokens=getattr(usage, "thoughts_token_count", None),
             )
         except (ValidationError, json.JSONDecodeError) as exc:
             raise PermanentLLMError("invalid_structured_output") from exc

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, SecretStr, model_validator
@@ -28,10 +29,17 @@ class Settings(BaseSettings):
     gemini_claim_support_model: str = "gemini-3.5-flash-lite"
     # Rewrites follow-up questions into standalone search queries; small and fast.
     gemini_query_model: str = "gemini-3.5-flash-lite"
-    gemini_target_input_tokens: int = Field(default=64_000, ge=8_000, le=128_000)
-    gemini_max_input_tokens: int = Field(default=128_000, ge=16_000, le=128_000)
-    # Thinking tokens count against this budget too; conversational answers need room.
-    gemini_max_output_tokens: int = Field(default=8_192, ge=512, le=16_384)
+    # Evidence budget per answer. Retrieval rarely fills it; it is a ceiling, not a target
+    # to reach. Gemini Flash accepts far more, the free tier allows 250K input tokens/min.
+    gemini_target_input_tokens: int = Field(default=96_000, ge=8_000, le=192_000)
+    gemini_max_input_tokens: int = Field(default=160_000, ge=16_000, le=192_000)
+    # Thinking tokens count against this budget too; "high" thinking needs the headroom.
+    gemini_max_output_tokens: int = Field(default=16_384, ge=512, le=32_768)
+    # Deeper reasoning for the answer (primary model only; the fallback keeps its default).
+    gemini_answer_thinking_level: Literal["minimal", "low", "medium", "high"] | None = "high"
+    # Verification is classification: the same pair should always get the same verdict.
+    # None keeps the model's default (used by the evaluation's "before" variant).
+    gemini_verifier_temperature: float | None = Field(default=0.0, ge=0.0, le=2.0)
     gemini_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
     chat_worker_poll_seconds: float = Field(default=2.0, ge=0.25, le=30)
     chat_worker_stale_minutes: int = Field(default=10, ge=2, le=120)
