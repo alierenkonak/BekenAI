@@ -48,7 +48,12 @@ dışa aktarma komutu, ölçülen dosyanın bayt bayt aynısını (aynı SHA-256
 ## Sonuç
 
 - Reranker yaklaşık 3,3 kat hızlanır ve süresi daha kararlı olur. Model dosyası 2,27 GB'tan
-  570 MB'a iner. Model servisi PyTorch'u artık hiç yüklemez.
+  570 MB'a iner ve servis 38 sn yerine yaklaşık 9 sn'de açılır. PyTorch reranker modeli artık
+  belleğe yüklenmez; `torch` kütüphanesi ise tokenizer için `transformers` üzerinden yine
+  import edilir.
+- Canlıya alındıktan sonra aynı yöntemle beş soruda ölçülen reranker'lı arama 10,6–20,8 sn
+  (ortalama yaklaşık 15 sn) sürdü; önceki PyTorch sürümünde 42,7–57,4 sn (ortalama yaklaşık
+  47 sn) sürüyordu.
 - Sıralama int8 yuvarlaması yüzünden 40 sorunun 3'ünde ilk sırada değişir. İlk 10'un %97'si
   aynı kalır; beklenen madde ölçütünde kayıp yoktur.
 - Sohbet, reranker'ın sıraladığı 25 adayın hepsini modele verir. Bu yüzden int8 farkı
