@@ -55,7 +55,7 @@ def derive_retrieval_query(message: str, *, maximum: int = 500) -> str:
     return query
 
 
-_HISTORY_CHARS = 1_500
+_HISTORY_CHARS = 2_500
 
 
 def fallback_plan(message: str, history: list[dict]) -> QueryPlan:

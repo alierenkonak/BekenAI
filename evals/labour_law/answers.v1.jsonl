@@ -1,0 +1,10 @@
+{"id": "A01", "question": "İşveren hiçbir gerekçe göstermeden iş sözleşmemi feshedebilir mi?"}
+{"id": "A02", "question": "Performans düşüklüğü nedeniyle işten çıkarıldım ama savunmam alınmadı. İşe iade davası açabilir miyim, ne talep edebilirim?"}
+{"id": "A03", "question": "Kıdem tazminatı nasıl hesaplanır, hangi ödemeler hesaba katılır?"}
+{"id": "A04", "question": "İmzalı bordroda fazla mesai görünmüyor. Fazla çalışma alacağımı nasıl ispat ederim?"}
+{"id": "A05", "question": "Yıllık izin hakkım kaç gün, kullanmadığım izinlerin ücretini alabilir miyim?"}
+{"id": "A06", "question": "Ücretim iki aydır ödenmiyor. İş sözleşmemi haklı nedenle feshedebilir miyim, kıdem tazminatı alır mıyım?"}
+{"id": "A07", "question": "İşe iade davası açmadan önce arabulucuya gitmek zorunlu mu, süreler nelerdir?"}
+{"id": "A08", "question": "Peki bunu yaparsam ihbar tazminatı da alabilir miyim?", "history": [{"role": "user", "content": "Ücretim iki aydır ödenmiyor, ne yapabilirim?"}, {"role": "assistant", "content": "Ücretin zamanında ödenmemesi işçiye iş sözleşmesini haklı nedenle derhal feshetme imkânı verir; bu durumda kıdem tazminatı da talep edilebilir."}]}
+{"id": "A09", "question": "işveren beni geri almazsa ne olur?", "history": [{"role": "user", "content": "Savunmam alınmadan işten çıkarıldım, işe iade davası açtım. Kazanırsam ne olur?"}, {"role": "assistant", "content": "Mahkeme feshin geçersizliğine karar verirse işe iade edilmeniz için işverene başvurmanız gerekir."}]}
+{"id": "A10", "question": "Merhaba, sen neler yapabiliyorsun?"}

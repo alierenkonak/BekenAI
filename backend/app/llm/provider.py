@@ -21,6 +21,7 @@ class StructuredResult(BaseModel):
     model: str
     input_tokens: int | None = None
     output_tokens: int | None = None
+    thinking_tokens: int | None = None
 
 
 class LLMProvider(Protocol):
@@ -29,5 +30,11 @@ class LLMProvider(Protocol):
     def stream(self, *, model: str, prompt: str) -> AsyncIterator[str]: ...
 
     async def structured_output(
-        self, *, model: str, prompt: str, schema: type[T]
+        self,
+        *,
+        model: str,
+        prompt: str,
+        schema: type[T],
+        temperature: float | None = None,
+        thinking_level: str | None = None,
     ) -> StructuredResult: ...

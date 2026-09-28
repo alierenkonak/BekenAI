@@ -10,7 +10,7 @@ from app.files.retrieval import PrivateHit
 
 # File passages go in first, but may take at most this share of the context so the
 # law they are compared against always fits too.
-FILE_CONTEXT_TOKENS = 16_000
+FILE_CONTEXT_TOKENS = 24_000
 
 
 def estimate_tokens(text: str) -> int:
@@ -160,7 +160,7 @@ class FileEvidenceSource:
         }
 
 
-def select_history(messages: list[dict], *, maximum_tokens: int = 16_000) -> list[dict]:
+def select_history(messages: list[dict], *, maximum_tokens: int = 24_000) -> list[dict]:
     selected: list[dict] = []
     used = 0
     for message in reversed(messages[-12:]):
