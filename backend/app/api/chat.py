@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.common import map_repository_error
@@ -22,6 +22,8 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=3, max_length=4000)
     domain: Literal["labour_law"] = "labour_law"
     include_doctrine: bool = False
+    # "web" is offered only after the corpus found nothing, and only when configured.
+    search_mode: Literal["corpus", "web"] = "corpus"
 
     @field_validator("message")
     @classmethod
@@ -43,6 +45,11 @@ async def enqueue_chat(
     ],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict:
+    if payload.search_mode == "web" and not settings.web_search_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "web_search_unavailable"},
+        )
     try:
         return await repository.enqueue_chat(
             user.id,
@@ -55,9 +62,18 @@ async def enqueue_chat(
             retrieval_query=derive_retrieval_query(payload.message),
             requested_model=settings.gemini_primary_model,
             max_active_jobs=settings.chat_max_active_jobs,
+            search_mode=payload.search_mode,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None
+
+
+@router.get("/chat/capabilities")
+async def chat_capabilities(
+    _user: CurrentUser, settings: Annotated[Settings, Depends(get_settings)]
+) -> dict:
+    """Optional features the client may offer; the key itself never leaves the server."""
+    return {"web_search": settings.web_search_enabled}
 
 
 @router.get("/chat/generations/{generation_id}")

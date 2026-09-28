@@ -63,7 +63,7 @@ export interface RenderedConversation {
 
 export type RenderedAnswer = RenderedLegacyAnswer | RenderedConversation;
 
-const LABEL_PREFIX: Record<SourceChannel, string> = { primary: '', doctrine: 'D', file: 'F' };
+const LABEL_PREFIX: Record<SourceChannel, string> = { primary: '', doctrine: 'D', file: 'F', web: 'W' };
 
 export function isConversational(answer: StructuredAnswer): answer is ConversationalAnswer {
   return answer.format === 'conversational-v1';
@@ -71,13 +71,13 @@ export function isConversational(answer: StructuredAnswer): answer is Conversati
 
 /**
  * Numbers sources by first appearance per channel (file F1, F2…; primary 1, 2…;
- * doctrine D1, D2…) and joins each sentence–source pair to its persisted citation so
+ * doctrine D1, D2…; web W1, W2…) and joins each sentence–source pair to its persisted citation so
  * chips carry the verifier's verdict.
  */
 function createNumbering(citations: Citation[]) {
   const citationByPair = new Map(citations.map((citation) => [`${citation.claim_id}::${citation.source_id}`, citation]));
   const sources = new Map<string, SourceRef>();
-  const counts: Record<SourceChannel, number> = { primary: 0, doctrine: 0, file: 0 };
+  const counts: Record<SourceChannel, number> = { primary: 0, doctrine: 0, file: 0, web: 0 };
 
   const chipsFor = (claimId: string, number: number, text: string, sourceIds: string[]): Chip[] => {
     const chips: Chip[] = [];
@@ -137,6 +137,7 @@ function renderLegacy(answer: LegacyAnswer, citations: Citation[]): RenderedLega
 }
 
 export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel): string {
+  if (channel === 'web') return 'Web';
   if (channel === 'file') return 'Dosya';
   if (channel === 'doctrine') return 'Doktrin';
   return snapshot.decision_metadata.case_number || snapshot.decision_metadata.decision_number ? 'İçtihat' : 'Mevzuat';
@@ -145,6 +146,10 @@ export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel): st
 export function sourceSubtitle(snapshot: SourceSnapshot): string {
   if (snapshot.source_scope === 'private') {
     return [snapshot.location_label, snapshot.section_title].filter(Boolean).join(' · ');
+  }
+  if (snapshot.source_scope === 'web') {
+    const published = snapshot.published_date ? new Date(snapshot.published_date).toLocaleDateString('tr-TR') : null;
+    return [snapshot.site, published].filter(Boolean).join(' · ');
   }
   const decision = snapshot.decision_metadata;
   const parts: string[] = [];

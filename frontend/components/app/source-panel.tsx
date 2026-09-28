@@ -23,16 +23,21 @@ export function SourcePanel({
   const { snapshot } = selected;
   const doctrine = selected.channel === 'doctrine';
   const file = selected.channel === 'file';
+  const web = selected.channel === 'web';
   const tone = file
     ? { solid: 'bg-file', soft: 'bg-file-bg text-file' }
     : doctrine
       ? { solid: 'bg-doc', soft: 'bg-doc-bg text-doc' }
-      : { solid: 'bg-accent', soft: 'bg-accent-bg text-accent' };
+      : web
+        ? { solid: 'bg-web', soft: 'bg-web-bg text-web' }
+        : { solid: 'bg-accent', soft: 'bg-accent-bg text-accent' };
   const kind = file
     ? `Dosya${snapshot.location_label ? ` · ${snapshot.location_label}` : ''}`
     : doctrine
       ? 'Doktrin · yardımcı kaynak'
-      : `Birincil · ${sourceKind(snapshot, selected.channel)}`;
+      : web
+        ? 'Web sayfası · resmî kaynak değil'
+        : `Birincil · ${sourceKind(snapshot, selected.channel)}`;
   const allPartial = selected.claims.every((claim) => claim.status === 'partial');
   const claimNumbers = selected.claims.map((claim) => claim.number).join(', ');
   const others = sources.filter((source) => source.sourceId !== selected.sourceId);
@@ -60,7 +65,7 @@ export function SourcePanel({
 
   const copyPassage = async () => {
     try {
-      const where = [snapshot.location_label, ...snapshot.breadcrumb].filter(Boolean).join(', ');
+      const where = [snapshot.location_label, ...snapshot.breadcrumb, web ? snapshot.source_url : null].filter(Boolean).join(', ');
       await navigator.clipboard.writeText(`${snapshot.exact_passage}\n\n— ${snapshot.title}${where ? `, ${where}` : ''}`);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
@@ -117,6 +122,12 @@ export function SourcePanel({
               {snapshot.exact_passage}
             </blockquote>
           )}
+          {web && (
+            <p className="m-0 text-[12.5px] leading-normal text-fg3">
+              Sayfadan arama anında alınan alıntı{snapshot.retrieved_on ? ` (${new Date(snapshot.retrieved_on).toLocaleDateString('tr-TR')})` : ''}.
+              Sayfa sonradan değişmiş olabilir; bilgiyi resmî kaynaktan doğrulayın.
+            </p>
+          )}
           <div className="flex flex-col gap-2 rounded-[10px] border border-line px-3.5 py-3">
             <div className="flex items-center gap-2 text-[12.5px]">
               <span className="font-semibold">Doğrulama</span>
@@ -158,7 +169,7 @@ export function SourcePanel({
                 className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg no-underline hover:bg-hover"
               >
                 <Icon name="ext" size={14} />
-                Kaynağı aç
+                {web ? 'Sayfayı aç' : 'Kaynağı aç'}
               </a>
             )}
             {!snapshot.redacted && (
@@ -187,6 +198,7 @@ export function SourcePanel({
             {others.map((source) => {
               const isDoctrine = source.channel === 'doctrine';
               const isFile = source.channel === 'file';
+              const isWeb = source.channel === 'web';
               const partial = source.claims.every((claim) => claim.status === 'partial');
               return (
                 <button
@@ -199,11 +211,13 @@ export function SourcePanel({
                     className={`flex h-[19px] min-w-[22px] items-center justify-center rounded-[5px] border px-[5px] font-mono text-[11px] font-medium ${
                       isFile
                         ? 'border-file-line bg-file-bg text-file'
-                        : isDoctrine
-                          ? 'border-doc-line bg-doc-bg text-doc'
-                          : partial
-                          ? 'border-dashed border-accent text-accent'
-                          : 'border-accent-line bg-accent-bg text-accent'
+                        : isWeb
+                          ? 'border-web-line bg-web-bg text-web'
+                          : isDoctrine
+                            ? 'border-doc-line bg-doc-bg text-doc'
+                            : partial
+                              ? 'border-dashed border-accent text-accent'
+                              : 'border-accent-line bg-accent-bg text-accent'
                     }`}
                   >
                     {source.label}
@@ -214,7 +228,7 @@ export function SourcePanel({
                       {isDoctrine ? 'Doktrin' : sourceSubtitle(source.snapshot) || sourceKind(source.snapshot, source.channel)}
                     </span>
                   </span>
-                  {partial && !isDoctrine && !isFile && (
+                  {partial && !isDoctrine && !isFile && !isWeb && (
                     <span className="shrink-0 rounded-full border border-dashed border-line-strong px-[7px] py-px text-[11.5px] text-fg2">Kısmen</span>
                   )}
                 </button>

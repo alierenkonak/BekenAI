@@ -42,7 +42,10 @@ export type ChipTone =
   | 'doctrineSelected'
   | 'file'
   | 'fileSelected'
-  | 'filePartial';
+  | 'filePartial'
+  | 'web'
+  | 'webSelected'
+  | 'webPartial';
 
 const CHIP_TONES: Record<ChipTone, string> = {
   primary: 'border-accent-line bg-accent-bg text-accent',
@@ -53,6 +56,9 @@ const CHIP_TONES: Record<ChipTone, string> = {
   file: 'border-file-line bg-file-bg text-file',
   fileSelected: 'border-file bg-file text-inv-fg',
   filePartial: 'border-dashed border-file bg-transparent text-file',
+  web: 'border-web-line bg-web-bg text-web',
+  webSelected: 'border-web bg-web text-inv-fg',
+  webPartial: 'border-dashed border-web bg-transparent text-web',
 };
 
 export function CitationChip({
@@ -78,7 +84,7 @@ export function CitationChip({
   );
 }
 
-export function Badge({ tone, children }: { tone: 'ok' | 'accent' | 'neutral' | 'err' | 'doc' | 'file'; children: ReactNode }) {
+export function Badge({ tone, children }: { tone: 'ok' | 'accent' | 'neutral' | 'err' | 'doc' | 'file' | 'web'; children: ReactNode }) {
   const tones = {
     ok: 'bg-ok-bg text-ok',
     accent: 'bg-accent-bg text-accent',
@@ -86,6 +92,7 @@ export function Badge({ tone, children }: { tone: 'ok' | 'accent' | 'neutral' | 
     err: 'bg-err-bg text-err',
     doc: 'bg-doc-bg text-doc',
     file: 'bg-file-bg text-file',
+    web: 'bg-web-bg text-web',
   };
   return (
     <span className={`inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-xs font-medium ${tones[tone]}`}>

@@ -24,8 +24,9 @@ from app.llm.models import (
     SupportReport,
 )
 from app.llm.provider import PermanentLLMError, StructuredResult, TransientLLMError
+from app.web.search import WebHit, WebSearchError
 
-P, D, F = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01"
+P, D, F, W = "SOURCE_PRIMARY_01", "SOURCE_DOCTRINE_01", "SOURCE_FILE_01", "SOURCE_WEB_01"
 SCOPE = PrivateScope(workspace_id=uuid4(), conversation_id=uuid4(), case_id=uuid4())
 REWRITTEN = "performans düşüklüğü gerekçesiyle savunma alınmadan fesih işe iade tazminat"
 
@@ -179,12 +180,15 @@ MIXED = chat_answer(
 )
 
 
-def service(provider, *, primary=None, doctrine=None, files=None) -> GroundedChatService:
+def service(
+    provider, *, primary=None, doctrine=None, files=None, web=None
+) -> GroundedChatService:
     return GroundedChatService(
         FakeCoordinator([hit()] if primary is None else primary, doctrine),
         provider,
         app_settings(),
         private_retriever=FakePrivateRetriever([file_hit()] if files is None else files),
+        web_search=web,
     )
 
 
@@ -287,6 +291,12 @@ def test_fallback_plan_without_history_uses_the_message() -> None:
     assert fallback_plan("Kıdem tazminatı nasıl hesaplanır?", []).search_query == (
         "Kıdem tazminatı nasıl hesaplanır?"
     )
+
+
+def test_fallback_plan_does_not_pair_a_repeated_question_with_itself() -> None:
+    question = "Uzaktan çalışana yemek ücreti ödenir mi?"
+    history = [{"role": "user", "content": question}, {"role": "assistant", "content": "Yok."}]
+    assert fallback_plan(f" {question}", history).search_query == question
 
 
 @pytest.mark.asyncio
@@ -506,3 +516,140 @@ async def test_the_answer_thinks_hard_and_the_verifier_is_deterministic(monkeypa
     await ask(service(fallback))
     # The fallback model keeps its own defaults; it may not support the thinking setting.
     assert fallback.options["gemini-fallback:ChatAnswer"] == {}
+
+
+def web_hit(text: str = "Uzaktan çalışana yemek yardımı işyeri uygulamasına bağlıdır.") -> WebHit:
+    return WebHit(
+        url="https://hukuk.example.com/uzaktan-calisma",
+        title="Uzaktan Çalışmada Yan Haklar",
+        site="hukuk.example.com",
+        text=text,
+        score=0.8,
+        retrieved_on="2026-09-28",
+        published_date="2025-02-01",
+    )
+
+
+class FakeWebSearch:
+    index_version = "tavily-advanced"
+
+    def __init__(self, hits: list[WebHit] | None = None) -> None:
+        self.hits = [web_hit()] if hits is None else hits
+        self.queries: list[str] = []
+
+    async def search(self, query: str) -> list[WebHit]:
+        self.queries.append(query)
+        return self.hits
+
+
+WEB_ANSWER = chat_answer(
+    paragraph(
+        ("Bu soruya web kaynaklarına göre cevap veriyorum.", []),
+        ("Yemek yardımı işyeri uygulamasına bağlı olarak ödenebilir.", [W]),
+        ("Dosyada sizden savunma istenmediği yazıyor.", [F]),
+    )
+)
+
+
+@pytest.mark.asyncio
+async def test_a_web_answer_searches_the_web_not_the_corpus_and_cites_pages() -> None:
+    provider = FakeProvider(WEB_ANSWER)
+    web = FakeWebSearch()
+    chat = service(provider, web=web)
+
+    result = await ask(chat, search_mode="web", include_doctrine=True)
+
+    assert chat.coordinator.searches == []
+    assert web.queries == [REWRITTEN]
+    # The user's files still supply the facts; their passages never leave for the web.
+    assert chat.private_retriever.calls == [(REWRITTEN, SCOPE)]
+    assert "genel bir web arama motoruna" in provider.prompts["QueryPlan"]
+    prompt = provider.prompts["ChatAnswer"]
+    assert "web sayfalarına dayanarak" in prompt and "<web_evidence>" in prompt
+    assert "site=hukuk.example.com" in prompt and "published=2025-02-01" in prompt
+    assert "<evidence>" not in prompt and "SOURCE_DOCTRINE_*" not in prompt
+
+    web_citation = next(c for c in result.citations if c["source_channel"] == "web")
+    assert web_citation["source_scope"] == "web" and web_citation["source_id"] == W
+    assert web_citation["document_id"] is None and web_citation["file_chunk_id"] is None
+    snapshot = web_citation["source_snapshot"]
+    assert snapshot["source_url"] == "https://hukuk.example.com/uzaktan-calisma"
+    assert snapshot["exact_passage"] == web_hit().text and snapshot["site"] == "hukuk.example.com"
+    assert result.structured_content["search_mode"] == "web"
+    assert result.structured_content["web_search_offered"] is False
+    assert result.index_versions == {
+        "web:web": "tavily-advanced",
+        "private:file": "beken_private_files_bge_m3_v1",
+    }
+    assert result.corpus_versions == {}
+
+
+@pytest.mark.asyncio
+async def test_web_passages_are_verified_like_any_other_source() -> None:
+    provider = FakeProvider(WEB_ANSWER, support={W: "unsupported"})
+    result = await ask(service(provider, web=FakeWebSearch()), search_mode="web")
+
+    claim = sentences(result)[1]
+    assert claim["verification"] == "unverified" and claim["source_ids"] == []
+    assert all(c["source_channel"] != "web" for c in result.citations)
+
+
+@pytest.mark.asyncio
+async def test_a_requested_web_search_runs_even_for_a_short_follow_up() -> None:
+    provider = FakeProvider(WEB_ANSWER, plan=QueryPlan(intent="conversation"))
+    web = FakeWebSearch()
+    await ask(service(provider, web=web), search_mode="web", message="Peki web'de?")
+
+    assert web.queries and web.queries[0].startswith("İşveren fesih gerekçesi")
+
+
+@pytest.mark.asyncio
+async def test_an_empty_web_search_says_so_instead_of_guessing() -> None:
+    answer = chat_answer(
+        paragraph(("Web'de de bu konuda bir kaynak bulamadım.", [])),
+        status="insufficient_evidence",
+    )
+    provider = FakeProvider(answer)
+    result = await ask(service(provider, files=[], web=FakeWebSearch([])), search_mode="web")
+
+    assert "web araması da ilgili bir sayfa bulamadı" in provider.prompts["ChatAnswer"]
+    assert result.structured_content["web_search_offered"] is False
+
+
+@pytest.mark.asyncio
+async def test_web_mode_without_a_configured_search_fails_with_a_safe_code() -> None:
+    with pytest.raises(WebSearchError, match="web_search_unavailable"):
+        await ask(service(FakeProvider(WEB_ANSWER)), search_mode="web")
+
+
+@pytest.mark.asyncio
+async def test_corpus_answers_never_touch_the_web_or_its_planner_rule() -> None:
+    provider = FakeProvider(MIXED)
+    web = FakeWebSearch()
+    await ask(service(provider, web=web))
+
+    assert web.queries == []
+    assert "web arama motoruna" not in provider.prompts["QueryPlan"]
+    assert "<web_evidence>" not in provider.prompts["ChatAnswer"]
+
+
+@pytest.mark.asyncio
+async def test_web_search_is_offered_only_for_legal_questions_the_corpus_could_not_ground() -> None:
+    insufficient = chat_answer(
+        paragraph(("Bu konuda kaynaklarımda bir bilgi bulamadım.", [])),
+        status="insufficient_evidence",
+    )
+    result = await ask(service(FakeProvider(insufficient), primary=[], files=[]))
+    assert result.structured_content["web_search_offered"] is True
+
+    # Answered, but nothing it cited survived verification.
+    result = await ask(service(FakeProvider(MIXED, support={P: "unsupported", F: "unsupported"})))
+    assert result.citations == [] and result.structured_content["web_search_offered"] is True
+
+    result = await ask(service(FakeProvider(MIXED)))
+    assert result.structured_content["web_search_offered"] is False
+
+    greeting = chat_answer(paragraph(("Merhaba!", [])))
+    small_talk = FakeProvider(greeting, plan=QueryPlan(intent="conversation"))
+    result = await ask(service(small_talk), message="Merhaba")
+    assert result.structured_content["web_search_offered"] is False

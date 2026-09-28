@@ -6,11 +6,18 @@ import { formatElapsed } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import type { GenerationSummary } from '@/lib/types';
 
-const STEPS = [
+const CORPUS_STEPS = [
   { title: 'Sırada', detail: 'İsteğiniz işlenmek üzere kuyruğa alındı' },
   { title: 'Kaynaklar aranıyor', detail: 'Mevzuat, Yargıtay kararları ve doktrin taranıyor' },
   { title: 'Cevap hazırlanıyor', detail: 'Yalnızca bulunan kaynaklarla taslak yazılıyor' },
   { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
+];
+
+const WEB_STEPS = [
+  CORPUS_STEPS[0],
+  { title: 'Web\'de aranıyor', detail: 'Soru genel bir arama sorgusuna çevrilip web sayfaları taranıyor' },
+  { title: 'Cevap hazırlanıyor', detail: 'Yalnızca bulunan sayfalardaki alıntılarla taslak yazılıyor' },
+  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı sayfa alıntısıyla ayrıca karşılaştırılıyor' },
 ];
 
 function currentStep(generation: GenerationSummary): number {
@@ -30,6 +37,7 @@ export function GenerationProgress({
   cancelling: boolean;
 }) {
   const now = useNow(1000);
+  const steps = generation.search_mode === 'web' ? WEB_STEPS : CORPUS_STEPS;
   const active = currentStep(generation);
   const elapsed = now ? formatElapsed(now - new Date(generation.created_at).getTime()) : null;
 
@@ -38,14 +46,14 @@ export function GenerationProgress({
       <div className="flex items-center gap-2">
         <LogoMark size={22} />
         <span className="text-[13.5px] font-semibold">BekenAI</span>
-        <span className="text-[13px] text-fg2">{STEPS[active].title}</span>
+        <span className="text-[13px] text-fg2">{steps[active].title}</span>
       </div>
       <div className="flex flex-col rounded-[14px] border border-line bg-surface">
         <ol className="m-0 flex list-none flex-col px-5 pb-1.5 pt-[18px]">
-          {STEPS.map((step, index) => {
+          {steps.map((step, index) => {
             const done = index < active;
             const on = index === active;
-            const last = index === STEPS.length - 1;
+            const last = index === steps.length - 1;
             return (
               <li key={step.title} className="flex gap-3.5">
                 <div className="flex flex-col items-center">

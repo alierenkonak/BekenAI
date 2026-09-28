@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     # None keeps the model's default (used by the evaluation's "before" variant).
     gemini_verifier_temperature: float | None = Field(default=0.0, ge=0.0, le=2.0)
     gemini_timeout_seconds: float = Field(default=120.0, gt=0, le=300)
+    # Web search, offered only when the corpus has no source. Tavily's free plan has
+    # 1,000 credits a month (basic search 1, advanced 2). Without a key it stays hidden.
+    tavily_api_key: SecretStr | None = None
+    web_search_depth: Literal["basic", "advanced"] = "advanced"
+    web_search_max_results: int = Field(default=8, ge=1, le=20)
+    web_search_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     chat_worker_poll_seconds: float = Field(default=2.0, ge=0.25, le=30)
     chat_worker_stale_minutes: int = Field(default=10, ge=2, le=120)
     chat_max_active_jobs: int = Field(default=2, ge=1, le=10)
@@ -104,6 +110,16 @@ class Settings(BaseSettings):
         if not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required")
         return self.gemini_api_key.get_secret_value()
+
+    @property
+    def web_search_enabled(self) -> bool:
+        return bool(self.tavily_api_key and self.tavily_api_key.get_secret_value().strip())
+
+    @property
+    def tavily_secret(self) -> str:
+        if not self.web_search_enabled:
+            raise ValueError("TAVILY_API_KEY is required")
+        return self.tavily_api_key.get_secret_value().strip()  # type: ignore[union-attr]
 
 
 @lru_cache

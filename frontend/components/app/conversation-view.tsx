@@ -7,7 +7,7 @@ import { Icon, Spinner } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
 import { isConversational, renderAnswer, type RenderedAnswer } from '@/lib/answer';
 import { describeError } from '@/lib/format';
-import type { Conversation, GenerationSummary, Message } from '@/lib/types';
+import type { ChatCapabilities, Conversation, GenerationSummary, Message, SearchMode } from '@/lib/types';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
 import { AttachButton, ChatFileTray, clearDraftHandoff, processingNote, readDraftHandoff, useChatFiles } from './chat-files';
 import { Composer } from './composer';
@@ -44,6 +44,26 @@ function isActive(generation: GenerationSummary | null): boolean {
   return generation?.status === 'queued' || generation?.status === 'processing';
 }
 
+// Server features do not change while the app is open; ask once, retry after a failure.
+let capabilities: Promise<ChatCapabilities> | null = null;
+function loadCapabilities(): Promise<ChatCapabilities> {
+  capabilities ??= api.chatCapabilities().catch((error) => {
+    capabilities = null;
+    throw error;
+  });
+  return capabilities;
+}
+
+/** The web search offer stays until the same question has been searched on the web. */
+function offersWebSearch(turns: Turn[], index: number): boolean {
+  const turn = turns[index];
+  const structured = turn.assistant?.structured_content;
+  if (!structured || !isConversational(structured) || !structured.web_search_offered) return false;
+  return !turns
+    .slice(index + 1)
+    .some((later) => later.generation?.search_mode === 'web' && later.user.content === turn.user.content);
+}
+
 export function ConversationView({ conversationId }: { conversationId: string }) {
   const router = useRouter();
   const { refresh: refreshSidebar } = useConversations();
@@ -61,12 +81,25 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [cancelling, setCancelling] = useState(false);
   const [selected, setSelected] = useState<{ messageId: string; sourceId: string } | null>(null);
   const [activePrompt, setActivePrompt] = useState(0);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const chatFiles = useChatFiles(conversationId);
   const lockNote = processingNote(chatFiles);
 
   useEffect(() => clearDraftHandoff(conversationId), [conversationId]);
+
+  useEffect(() => {
+    let active = true;
+    loadCapabilities()
+      .then((loaded) => {
+        if (active) setWebSearchEnabled(loaded.web_search);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -169,14 +202,14 @@ export function ConversationView({ conversationId }: { conversationId: string })
     setActivePrompt(index);
   };
 
-  const send = async (text: string) => {
+  const send = async (text: string, searchMode: SearchMode = 'corpus') => {
     const message = text.trim();
     if (message.length < 3 || sending) return;
     setSending(true);
     setActionError(null);
     try {
       const queued = await api.sendChat(
-        { conversation_id: conversationId, message, include_doctrine: includeDoctrine },
+        { conversation_id: conversationId, message, include_doctrine: includeDoctrine, search_mode: searchMode },
         crypto.randomUUID(),
       );
       const createdAt = new Date().toISOString();
@@ -199,6 +232,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
             answer_status: null,
             safe_error_code: null,
             include_doctrine: includeDoctrine,
+            search_mode: searchMode,
             latency_ms: null,
             corpus_versions: {},
             index_versions: {},
@@ -208,7 +242,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
           },
         },
       ]);
-      setDraft('');
+      if (searchMode === 'corpus') setDraft('');
       stickToBottom.current = true;
       refreshSidebar();
     } catch (error) {
@@ -334,10 +368,19 @@ export function ConversationView({ conversationId }: { conversationId: string })
                 const insufficient =
                   !conversational &&
                   (generation?.answer_status === 'insufficient_evidence' || structured?.answer_status === 'insufficient_evidence');
+                const webTurn = generation?.search_mode === 'web';
                 return (
                   <section key={turn.user.id} data-turn={index} aria-label={`${index + 1}. soru`} className="flex flex-col gap-5">
-                    <div className="max-w-[500px] self-end whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">
-                      {turn.user.content}
+                    <div className="flex max-w-[500px] flex-col items-end gap-1.5 self-end">
+                      {webTurn && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-web">
+                          <Icon name="globe" size={13} />
+                          Web&apos;de arandı
+                        </span>
+                      )}
+                      <div className="whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">
+                        {turn.user.content}
+                      </div>
                     </div>
                     {generation && isActive(generation) && (
                       <GenerationProgress generation={generation} cancelling={cancelling} onCancel={() => void cancel(generation.id)} />
@@ -352,15 +395,21 @@ export function ConversationView({ conversationId }: { conversationId: string })
                         generation={generation}
                         selectedSourceId={selected?.messageId === turn.assistant?.id ? selected?.sourceId ?? null : null}
                         onSelectSource={(sourceId) => turn.assistant && setSelected({ messageId: turn.assistant.id, sourceId })}
+                        onWebSearch={
+                          webSearchEnabled && offersWebSearch(turns, index) ? () => void send(turn.user.content, 'web') : undefined
+                        }
+                        webSearchBusy={sending || Boolean(lockNote)}
                       />
                     )}
                     {generation?.status === 'completed' && !insufficient && !structured && turn.assistant && (
                       <p className="m-0 whitespace-pre-wrap text-[15px] leading-relaxed">{turn.assistant.content}</p>
                     )}
                     {generation?.status === 'failed' && (
-                      <FailedCard code={generation.safe_error_code} onRetry={() => void send(turn.user.content)} />
+                      <FailedCard code={generation.safe_error_code} onRetry={() => void send(turn.user.content, generation.search_mode)} />
                     )}
-                    {generation?.status === 'cancelled' && <CancelledCard onResend={() => void send(turn.user.content)} />}
+                    {generation?.status === 'cancelled' && (
+                      <CancelledCard onResend={() => void send(turn.user.content, generation.search_mode)} />
+                    )}
                   </section>
                 );
               })}

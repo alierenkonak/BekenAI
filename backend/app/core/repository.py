@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Any
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 from fastapi import Depends
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from app.files.retrieval import PrivateScope
 
 GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
+# global: the legal corpus; private: the user's own files; web: pages a web search found.
+CITATION_SCOPES = frozenset({"global", "private", "web"})
 # Files past verification: their object size is known and their bytes are readable.
 VERIFIED_FILE_STATUSES = ("uploaded", "indexing", "ready")
 # Indexing failures a later attempt can fix; format errors (scanned PDF…) cannot.
@@ -391,8 +394,8 @@ class AppRepository:
         generations = await (
             await conn.execute(
                 """select id,user_message_id,assistant_message_id,status,stage,answer_status,
-                          safe_error_code,include_doctrine,latency_ms,corpus_versions,
-                          index_versions,created_at,started_at,completed_at
+                          safe_error_code,include_doctrine,search_mode,latency_ms,
+                          corpus_versions,index_versions,created_at,started_at,completed_at
                    from public.chat_generations
                    where workspace_id=%s
                      and (user_message_id=any(%s) or assistant_message_id=any(%s))""",
@@ -438,6 +441,7 @@ class AppRepository:
         retrieval_query: str,
         requested_model: str,
         max_active_jobs: int = 2,
+        search_mode: str = "corpus",
     ) -> dict[str, Any]:
         if max_active_jobs < 1:
             raise ValueError("max_active_jobs_must_be_positive")
@@ -534,15 +538,17 @@ class AppRepository:
                 await conn.execute(
                     """insert into public.chat_generations
                     (workspace_id,conversation_id,user_message_id,requested_model,prompt_version,
-                     retrieval_query,include_doctrine)
-                    values (%s,%s,%s,%s,'grounded-chat-v2',%s,%s) returning *""",
+                     retrieval_query,include_doctrine,search_mode)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
                     (
                         workspace["id"],
                         conversation["id"],
                         user_message["id"],
                         requested_model,
+                        "web-search-v1" if search_mode == "web" else "grounded-chat-v2",
                         retrieval_query,
                         include_doctrine,
+                        search_mode,
                     ),
                 )
             ).fetchone()
@@ -1306,10 +1312,15 @@ class AppRepository:
     ) -> None:
         # Conversational answers may legitimately cite nothing (a greeting, a follow-up
         # clarification); every citation that is present must still resolve exactly.
+        if any(item["source_scope"] not in CITATION_SCOPES for item in result.citations):
+            raise CitationIntegrityError("citation_integrity_failed")
         private = [item for item in result.citations if item["source_scope"] == "private"]
-        citations = [item for item in result.citations if item["source_scope"] != "private"]
+        web = [item for item in result.citations if item["source_scope"] == "web"]
+        citations = [item for item in result.citations if item["source_scope"] == "global"]
         if private:
             await self._assert_private_citations(conn, private, workspace_id)
+        if web:
+            self._assert_web_citations(web)
         if not citations:
             return
         chunk_ids = list({UUID(str(item["chunk_id"])) for item in citations})
@@ -1368,6 +1379,26 @@ class AppRepository:
                 or row["exact_passage"] != snapshot.get("exact_passage")
                 or not source_url_matches
                 or (document_id, parse_id, snapshot.get("corpus_version")) not in pins
+            ):
+                raise CitationIntegrityError("citation_integrity_failed")
+
+    @staticmethod
+    def _assert_web_citations(citations: list[dict[str, Any]]) -> None:
+        """A web citation points at no stored row: its snapshot must carry the page itself."""
+        for citation in citations:
+            snapshot = citation["source_snapshot"]
+            url = urlsplit(str(snapshot.get("source_url") or ""))
+            if (
+                citation["source_channel"] != "web"
+                or snapshot.get("source_channel") != "web"
+                or not str(citation["source_id"]).startswith("SOURCE_WEB_")
+                or any(
+                    citation.get(key) is not None
+                    for key in ("document_id", "parse_id", "chunk_id", "file_id", "file_chunk_id")
+                )
+                or url.scheme not in {"http", "https"}
+                or not url.netloc
+                or not str(snapshot.get("exact_passage") or "").strip()
             ):
                 raise CitationIntegrityError("citation_integrity_failed")
 

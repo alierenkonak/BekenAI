@@ -40,6 +40,7 @@ const PATHS = {
   history: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 8v4l3 2',
   code: 'M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16',
   stop: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM9 9h6v6H9z',
+  globe: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18zM3 12h18M12 3c2.5 2.5 3.8 5.6 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.6-3.8-9s1.3-6.5 3.8-9z',
 } as const;
 
 export type IconName = keyof typeof PATHS;

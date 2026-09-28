@@ -9,6 +9,7 @@ from app import worker as worker_module
 from app.core.repository import ConflictError
 from app.files.extraction import ExtractionError
 from app.files.vectors import VectorStoreUnavailable
+from app.web.search import TransientWebSearchError, WebSearchError
 
 
 @pytest.mark.asyncio
@@ -251,3 +252,57 @@ async def test_stage_update_failure_does_not_fail_the_answer(monkeypatch):
     await worker._chat({"id": "job-id", "subject_id": "generation-id"})
 
     worker.repository.complete_generation.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "code", "retryable"),
+    [
+        (
+            TransientWebSearchError("web_search_temporarily_unavailable"),
+            "web_search_temporarily_unavailable",
+            True,
+        ),
+        (WebSearchError("web_search_quota_exceeded"), "web_search_quota_exceeded", False),
+        (WebSearchError("web_search_unavailable"), "web_search_unavailable", False),
+        (WebSearchError("unexpected detail"), "web_search_failed", False),
+    ],
+)
+async def test_web_search_failures_map_to_safe_codes(error, code, retryable):
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.repository = SimpleNamespace(fail_job=AsyncMock())
+    worker._chat = AsyncMock(side_effect=error)
+    job = {"id": "job-id", "kind": "chat_generation", "attempt_count": 1}
+
+    await worker._process(job)
+
+    worker.repository.fail_job.assert_awaited_once_with(
+        job, error_code=code, retryable=retryable
+    )
+
+
+class _RecordingService:
+    created: list[dict] = []
+
+    def __init__(self, *_args, **kwargs) -> None:
+        self.created.append(kwargs)
+
+    async def answer(self, **kwargs):
+        self.created[-1]["search_mode"] = kwargs["search_mode"]
+        return SimpleNamespace(answer_status="answered")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["corpus", "web"])
+async def test_only_web_jobs_get_the_web_search_client(monkeypatch, mode):
+    worker = _chat_worker(monkeypatch, AsyncMock())
+    monkeypatch.setattr(worker_module, "GroundedChatService", _RecordingService)
+    _RecordingService.created = []
+    worker.web_search = "tavily-client"
+    worker.repository.get_chat_work.return_value["search_mode"] = mode
+
+    await worker._chat({"id": "job-id", "subject_id": "generation-id"})
+
+    [created] = _RecordingService.created
+    assert created["search_mode"] == mode
+    assert created["web_search"] == ("tavily-client" if mode == "web" else None)
