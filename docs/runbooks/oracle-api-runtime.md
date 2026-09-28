@@ -71,3 +71,22 @@ the workspace and to the ready file ids the database returns) and Turkish full t
 `SOURCE_FILE_*` evidence that only the answer's `file_answer` section may cite. While a file
 in the chat's scope is still being verified or indexed, `POST /chat` returns
 `409 files_processing`. Deleting a file redacts the passages earlier answers quoted from it.
+
+## Web search fallback
+
+When the corpus has no source for a legal question, the answer offers a web search (see
+ADR 0004). It needs one secret in `/etc/bekenai/api.env`, read by both the API (to offer
+and accept web requests) and the worker (to search):
+
+```bash
+TAVILY_API_KEY=tvly-...
+```
+
+Restart `bekenai-api` and `bekenai-worker` after adding it; `GET /chat/capabilities` then
+returns `{"web_search": true}`. Without the key the option stays hidden. Optional settings:
+`WEB_SEARCH_DEPTH` (`advanced`, 2 credits; `basic`, 1 credit), `WEB_SEARCH_MAX_RESULTS` (8)
+and `WEB_SEARCH_TIMEOUT_SECONDS` (30). The free plan has 1,000 credits a month; a spent plan
+fails web answers with `web_search_quota_exceeded` until it renews.
+
+Deploy order: apply `20260928154731_add_web_search_citations.sql` (adds
+`chat_generations.search_mode` and the `web` citation scope), then restart the API and worker.

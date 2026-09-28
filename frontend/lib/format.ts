@@ -85,6 +85,10 @@ const MESSAGES: Record<string, string> = {
   vector_store_temporarily_unavailable: 'Arama dizini geçici olarak kullanılamıyor.',
   file_not_reindexable: 'Bu dosya yeniden işlenemez; dosyayı yeniden yükleyin.',
   files_processing: 'Dosyalar işleniyor; tamamlanınca soru sorabilirsiniz.',
+  web_search_unavailable: 'Web araması şu an kullanılamıyor.',
+  web_search_quota_exceeded: 'Bu ayın web araması hakkı doldu; ay başında yenilenir.',
+  web_search_temporarily_unavailable: 'Web araması servisi geçici olarak yanıt vermiyor.',
+  web_search_failed: 'Web araması tamamlanamadı.',
 };
 
 const VERIFICATION_FAILURES = new Set([
@@ -126,6 +130,7 @@ export function isRetryableFailure(code: string | null): boolean {
     code === 'provider_temporarily_unavailable' ||
     code === 'model_temporarily_unavailable' ||
     code === 'storage_temporarily_unavailable' ||
+    code === 'web_search_temporarily_unavailable' ||
     code === 'job_failed' ||
     (code !== null && VERIFICATION_FAILURES.has(code))
   );

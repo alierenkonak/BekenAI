@@ -30,6 +30,12 @@ from app.files.retrieval import PrivateFileRetriever, PrivateScope, RemotePassag
 from app.files.vectors import PrivateFileVectorStore, VectorStoreUnavailable
 from app.llm.gemini import get_llm_provider
 from app.llm.provider import PermanentLLMError, TransientLLMError
+from app.web.search import (
+    SAFE_WEB_SEARCH_ERRORS,
+    TavilyWebSearch,
+    TransientWebSearchError,
+    WebSearchError,
+)
 
 logger = logging.getLogger("bekenai.worker")
 
@@ -101,6 +107,10 @@ class Worker:
         )
 
     @cached_property
+    def web_search(self) -> TavilyWebSearch | None:
+        return TavilyWebSearch(self.settings) if self.settings.web_search_enabled else None
+
+    @cached_property
     def file_ingestion(self) -> FileIngestionService:
         client = self._inference_client()
         return FileIngestionService(
@@ -164,6 +174,10 @@ class Worker:
             await self.repository.fail_job(
                 job, error_code="model_temporarily_unavailable", retryable=True
             )
+        except TransientWebSearchError:
+            await self.repository.fail_job(
+                job, error_code="web_search_temporarily_unavailable", retryable=True
+            )
         except StorageError:
             await self.repository.fail_job(
                 job, error_code="storage_temporarily_unavailable", retryable=True
@@ -183,11 +197,13 @@ class Worker:
 
     async def _chat(self, job: dict) -> None:
         work = await self.repository.get_chat_work(job["subject_id"])
+        search_mode = work.get("search_mode") or "corpus"
         service = GroundedChatService(
             _load_search_coordinator(),
             get_llm_provider(),
             self.settings,
             private_retriever=self.private_retriever,
+            web_search=self.web_search if search_mode == "web" else None,
         )
 
         async def report_stage(stage: str) -> None:
@@ -209,6 +225,7 @@ class Worker:
                 conversation_id=work["conversation_id"],
                 case_id=work["case_id"],
             ),
+            search_mode=search_mode,
         )
         await self.repository.complete_generation(job["subject_id"], result)
 
@@ -258,6 +275,8 @@ class Worker:
             )
         if isinstance(exc, CitationIntegrityError):
             return "citation_integrity_failed"
+        if isinstance(exc, WebSearchError):
+            return str(exc) if str(exc) in SAFE_WEB_SEARCH_ERRORS else "web_search_failed"
         # ExtractionError is a ValueError whose message is always a safe code.
         if isinstance(exc, ValueError) and str(exc) in _SAFE_FILE_ERRORS:
             return str(exc)

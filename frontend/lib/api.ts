@@ -3,6 +3,7 @@
 import { API_URL } from './config';
 import { getAccessToken, getSupabase } from './supabase';
 import type {
+  ChatCapabilities,
   ChatEnqueued,
   Conversation,
   FileMediaType,
@@ -10,6 +11,7 @@ import type {
   LegalCase,
   Message,
   Page,
+  SearchMode,
   SearchResponse,
   UploadIntent,
   UserFile,
@@ -93,7 +95,13 @@ export const api = {
     request<Page<Message>>(`/conversations/${id}/messages${query({ cursor, limit: 50 })}`),
 
   sendChat: (
-    payload: { conversation_id?: string; case_id?: string | null; message: string; include_doctrine: boolean },
+    payload: {
+      conversation_id?: string;
+      case_id?: string | null;
+      message: string;
+      include_doctrine: boolean;
+      search_mode?: SearchMode;
+    },
     idempotencyKey: string,
   ) =>
     request<ChatEnqueued>('/chat', {
@@ -101,6 +109,8 @@ export const api = {
       body: { ...payload, domain: 'labour_law' },
       headers: { 'Idempotency-Key': idempotencyKey },
     }),
+  /** Optional features the server has configured (web search needs a search API key). */
+  chatCapabilities: () => request<ChatCapabilities>('/chat/capabilities'),
   getGeneration: (id: string, signal?: AbortSignal) =>
     request<GenerationDetail>(`/chat/generations/${id}`, { signal }),
   cancelGeneration: (id: string) => request<unknown>(`/chat/generations/${id}/cancel`, { method: 'POST' }),

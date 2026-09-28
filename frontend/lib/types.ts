@@ -3,7 +3,10 @@
 export type JobStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 export type GenerationStage = 'retrieving' | 'generating' | 'verifying';
 export type AnswerStatus = 'answered' | 'insufficient_evidence';
-export type SourceChannel = 'primary' | 'doctrine' | 'file';
+export type SourceChannel = 'primary' | 'doctrine' | 'file' | 'web';
+export type SourceScope = 'global' | 'private' | 'web';
+/** corpus: the legal corpus and the user's files; web: a web search the user asked for. */
+export type SearchMode = 'corpus' | 'web';
 
 export interface Page<T> {
   items: T[];
@@ -32,13 +35,16 @@ export interface Conversation {
   updated_at: string;
 }
 
-/** Global snapshots point into the legal corpus; private ones into the user's own file. */
+/**
+ * Global snapshots point into the legal corpus, private ones into the user's own file,
+ * web ones at a page a web search found (the excerpt is kept as it was at search time).
+ */
 export interface SourceSnapshot {
   source_id: string;
   document_id: string | null;
   parse_id: string | null;
   chunk_id: string | null;
-  source_scope: 'global' | 'private';
+  source_scope: SourceScope;
   source_channel: SourceChannel;
   title: string;
   authority: string | null;
@@ -61,12 +67,15 @@ export interface SourceSnapshot {
   location_label?: string;
   /** Set once the file was deleted: the passage and file name are gone. */
   redacted?: boolean;
+  site?: string;
+  published_date?: string | null;
+  retrieved_on?: string;
 }
 
 export interface Citation {
   claim_id: string;
   source_id: string;
-  source_scope: 'global' | 'private';
+  source_scope: SourceScope;
   source_channel: SourceChannel;
   source_snapshot: SourceSnapshot;
   integrity_status: 'valid';
@@ -122,6 +131,10 @@ export interface ConversationalAnswer {
   blocks: AnswerBlock[];
   limitations: string[];
   unverified_count: number;
+  /** Absent on answers written before web search existed (they are corpus answers). */
+  search_mode?: SearchMode;
+  /** The corpus found nothing for this legal question; the user may search the web. */
+  web_search_offered?: boolean;
 }
 
 export type StructuredAnswer = LegacyAnswer | ConversationalAnswer;
@@ -135,6 +148,7 @@ export interface GenerationSummary {
   answer_status: AnswerStatus | null;
   safe_error_code: string | null;
   include_doctrine: boolean;
+  search_mode: SearchMode;
   latency_ms: number | null;
   corpus_versions: Record<string, string>;
   index_versions: Record<string, string>;
@@ -160,6 +174,10 @@ export interface Message {
   created_at: string;
   generation: GenerationSummary | null;
   citations?: Citation[];
+}
+
+export interface ChatCapabilities {
+  web_search: boolean;
 }
 
 export interface ChatEnqueued {

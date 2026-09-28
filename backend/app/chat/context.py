@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from beken_retrieval.models import SearchHit
 
 from app.files.retrieval import PrivateHit
+from app.web.search import WebHit
 
 # File passages go in first, but may take at most this share of the context so the
 # law they are compared against always fits too.
@@ -160,6 +161,73 @@ class FileEvidenceSource:
         }
 
 
+@dataclass(frozen=True)
+class WebEvidenceSource:
+    """Excerpts of a web page the user asked for: evidence of what the page says, not law."""
+
+    source_id: str
+    hit: WebHit
+    index_version: str
+    channel: Literal["web"] = "web"
+
+    @property
+    def passage(self) -> str:
+        return self.hit.text
+
+    def citation_reference(self) -> dict:
+        return {
+            "source_scope": "web",
+            "document_id": None,
+            "parse_id": None,
+            "chunk_id": None,
+            "file_id": None,
+            "file_chunk_id": None,
+        }
+
+    @property
+    def prompt_block(self) -> str:
+        hit = self.hit
+        metadata = [
+            f"source_id={self.source_id}",
+            "channel=web",
+            f"site={hit.site}",
+            # Page titles are third-party text; keep them on one metadata line.
+            f"title={' '.join(hit.title.split())}",
+            f"published={hit.published_date or ''}",
+        ]
+        return "\n".join(metadata) + f"\n<web_passage>\n{hit.text}\n</web_passage>"
+
+    def snapshot(self) -> dict:
+        hit = self.hit
+        return {
+            "source_id": self.source_id,
+            "source_scope": "web",
+            "source_channel": "web",
+            "title": hit.title,
+            "site": hit.site,
+            "source_url": hit.url,
+            "published_date": hit.published_date,
+            "retrieved_on": hit.retrieved_on,
+            "exact_passage": hit.text,
+            "index_version": self.index_version,
+            # Shape shared with corpus snapshots so every client can render either.
+            "document_id": None,
+            "parse_id": None,
+            "chunk_id": None,
+            "authority": None,
+            "decision_metadata": {
+                "chamber": None,
+                "case_number": None,
+                "decision_number": None,
+                "document_date": None,
+            },
+            "page_number": None,
+            "breadcrumb": [],
+            "corpus_version": None,
+            "retrieval_scope_version": None,
+        }
+
+
 def select_history(messages: list[dict], *, maximum_tokens: int = 24_000) -> list[dict]:
     selected: list[dict] = []
     used = 0
@@ -181,8 +249,9 @@ def select_sources(
     hard_tokens: int,
     files: list[FileEvidenceSource] | None = None,
     file_tokens: int = FILE_CONTEXT_TOKENS,
-) -> list[EvidenceSource | FileEvidenceSource]:
-    selected: list[EvidenceSource | FileEvidenceSource] = []
+    web: list[WebEvidenceSource] | None = None,
+) -> list[EvidenceSource | FileEvidenceSource | WebEvidenceSource]:
+    selected: list[EvidenceSource | FileEvidenceSource | WebEvidenceSource] = []
     used = base_tokens
     file_limit = min(target_tokens, base_tokens + file_tokens)
     for source in files or []:
@@ -191,7 +260,7 @@ def select_sources(
             continue
         selected.append(source)
         used += cost
-    for source in primary:
+    for source in [*primary, *(web or [])]:
         cost = estimate_tokens(source.prompt_block)
         if used + cost > target_tokens:
             continue

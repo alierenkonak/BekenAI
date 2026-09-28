@@ -612,6 +612,117 @@ async def test_file_citations_must_quote_a_ready_file_and_are_redacted_on_deleti
         _cleanup(user_id)
 
 
+@pytest.mark.asyncio
+async def test_web_citations_keep_their_page_and_the_generation_records_the_search() -> None:
+    user_id = uuid4()
+    repository = _repository()
+    passage = "Uzaktan çalışana yemek yardımı işyeri uygulamasına bağlıdır."
+    try:
+        await repository.bootstrap(user_id, "web-citations@example.test")
+        queued = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="web-citation-fixture",
+            conversation_id=None,
+            case_id=None,
+            message="Uzaktan çalışana yemek ücreti ödenir mi?",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="uzaktan çalışma yemek ücreti",
+            requested_model="fixture-model",
+            search_mode="web",
+        )
+        _job("chat_generation", queued["generation_id"])
+        with psycopg.connect(database_url()) as conn:
+            conn.execute(
+                "update public.chat_generations set status='processing' where id=%s",
+                (queued["generation_id"],),
+            )
+
+        def result(url: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                answer_status="answered",
+                content="Web kaynaklarına göre",
+                structured_content={"search_mode": "web"},
+                actual_model="fixture",
+                verifier_model="fixture",
+                fallback_used=False,
+                input_tokens=1,
+                output_tokens=1,
+                latency_ms=1,
+                corpus_versions={},
+                index_versions={"web:web": "tavily-advanced"},
+                citations=[
+                    {
+                        "claim_id": "S1",
+                        "source_id": "SOURCE_WEB_01",
+                        "source_scope": "web",
+                        "source_channel": "web",
+                        "document_id": None,
+                        "parse_id": None,
+                        "chunk_id": None,
+                        "file_id": None,
+                        "file_chunk_id": None,
+                        "source_snapshot": {
+                            "source_channel": "web",
+                            "source_url": url,
+                            "title": "Uzaktan Çalışmada Yan Haklar",
+                            "exact_passage": passage,
+                        },
+                        "integrity_status": "valid",
+                        "support_status": "supported",
+                        "support_reason": "Pasaj bunu söylüyor.",
+                        "ordinal": 1,
+                    }
+                ],
+            )
+
+        with pytest.raises(CitationIntegrityError, match="citation_integrity_failed"):
+            await repository.complete_generation(
+                queued["generation_id"], result("javascript:alert(1)")
+            )
+        await repository.complete_generation(
+            queued["generation_id"], result("https://hukuk.example.com/yazi")
+        )
+
+        page = await repository.list_messages(
+            user_id, queued["conversation_id"], limit=10, cursor=None
+        )
+        question = next(item for item in page.items if item["role"] == "user")
+        answer = next(item for item in page.items if item["role"] == "assistant")
+        assert question["generation"]["search_mode"] == "web"
+        [citation] = answer["citations"]
+        assert citation["source_scope"] == "web" and citation["source_channel"] == "web"
+        assert citation["source_snapshot"]["source_url"] == "https://hukuk.example.com/yazi"
+        with psycopg.connect(database_url()) as conn:
+            [prompt_version] = conn.execute(
+                "select prompt_version from public.chat_generations where id=%s",
+                (queued["generation_id"],),
+            ).fetchone()
+        assert prompt_version == "web-search-v1"
+    finally:
+        _cleanup(user_id)
+
+
+def test_a_web_citation_points_at_no_corpus_or_file_row() -> None:
+    with psycopg.connect(database_url()) as conn:
+        for scope, channel, document_id in (
+            ("web", "web", "gen_random_uuid()"),
+            ("global", "web", "null"),
+            ("web", "primary", "null"),
+        ):
+            with conn.transaction(force_rollback=True):
+                with pytest.raises(psycopg.errors.CheckViolation):
+                    conn.execute(
+                        f"""insert into public.message_citations
+                        (workspace_id,message_id,conversation_id,claim_id,source_id,source_scope,
+                         source_channel,document_id,source_snapshot,integrity_status,
+                         support_status,ordinal)
+                        values (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'S1',
+                                'SOURCE_WEB_01','{scope}','{channel}',{document_id},'{{}}',
+                                'valid','supported',1)"""
+                    )
+
+
 def test_a_citation_is_either_global_or_a_private_file_never_both() -> None:
     with psycopg.connect(database_url()) as conn:
         with conn.transaction(force_rollback=True):

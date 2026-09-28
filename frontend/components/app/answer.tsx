@@ -20,9 +20,10 @@ const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipT
   primary: { base: 'primary', selected: 'selected', partial: 'partial' },
   doctrine: { base: 'doctrine', selected: 'doctrineSelected', partial: 'doctrine' },
   file: { base: 'file', selected: 'fileSelected', partial: 'filePartial' },
+  web: { base: 'web', selected: 'webSelected', partial: 'webPartial' },
 };
 
-const CHIP_NAME = { primary: 'Kaynak', doctrine: 'Doktrin kaynağı', file: 'Dosya pasajı' } as const;
+const CHIP_NAME = { primary: 'Kaynak', doctrine: 'Doktrin kaynağı', file: 'Dosya pasajı', web: 'Web kaynağı' } as const;
 
 function ClaimParagraph({
   claim,
@@ -59,12 +60,17 @@ export function AnswerView({
   generation,
   selectedSourceId,
   onSelectSource,
+  onWebSearch,
+  webSearchBusy = false,
 }: {
   answer: StructuredAnswer;
   rendered: RenderedAnswer;
   generation: GenerationSummary | null;
   selectedSourceId: string | null;
   onSelectSource: (sourceId: string) => void;
+  /** Set when this answer may be retried as a web search; the offer is hidden otherwise. */
+  onWebSearch?: () => void;
+  webSearchBusy?: boolean;
 }) {
   if (rendered.kind === 'conversational' && isConversational(answer)) {
     return (
@@ -74,6 +80,8 @@ export function AnswerView({
         generation={generation}
         selectedSourceId={selectedSourceId}
         onSelectSource={onSelectSource}
+        onWebSearch={onWebSearch}
+        webSearchBusy={webSearchBusy}
       />
     );
   }
@@ -154,33 +162,41 @@ function ConversationalAnswerView({
   generation,
   selectedSourceId,
   onSelectSource,
+  onWebSearch,
+  webSearchBusy,
 }: {
   answer: ConversationalAnswer;
   rendered: RenderedConversation;
   generation: GenerationSummary | null;
   selectedSourceId: string | null;
   onSelectSource: (sourceId: string) => void;
+  onWebSearch?: () => void;
+  webSearchBusy: boolean;
 }) {
   const [copied, setCopied] = useState(false);
+  const web = answer.search_mode === 'web';
   const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
   const sourceSummary = [
     count('file') ? `${count('file')} dosya pasajı` : null,
     count('primary') ? `${count('primary')} birincil kaynak` : null,
     count('doctrine') ? `${count('doctrine')} doktrin kaynağı` : null,
+    count('web') ? `${count('web')} web sayfası` : null,
   ]
     .filter(Boolean)
     .join(' · ');
   const seconds = formatSeconds(generation?.latency_ms ?? null);
   const corpus = generation?.corpus_versions?.['labour_law:primary'];
-  const index = generation?.index_versions?.['labour_law:primary'];
+  const index = generation?.index_versions?.['labour_law:primary'] ?? generation?.index_versions?.['web:web'];
   const status =
     answer.answer_status === 'insufficient_evidence'
       ? { tone: 'neutral' as const, icon: 'searchX' as const, label: 'Kaynak bulunamadı' }
-      : rendered.unverifiedCount > 0
-        ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
-        : rendered.sources.length > 0
-          ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
-          : null;
+      : web
+        ? { tone: 'web' as const, icon: 'globe' as const, label: 'Web kaynaklı' }
+        : rendered.unverifiedCount > 0
+          ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
+          : rendered.sources.length > 0
+            ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
+            : null;
 
   const copy = async () => {
     const text = rendered.blocks
@@ -199,7 +215,7 @@ function ConversationalAnswerView({
             'Kaynaklar:',
             ...rendered.sources.map(
               (source) =>
-                `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}`,
+                `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}${source.channel === 'web' && source.snapshot.source_url ? ` — ${source.snapshot.source_url}` : ''}`,
             ),
           ]
         : []),
@@ -230,6 +246,17 @@ function ConversationalAnswerView({
           {seconds}
         </span>
       </div>
+
+      {web && (
+        <p className="m-0 flex items-start gap-2 rounded-xl border border-web-line bg-web-bg px-3.5 py-2.5 text-[12.5px] leading-normal text-fg2">
+          <Icon name="globe" size={14} className="mt-0.5 shrink-0 text-web" />
+          <span>
+            Bu cevap BekenAI&apos;nin mevzuat ve içtihat kaynaklarından değil, isteğiniz üzerine yapılan web aramasından
+            derlendi. Web sayfaları resmî kaynak değildir; önemli bilgileri mevzuattan veya Yargıtay kararlarından kontrol
+            edin.
+          </span>
+        </p>
+      )}
 
       <div className="flex flex-col gap-3 text-[15px] leading-[1.7] [text-wrap:pretty]">
         {rendered.blocks.map((block, blockIndex) => {
@@ -280,6 +307,8 @@ function ConversationalAnswerView({
         </div>
       )}
 
+      {onWebSearch && <WebSearchOffer onSearch={onWebSearch} busy={webSearchBusy} />}
+
       <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"
@@ -290,14 +319,34 @@ function ConversationalAnswerView({
           {copied ? 'Kopyalandı' : 'Kopyala'}
         </button>
         <span className="grow" />
-        {corpus && (
+        {(corpus || index) && (
           <span className="font-mono text-[11px] text-fg3" title="Cevabın üretildiği kaynak ve dizin sürümü">
-            {corpus}
-            {index ? ` · ${index}` : ''}
+            {[corpus, index].filter(Boolean).join(' · ')}
           </span>
         )}
       </div>
     </article>
+  );
+}
+
+/** Offered only when the corpus could not ground a legal question; never runs on its own. */
+function WebSearchOffer({ onSearch, busy }: { onSearch: () => void; busy: boolean }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-center">
+      <p className="m-0 grow text-[13px] leading-normal text-fg2">
+        BekenAI&apos;nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web&apos;de arayabilirim; web sonuçları ayrıca
+        etiketlenir ve resmî kaynak yerine geçmez.
+      </p>
+      <button
+        type="button"
+        onClick={onSearch}
+        disabled={busy}
+        className="flex h-[34px] w-fit shrink-0 items-center gap-1.5 rounded-[9px] border border-web-line bg-web-bg px-3.5 text-[13.5px] font-medium text-web hover:border-web disabled:opacity-60"
+      >
+        <Icon name="globe" size={15} />
+        Web&apos;de ara
+      </button>
+    </div>
   );
 }
 
