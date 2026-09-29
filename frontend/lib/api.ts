@@ -165,5 +165,19 @@ async function uploadVia(intentPath: string, file: File, mediaType: FileMediaTyp
     await request<UserFile>(`/files/${intent.file.id}`, { method: 'DELETE' }).catch(() => {});
     throw new ApiError(503, 'storage_temporarily_unavailable');
   }
-  return request<UserFile>(`/files/${intent.file.id}/complete`, { method: 'POST' });
+  // Completing is idempotent, so a lost response is simply asked again. If it keeps
+  // failing, the upload is given up and queued for deletion instead of holding quota.
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await request<UserFile>(`/files/${intent.file.id}/complete`, { method: 'POST' });
+    } catch (error) {
+      const transient = error instanceof ApiError && (error.status === 0 || error.status >= 500);
+      if (transient && attempt < 3) {
+        await new Promise((resolve) => window.setTimeout(resolve, attempt * 1500));
+        continue;
+      }
+      await request<UserFile>(`/files/${intent.file.id}`, { method: 'DELETE' }).catch(() => {});
+      throw error;
+    }
+  }
 }
