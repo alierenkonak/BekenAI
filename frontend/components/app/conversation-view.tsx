@@ -182,7 +182,9 @@ export function ConversationView({ conversationId }: { conversationId: string })
     setActivePrompt(index);
   };
 
-  const send = async (text: string, searchMode: SearchMode = 'corpus') => {
+  // Only a question typed in the composer clears it; resending an earlier question
+  // (retry, "Web'de ara") must not wipe what the user is typing now.
+  const send = async (text: string, searchMode: SearchMode = 'corpus', { fromComposer = false } = {}) => {
     const message = text.trim();
     if (message.length < 3 || sending) return;
     setSending(true);
@@ -222,7 +224,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
           },
         },
       ]);
-      if (searchMode === 'corpus') setDraft('');
+      if (fromComposer) setDraft('');
       stickToBottom.current = true;
       refreshSidebar();
     } catch (error) {
@@ -421,7 +423,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
               variant="compact"
               value={draft}
               onChange={setDraft}
-              onSubmit={() => void send(draft, webSearchAvailable && webSearchOn ? 'web' : 'corpus')}
+              onSubmit={() => void send(draft, webSearchAvailable && webSearchOn ? 'web' : 'corpus', { fromComposer: true })}
               includeDoctrine={includeDoctrine}
               onDoctrineChange={changeDoctrine}
               webSearch={webSearchAvailable ? { checked: webSearchOn, onChange: changeWebSearch } : undefined}

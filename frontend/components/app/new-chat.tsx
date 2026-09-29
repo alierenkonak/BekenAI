@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Icon } from '@/components/icons';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { SAMPLE_FILE_URL, SAMPLE_QUESTIONS, mediaTypeOf, uploadProblem } from '@/lib/files';
 import { describeError } from '@/lib/format';
 import type { LegalCase } from '@/lib/types';
@@ -55,9 +55,15 @@ export function NewChat() {
     if (message.length < 3 || sending) return;
     setSending(true);
     setError(null);
+    const searchMode = withWeb ? 'web' : 'corpus';
+    // After a partly failed upload the files that made it already sit in the chat created
+    // for them; the question goes there, not to a new chat without them.
+    const target = attachedConversationId;
     try {
       const queued = await api.sendChat(
-        { message, include_doctrine: includeDoctrine, case_id: caseId || null, search_mode: withWeb ? 'web' : 'corpus' },
+        target
+          ? { conversation_id: target, message, include_doctrine: includeDoctrine, search_mode: searchMode }
+          : { message, include_doctrine: includeDoctrine, case_id: caseId || null, search_mode: searchMode },
         crypto.randomUUID(),
       );
       // The switch stays on for the rest of this chat.
@@ -65,6 +71,15 @@ export function NewChat() {
       refresh();
       router.push(`/sohbet/${queued.conversation_id}`);
     } catch (sendError) {
+      // Its files are still being processed: continue in that chat, where progress shows
+      // and the question waits in the composer.
+      if (target && sendError instanceof ApiError && sendError.code === 'files_processing') {
+        saveDraftHandoff(target, message);
+        if (withWeb) rememberWebSearch(target, true);
+        refresh();
+        router.push(`/sohbet/${target}`);
+        return;
+      }
       setError(describeError(sendError));
       setSending(false);
     }

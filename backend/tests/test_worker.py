@@ -20,6 +20,7 @@ async def test_worker_recovers_jobs_that_become_stale_after_start(monkeypatch):
     worker.worker_id = "test-worker"
     worker.repository = SimpleNamespace(
         recover_stale_jobs=AsyncMock(return_value=1),
+        expire_abandoned_uploads=AsyncMock(side_effect=[RuntimeError("db hiccup"), 2]),
         claim_job=AsyncMock(return_value={"id": "fixture"}),
     )
     clock = iter((1.0, 62.0))
@@ -35,6 +36,8 @@ async def test_worker_recovers_jobs_that_become_stale_after_start(monkeypatch):
     worker._process = process
     await worker._run_lane(worker_module.INTERACTIVE_JOB_KINDS, recover_stale=True)
     assert worker.repository.recover_stale_jobs.await_count == 2
+    # Abandoned uploads are swept on the same tick; a failed sweep does not stop the lane.
+    assert worker.repository.expire_abandoned_uploads.await_count == 2
     worker.repository.claim_job.assert_awaited_with(
         "test-worker", worker_module.INTERACTIVE_JOB_KINDS
     )

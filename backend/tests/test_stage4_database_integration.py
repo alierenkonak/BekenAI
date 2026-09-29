@@ -185,7 +185,7 @@ async def test_deleting_a_file_while_it_indexes_stops_the_ingest_and_removes_chu
 
 
 @pytest.mark.asyncio
-async def test_failed_deletion_restores_a_ready_file_and_success_drops_its_chunks() -> None:
+async def test_failed_deletion_reindexes_a_ready_file_and_success_drops_its_chunks() -> None:
     user_id = uuid4()
     repository = _repository()
     try:
@@ -200,8 +200,12 @@ async def test_failed_deletion_restores_a_ready_file_and_success_drops_its_chunk
         await repository.fail_job(
             job, error_code="storage_temporarily_unavailable", retryable=False
         )
+        # The vectors went first, so the file comes back rebuilding its index instead of
+        # "ready" with half of one.
         restored = await repository.get_file(user_id, file["id"])
-        assert restored["status"] == "ready" and restored["status_before_deletion"] is None
+        assert restored["status"] == "indexing" and restored["status_before_deletion"] is None
+        assert restored["chunks_done"] is None
+        assert _job_status("file_ingest", file["id"]) == "queued"
 
         await repository.request_file_deletion(user_id, file["id"])
         job = _job("file_deletion", file["id"])
@@ -213,6 +217,47 @@ async def test_failed_deletion_restores_a_ready_file_and_success_drops_its_chunk
                 "select count(*) from public.user_file_chunks where file_id=%s", (file["id"],)
             ).fetchone()[0]
         assert remaining == 0
+    finally:
+        _cleanup(user_id)
+
+
+@pytest.mark.asyncio
+async def test_abandoned_uploads_are_deleted_so_their_quota_comes_back() -> None:
+    user_id = uuid4()
+    repository = _repository()
+    try:
+        await repository.bootstrap(user_id, "abandoned-upload@example.test")
+        case = await repository.create_case(user_id, "Terk", None)
+        # Each intent reserves the 50 MB maximum; two of them fill the 100 MB quota.
+        first = await _intent(repository, user_id, case_id=case["id"])
+        second = await _intent(repository, user_id, case_id=case["id"])
+        with pytest.raises(ConflictError, match="user_file_quota_exceeded"):
+            await _intent(repository, user_id, case_id=case["id"])
+
+        # The tab was closed: both intents expire without ever completing. They stay
+        # charged (an object may exist) until the sweep's deletion jobs have run.
+        with psycopg.connect(database_url()) as conn:
+            conn.execute(
+                """update public.user_files set upload_expires_at=now() - interval '1 hour'
+                where id = any(%s)""",
+                ([first["id"], second["id"]],),
+            )
+        with pytest.raises(ConflictError, match="user_file_quota_exceeded"):
+            await _intent(repository, user_id, case_id=case["id"])
+
+        assert await repository.expire_abandoned_uploads() >= 2
+        for abandoned in (first, second):
+            file = await repository.get_file(user_id, abandoned["id"])
+            assert file["status"] == "delete_pending"
+            assert file["status_before_deletion"] == "pending_upload"
+            job = _job("file_deletion", abandoned["id"])
+            await repository.complete_file_deletion(job["id"], abandoned["id"])
+
+        third = await _intent(repository, user_id, case_id=case["id"])
+        assert third["status"] == "pending_upload"
+        # A live intent is left alone.
+        await repository.expire_abandoned_uploads()
+        assert (await repository.get_file(user_id, third["id"]))["status"] == "pending_upload"
     finally:
         _cleanup(user_id)
 

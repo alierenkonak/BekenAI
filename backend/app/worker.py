@@ -142,6 +142,7 @@ class Worker:
                 )
                 if recovered:
                     logger.info("Recovered %d stale jobs", recovered)
+                await self._expire_abandoned_uploads()
                 next_recovery = now + 60.0
             job = await self.repository.claim_job(self.worker_id, kinds)
             if job is None:
@@ -153,6 +154,16 @@ class Worker:
                     pass
                 continue
             await self._process(job)
+
+    async def _expire_abandoned_uploads(self) -> None:
+        # Housekeeping must never stop the lane that answers questions.
+        try:
+            expired = await self.repository.expire_abandoned_uploads()
+        except Exception as exc:
+            logger.warning("Abandoned upload cleanup skipped (%s)", type(exc).__name__)
+            return
+        if expired:
+            logger.info("Queued %d abandoned uploads for deletion", expired)
 
     async def _process(self, job: dict) -> None:
         try:

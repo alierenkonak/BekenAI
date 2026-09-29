@@ -866,6 +866,43 @@ class AppRepository:
                 )
         return len(rows)
 
+    async def expire_abandoned_uploads(self, grace_minutes: int = 10) -> int:
+        """Queue deletion of uploads whose intent expired (e.g. the tab was closed).
+
+        Such a record can never complete, but it stays charged until its object is gone,
+        since an upload that started in time may still have written one. The ordinary
+        deletion job removes it (a missing object counts as deleted) and frees the quota.
+        The grace period lets an upload that was in flight at expiry finish first.
+        """
+        async with await self.database.connect() as conn:
+            row = await (
+                await conn.execute(
+                    """
+                    with doomed as (
+                      update public.user_files
+                      set status_before_deletion=status,status='delete_pending',updated_at=now()
+                      where status='pending_upload'
+                        and upload_expires_at < now() - (%s * interval '1 minute')
+                      returning id,workspace_id
+                    ), queued as (
+                      insert into app_private.jobs
+                        (kind,workspace_id,subject_id,idempotency_key,payload)
+                      select 'file_deletion',workspace_id,id,'file-delete:' || id::text,
+                             '{}'::jsonb
+                      from doomed
+                      on conflict (workspace_id,idempotency_key) do update
+                      set status='queued',attempt_count=0,available_at=now(),locked_at=null,
+                          locked_by=null,safe_error_code=null,completed_at=null
+                      where app_private.jobs.status in ('failed','cancelled')
+                      returning 1
+                    )
+                    select count(*) as count from doomed
+                    """,
+                    (grace_minutes,),
+                )
+            ).fetchone()
+        return int(row["count"])
+
     async def claim_job(
         self, worker_id: str, kinds: Sequence[str] | None = None
     ) -> dict[str, Any] | None:
@@ -1069,14 +1106,27 @@ class AppRepository:
             elif job["kind"] == "file_deletion" and not retry:
                 # Give the file back in the state it had, so the user can retry. A file
                 # whose chat is already gone has no state to return to and stays queued.
-                await conn.execute(
-                    """update public.user_files
-                    set status=coalesce(status_before_deletion,'uploaded'),
-                        status_before_deletion=null,safe_error_code=%s,updated_at=now()
-                    where id=%s and status='delete_pending'
-                      and num_nonnulls(case_id,conversation_id)=1""",
-                    (error_code, job["subject_id"]),
-                )
+                # Vectors are deleted first, so a searchable file may have lost them: it
+                # comes back re-indexing rather than "ready" with half an index.
+                restored = await (
+                    await conn.execute(
+                        """update public.user_files
+                        set status=case when status_before_deletion in ('ready','indexing')
+                                        then 'indexing'
+                                        else coalesce(status_before_deletion,'uploaded') end,
+                            chunks_done=case when status_before_deletion in ('ready','indexing')
+                                             then null else chunks_done end,
+                            chunks_total=case when status_before_deletion in ('ready','indexing')
+                                              then null else chunks_total end,
+                            status_before_deletion=null,safe_error_code=%s,updated_at=now()
+                        where id=%s and status='delete_pending'
+                          and num_nonnulls(case_id,conversation_id)=1
+                        returning id,workspace_id,status""",
+                        (error_code, job["subject_id"]),
+                    )
+                ).fetchone()
+                if restored and restored["status"] == "indexing":
+                    await self._enqueue_ingest(conn, restored["workspace_id"], restored["id"])
 
     async def cancel_job(self, job_id: UUID) -> None:
         """Close a job whose subject moved on (cancelled chat, file deleted mid-way)."""

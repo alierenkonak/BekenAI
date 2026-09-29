@@ -71,6 +71,10 @@ the workspace and to the ready file ids the database returns) and Turkish full t
 `SOURCE_FILE_*` evidence that only the answer's `file_answer` section may cite. While a file
 in the chat's scope is still being verified or indexed, `POST /chat` returns
 `409 files_processing`. Deleting a file redacts the passages earlier answers quoted from it.
+Deletion removes vectors before the stored object; if it fails for good, a file that was
+searchable comes back re-indexing rather than "ready" with half an index. Once a minute the
+worker queues deletion for uploads whose intent expired more than 10 minutes ago (a closed tab);
+they stay charged against the quota until that deletion has removed any object they left.
 
 ## Web search
 
