@@ -743,9 +743,96 @@ async def test_web_citations_keep_their_page_and_the_generation_records_the_sear
                 "select prompt_version from public.chat_generations where id=%s",
                 (queued["generation_id"],),
             ).fetchone()
-        assert prompt_version == "web-search-v1"
+        assert prompt_version == "web-search-v2"
     finally:
         _cleanup(user_id)
+
+
+@pytest.mark.asyncio
+async def test_an_analysis_needs_a_case_with_ready_files_and_reads_them_in_order() -> None:
+    user_id = uuid4()
+    repository = _repository()
+
+    async def analyse(**target) -> dict:
+        return await repository.enqueue_chat(
+            user_id,
+            idempotency_key=f"analysis-{uuid4()}",
+            message="Dava dosyalarını analiz et",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="dava dosyalarını analiz et",
+            requested_model="fixture-model",
+            search_mode="analysis",
+            **{"conversation_id": None, "case_id": None, **target},
+        )
+
+    try:
+        await repository.bootstrap(user_id, "analysis@example.test")
+        with pytest.raises(ConflictError, match="analysis_requires_case"):
+            await analyse()
+        case = await repository.create_case(user_id, "İşe  İade", None)
+        with pytest.raises(ConflictError, match="case_has_no_ready_files"):
+            await analyse(case_id=case["id"])
+
+        first = await _ready_file(
+            repository, user_id, ["Dilekçe birinci parça."], case_id=case["id"]
+        )
+        await _ready_file(
+            repository, user_id, ["Cevap birinci.", "Cevap ikinci."], case_id=case["id"]
+        )
+        queued = await analyse(case_id=case["id"])
+
+        conversation = await repository.get_conversation(user_id, queued["conversation_id"])
+        assert conversation["title"] == "Dosya analizi: İşe İade"
+        with psycopg.connect(database_url(), row_factory=psycopg.rows.dict_row) as conn:
+            generation = conn.execute(
+                "select search_mode,prompt_version from public.chat_generations where id=%s",
+                (queued["generation_id"],),
+            ).fetchone()
+        assert generation == {"search_mode": "analysis", "prompt_version": "case-analysis-v1"}
+
+        rows = await repository.scope_file_chunks(
+            PrivateScope(
+                workspace_id=first["workspace_id"],
+                conversation_id=queued["conversation_id"],
+                case_id=case["id"],
+            ),
+            limit=10,
+        )
+        assert [row["text"] for row in rows] == [
+            "Dilekçe birinci parça.",
+            "Cevap birinci.",
+            "Cevap ikinci.",
+        ]
+    finally:
+        _cleanup(user_id)
+
+
+def test_a_whole_case_can_cite_more_than_99_file_passages() -> None:
+    with psycopg.connect(database_url()) as conn:
+        with conn.transaction(force_rollback=True):
+            # A three-digit id passes the id check (and fails only on the missing rows).
+            with pytest.raises(psycopg.errors.ForeignKeyViolation):
+                conn.execute(
+                    """insert into public.message_citations
+                    (workspace_id,message_id,conversation_id,claim_id,source_id,source_scope,
+                     source_channel,file_chunk_id,source_snapshot,integrity_status,
+                     support_status,ordinal)
+                    values (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'S1',
+                            'SOURCE_FILE_120','private','file',gen_random_uuid(),'{}',
+                            'valid','supported',1)"""
+                )
+        with conn.transaction(force_rollback=True):
+            with pytest.raises(psycopg.errors.CheckViolation):
+                conn.execute(
+                    """insert into public.message_citations
+                    (workspace_id,message_id,conversation_id,claim_id,source_id,source_scope,
+                     source_channel,file_chunk_id,source_snapshot,integrity_status,
+                     support_status,ordinal)
+                    values (gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),'S1',
+                            'SOURCE_FILE_1200','private','file',gen_random_uuid(),'{}',
+                            'valid','supported',1)"""
+                )
 
 
 def test_a_web_citation_points_at_no_corpus_or_file_row() -> None:

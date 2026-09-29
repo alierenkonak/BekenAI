@@ -89,6 +89,8 @@ const MESSAGES: Record<string, string> = {
   web_search_quota_exceeded: 'Bu ayın web araması hakkı doldu; ay başında yenilenir.',
   web_search_temporarily_unavailable: 'Web araması servisi geçici olarak yanıt vermiyor.',
   web_search_failed: 'Web araması tamamlanamadı.',
+  analysis_requires_case: 'Dosya analizi yalnızca bir davanın dosyaları için yapılabilir.',
+  case_has_no_ready_files: 'Analiz için davada işlenmesi tamamlanmış en az bir dosya olmalı.',
 };
 
 const VERIFICATION_FAILURES = new Set([

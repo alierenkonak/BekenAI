@@ -309,3 +309,28 @@ async def test_only_web_jobs_get_the_web_search_client(monkeypatch, mode):
     [created] = _RecordingService.created
     assert created["search_mode"] == mode
     assert created["web_search"] == ("tavily-client" if mode == "web" else None)
+
+
+@pytest.mark.asyncio
+async def test_analysis_jobs_run_the_case_analysis(monkeypatch):
+    worker = _chat_worker(monkeypatch, AsyncMock())
+    analysed = SimpleNamespace(answer_status="answered")
+    calls: list[dict] = []
+
+    class RecordingAnalysis:
+        def __init__(self, chat, chunks, settings) -> None:
+            assert chunks is worker.repository
+
+        async def analyze(self, **kwargs):
+            calls.append(kwargs)
+            return analysed
+
+    monkeypatch.setattr(worker_module, "CaseAnalysisService", RecordingAnalysis)
+    worker.repository.get_chat_work.return_value["search_mode"] = "analysis"
+    worker.repository.get_chat_work.return_value["case_id"] = "case-id"
+
+    await worker._chat({"id": "job-id", "subject_id": "generation-id"})
+
+    [call] = calls
+    assert call["domain"] == "labour_law" and call["private_scope"].case_id == "case-id"
+    worker.repository.complete_generation.assert_awaited_once_with("generation-id", analysed)

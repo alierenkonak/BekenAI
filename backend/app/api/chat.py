@@ -24,7 +24,8 @@ class ChatRequest(BaseModel):
     include_doctrine: bool = False
     # "web": the usual answer plus a labelled web section after it (the composer switch or
     # the offer under a sourceless answer). Accepted only when a search key is configured.
-    search_mode: Literal["corpus", "web"] = "corpus"
+    # "analysis": a report over every ready file of the chat's case (the case page button).
+    search_mode: Literal["corpus", "web", "analysis"] = "corpus"
 
     @field_validator("message")
     @classmethod

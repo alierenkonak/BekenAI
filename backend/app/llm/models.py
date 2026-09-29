@@ -17,6 +17,19 @@ class QueryPlan(BaseModel):
     web_query: str = Field(default="", max_length=4000)
 
 
+class CaseIssue(BaseModel):
+    # A short heading for the report, e.g. "Savunma alınması".
+    title: str = Field(min_length=3, max_length=200)
+    # How to find the law on it: general legal terms, no names. Clipped in code.
+    search_query: str = Field(min_length=3, max_length=2000)
+
+
+class CaseIssues(BaseModel):
+    """The legal issues a case file raises, most decisive first."""
+
+    issues: list[CaseIssue] = Field(min_length=1, max_length=12)
+
+
 class AnswerSentence(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     # Sources the sentence rests on; empty for explanation, transitions and guidance.

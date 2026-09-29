@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
 # global: the legal corpus; private: the user's own files; web: pages a web search found.
 CITATION_SCOPES = frozenset({"global", "private", "web"})
+PROMPT_VERSIONS = {"web": "web-search-v2", "analysis": "case-analysis-v1"}
 # Files past verification: their object size is known and their bytes are readable.
 VERIFIED_FILE_STATUSES = ("uploaded", "indexing", "ready")
 # Indexing failures a later attempt can fix; format errors (scanned PDF…) cannot.
@@ -513,8 +514,27 @@ class AppRepository:
             if busy:
                 raise ConflictError("files_processing")
 
+            title = " ".join(message.split())[:80]
+            if search_mode == "analysis":
+                # An analysis reads a case's files; a chat outside a case has none to read.
+                analysed_case = conversation["case_id"] if conversation else case_id
+                if analysed_case is None:
+                    raise ConflictError("analysis_requires_case")
+                case = await (
+                    await conn.execute(
+                        """select c.name,exists(
+                              select 1 from public.user_files f
+                              where f.workspace_id=c.workspace_id and f.case_id=c.id
+                                and f.status='ready') as has_ready_files
+                           from public.cases c where c.id=%s and c.workspace_id=%s""",
+                        (analysed_case, workspace["id"]),
+                    )
+                ).fetchone()
+                if not case or not case["has_ready_files"]:
+                    raise ConflictError("case_has_no_ready_files")
+                title = f"Dosya analizi: {' '.join(case['name'].split())}"[:160]
+
             if conversation is None:
-                title = " ".join(message.split())[:80]
                 conversation = await (
                     await conn.execute(
                         """
@@ -545,7 +565,7 @@ class AppRepository:
                         conversation["id"],
                         user_message["id"],
                         requested_model,
-                        "web-search-v1" if search_mode == "web" else "grounded-chat-v2",
+                        PROMPT_VERSIONS.get(search_mode, "grounded-chat-v2"),
                         retrieval_query,
                         include_doctrine,
                         search_mode,
@@ -1502,6 +1522,32 @@ class AppRepository:
                 )
             ).fetchall()
         return [row["id"] for row in rows]
+
+    async def scope_file_chunks(
+        self, scope: PrivateScope, *, limit: int
+    ) -> list[dict[str, Any]]:
+        """Every chunk of the ready files a chat can read, in reading order."""
+        async with await self.database.connect() as conn:
+            rows = await (
+                await conn.execute(
+                    f"""select c.id,c.file_id,c.chunk_index,c.text,c.section_title,
+                              c.page_start,c.page_end,c.paragraph_start,c.paragraph_end,
+                              f.original_name
+                       from public.user_file_chunks c
+                       join public.user_files f on f.id=c.file_id
+                       where {_SCOPE_FILES} and f.status='ready'
+                         and c.workspace_id=%(workspace_id)s
+                       order by f.created_at,f.id,c.chunk_index
+                       limit %(limit)s""",
+                    {
+                        "workspace_id": scope.workspace_id,
+                        "conversation_id": scope.conversation_id,
+                        "case_id": scope.case_id,
+                        "limit": limit,
+                    },
+                )
+            ).fetchall()
+        return rows
 
     async def search_file_chunks(
         self, workspace_id: UUID, file_ids: Sequence[UUID], query: str, *, limit: int
