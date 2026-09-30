@@ -560,3 +560,64 @@ async def test_generation_stage_lifecycle_and_message_details() -> None:
         with psycopg.connect(database_url()) as conn:
             conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
             conn.execute("delete from public.profiles where user_id=%s", (user_id,))
+
+
+@pytest.mark.asyncio
+async def test_provision_changes_follow_the_units_each_law_chunk_covers(tmp_path) -> None:
+    from beken_ingestion.database import CorpusRepository
+    from beken_ingestion.models import RawDocument
+    from beken_ingestion.pipeline import IngestionPipeline
+    from beken_ingestion.storage import FilesystemRawStorage
+
+    pipeline = IngestionPipeline(CorpusRepository(database_url()), FilesystemRawStorage(tmp_path))
+    imported = pipeline.ingest(
+        RawDocument(
+            source_name="manual",
+            source_document_id="integration-provision-history",
+            source_url="file:///integration-provision-history.txt",
+            media_type="text/plain",
+            content=(
+                "MADDE 1 - (1) Birinci fıkra işverenin yükümlülüğünü düzenleyen bir hükümdür.\n"
+                "(2) (Ek fıkra: 1/7/2006-5538/18 md.) Sonradan eklenen fıkra yeni bir şart "
+                "getirir ve işçinin başvuru hakkını düzenler.\n"
+                "MADDE 2 - (Değişik: 6/5/2016-6715/1 md.) Değişen madde bugünkü metniyle "
+                "yürürlüktedir ve ayrıntılı bir usul öngörür.\n"
+                "MADDE 3 - Hiç değişmemiş madde aynen yürürlüktedir ve bir süre öngörür.\n"
+            ).encode(),
+            metadata={
+                "source_kind": "legislation",
+                "document_type": "law",
+                "domain": "labour_law",
+                "title": "Provision History Kanunu",
+            },
+        )
+    )
+    try:
+        with psycopg.connect(database_url()) as connection:
+            chunks = connection.execute(
+                """select c.id,c.text from legal.document_chunks c
+                   join legal.documents d on d.current_parse_id=c.parse_id
+                   where d.id=%s order by c.chunk_index""",
+                (imported.document_id,),
+            ).fetchall()
+        rows = await AppRepository(AppDatabase(database_url())).provision_changes(
+            [str(chunk_id) for chunk_id, _ in chunks]
+        )
+        notes: dict[str, list[tuple]] = {}
+        for row in rows:
+            notes.setdefault(str(row["chunk_id"]), []).append(
+                (row["event_type"], row["event_date"].isoformat(), row["source_law_number"])
+            )
+        by_article = {
+            text.split(" -", 1)[0]: notes.get(str(chunk_id), [])
+            for chunk_id, text in chunks
+            if text.startswith("MADDE")
+        }
+        assert by_article == {
+            "MADDE 1": [("added", "2006-07-01", "5538")],
+            "MADDE 2": [("amended", "2016-05-06", "6715")],
+            "MADDE 3": [],
+        }
+    finally:
+        with psycopg.connect(database_url()) as connection:
+            connection.execute("delete from legal.documents where id=%s", (imported.document_id,))

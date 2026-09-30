@@ -73,7 +73,39 @@ export interface SourceSnapshot {
   site?: string;
   published_date?: string | null;
   retrieved_on?: string;
+  /** Law passages only: the official amendment notes of the articles it covers, newest first. */
+  provision_changes?: ProvisionChange[];
 }
+
+export type ProvisionChangeType = 'added' | 'amended' | 'repealed' | 'annulled';
+
+export interface ProvisionChange {
+  event_type: ProvisionChangeType;
+  /** The amending law's adoption date (for an annulment, the court's decision date). */
+  change_date: string;
+  effective_from: string | null;
+  amending_law: string | null;
+  /** e.g. "m.3, 12. fıkra"; empty when the note is not tied to an article. */
+  provision: string;
+  /** The official note as the law text prints it. */
+  annotation: string;
+}
+
+/**
+ * Yürürlük kontrolü: a cited provision changed after the case date (changed_after) or
+ * shortly before it, so its effective date needs checking (near_change).
+ */
+export interface TemporalCheck extends ProvisionChange {
+  source_id: string;
+  level: 'changed_after' | 'near_change';
+  title: string;
+  case_date: string;
+  case_date_label: string;
+  text: string;
+}
+
+/** Why a web search could help: nothing found, a provision changed, or something missing. */
+export type WebSearchOfferReason = 'no_sources' | 'provision_changed' | 'missing_info';
 
 export interface Citation {
   claim_id: string;
@@ -140,8 +172,12 @@ export interface ConversationalAnswer {
   web_blocks?: AnswerBlock[];
   /** found, empty, or why the web search failed; null without one. */
   web_search_status?: string | null;
-  /** The corpus found nothing for this legal question; the user may search the web. */
+  /** A web search could help this legal question; the user may run it. */
   web_search_offered?: boolean;
+  /** Why; absent on answers from before the reasons existed (they meant no_sources). */
+  web_search_offer?: WebSearchOfferReason | null;
+  /** Absent on answers written before the check existed. */
+  temporal_checks?: TemporalCheck[];
 }
 
 export type StructuredAnswer = LegacyAnswer | ConversationalAnswer;

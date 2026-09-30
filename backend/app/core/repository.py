@@ -1377,6 +1377,30 @@ class AppRepository:
             raise NotFoundError("source_not_found")
         return row
 
+    async def provision_changes(self, chunk_ids: Sequence[str]) -> list[dict[str, Any]]:
+        """Dated amendment notes of the articles, paragraphs and items a law chunk covers.
+
+        A note is tied to the smallest unit it changed; it concerns every chunk that
+        overlaps that unit, so an article-level change shows on each of its chunks.
+        """
+        if not chunk_ids:
+            return []
+        async with await self.database.connect() as conn:
+            return await (
+                await conn.execute(
+                    """select c.id as chunk_id,e.id as event_id,e.event_type,e.target_type,
+                              e.event_date,e.effective_from,e.source_law_number,
+                              e.raw_annotation,u.unit_path,u.unit_type
+                       from legal.document_chunks c
+                       join legal.provision_events e on e.parse_id=c.parse_id
+                       join legal.legal_units u on u.id=e.legal_unit_id and u.parse_id=e.parse_id
+                       where c.id=any(%s) and e.event_date is not null
+                         and u.char_start<c.char_end and u.char_end>c.char_start
+                       order by c.id,e.event_date desc,e.event_index""",
+                    ([UUID(str(chunk_id)) for chunk_id in chunk_ids],),
+                )
+            ).fetchall()
+
     async def _assert_citation_integrity(
         self, conn: AsyncConnection, result: Any, workspace_id: UUID
     ) -> None:

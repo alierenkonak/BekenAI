@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 from beken_retrieval.models import SearchHit
 
+from app.chat.temporal import ProvisionChange
 from app.files.retrieval import PrivateHit
 from app.web.search import WebHit
 
@@ -26,10 +27,19 @@ class EvidenceSource:
     channel: Literal["primary", "doctrine"]
     hit: SearchHit
     index_version: str
+    # Official amendment notes of the articles this passage covers, newest first.
+    changes: tuple[ProvisionChange, ...] = ()
+
+    @property
+    def amendments(self) -> str:
+        return "\n".join(change.prompt_line for change in self.changes)
 
     @property
     def passage(self) -> str:
-        return self.hit.record.text
+        # The verifier sees the notes too, so "this paragraph changed in 2024" can be checked.
+        if not self.changes:
+            return self.hit.record.text
+        return f"{self.hit.record.text}\n\nResmî değişiklik notları:\n{self.amendments}"
 
     def citation_reference(self) -> dict:
         record = self.hit.record
@@ -55,7 +65,10 @@ class EvidenceSource:
             f"breadcrumb={' > '.join(record.breadcrumb)}",
             f"page={record.page_number or ''}",
         ]
-        return "\n".join(metadata) + f"\n<passage>\n{record.text}\n</passage>"
+        block = "\n".join(metadata) + f"\n<passage>\n{record.text}\n</passage>"
+        if self.changes:
+            block += f"\n<amendments>\n{self.amendments}\n</amendments>"
+        return block
 
     def snapshot(self) -> dict:
         record = self.hit.record
@@ -86,7 +99,11 @@ class EvidenceSource:
             "corpus_version": record.corpus_version,
             "retrieval_scope_version": record.retrieval_scope_version,
             "index_version": self.index_version,
-        }
+        } | (
+            {"provision_changes": [change.snapshot() for change in self.changes]}
+            if self.changes
+            else {}
+        )
 
 
 @dataclass(frozen=True)

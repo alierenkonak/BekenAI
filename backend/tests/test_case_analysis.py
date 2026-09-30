@@ -169,10 +169,12 @@ def settings() -> Settings:
     )
 
 
-def analysis(provider=None, rows=ROWS) -> tuple[CaseAnalysisService, FakeProvider, FakeCoordinator]:
+def analysis(
+    provider=None, rows=ROWS, provisions=None
+) -> tuple[CaseAnalysisService, FakeProvider, FakeCoordinator]:
     provider = provider or FakeProvider()
     coordinator = FakeCoordinator()
-    chat = GroundedChatService(coordinator, provider, settings())
+    chat = GroundedChatService(coordinator, provider, settings(), provisions=provisions)
     return CaseAnalysisService(chat, FakeChunks(rows), settings()), provider, coordinator
 
 
@@ -271,3 +273,65 @@ async def test_issue_extraction_falls_back_when_the_analysis_model_is_unavailabl
     service, provider, _ = analysis(provider=QuotaExhausted())
     await service.analyze(domain="labour_law", private_scope=SCOPE)
     assert provider.calls[:2] == ["gemini-analysis:CaseIssues", "gemini-fallback:CaseIssues"]
+
+
+class FakeProvisions:
+    """Only the defence article changed, after the dismissal in the file."""
+
+    async def provision_changes(self, chunk_ids):
+        return [
+            {
+                "chunk_id": chunk_id,
+                "event_id": "defence-change",
+                "event_type": "amended",
+                "target_type": "unit",
+                "unit_type": "article",
+                "event_date": date(2023, 11, 8),
+                "effective_from": None,
+                "source_law_number": "7999",
+                "raw_annotation": "Değişik: 8/11/2023-7999/1 md.",
+                "unit_path": ["article:19"],
+            }
+            for chunk_id in chunk_ids
+            if chunk_id == DEFENCE.record.chunk_id
+        ]
+
+
+@pytest.mark.asyncio
+async def test_each_issue_is_checked_against_the_date_the_file_gives_for_it() -> None:
+    dated = CaseIssues(
+        issues=[
+            CaseIssue(
+                title="Savunma alınması",
+                search_query="savunma alınmadan geçerli fesih",
+                date="14.06.2023",
+                date_label="fesih tarihi",
+            ),
+            # The model made this date up: the file does not contain it.
+            CaseIssue(
+                title="İş güvencesi kapsamı",
+                search_query="iş güvencesi şartları kıdem",
+                date="01.01.2020",
+                date_label="işe giriş tarihi",
+            ),
+        ]
+    )
+    rows = [*ROWS, chunk_row("Fesih bildirimi 14.06.2023 tarihinde tebliğ edilmiştir.",
+                             file_name="Fesih Bildirimi.pdf", index=0, page=1)]
+    service, provider, _ = analysis(FakeProvider(dated), rows=rows, provisions=FakeProvisions())
+    result = await service.analyze(domain="labour_law", private_scope=SCOPE)
+
+    report_prompt = provider.prompts["ChatAnswer"]
+    issue_map = json.loads(report_prompt.rsplit("<issues>", 1)[1].split("</issues>")[0])
+    assert issue_map[0]["olay_tarihi"] == "fesih tarihi: 14.06.2023"
+    assert "olay_tarihi" not in issue_map[1]
+    assert "- m.19: Değişik: 8/11/2023-7999/1 md." in report_prompt
+
+    [check] = result.structured_content["temporal_checks"]
+    assert (check["source_id"], check["level"], check["case_date_label"]) == (
+        P1,
+        "changed_after",
+        "fesih tarihi",
+    )
+    # A report is not re-run as a web search.
+    assert result.structured_content["web_search_offer"] is None

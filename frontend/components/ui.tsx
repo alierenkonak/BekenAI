@@ -122,20 +122,24 @@ export function CitationChip({
   tone,
   onClick,
   ariaLabel,
+  flagged = false,
 }: {
   label: string;
   tone: ChipTone;
   onClick?: () => void;
   ariaLabel: string;
+  /** Marks a source with a Yürürlük kontrolü warning. */
+  flagged?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
-      className={`ml-1 inline-flex h-[19px] min-w-5 items-center justify-center rounded-[5px] border px-[5px] align-[1px] font-mono text-[11px] font-medium transition-colors ${CHIP_TONES[tone]}`}
+      className={`ml-1 inline-flex h-[19px] min-w-5 items-center justify-center gap-[3px] rounded-[5px] border px-[5px] align-[1px] font-mono text-[11px] font-medium transition-colors ${CHIP_TONES[tone]}`}
     >
       {label}
+      {flagged && <span aria-hidden className="h-[5px] w-[5px] shrink-0 rounded-full bg-err" />}
     </button>
   );
 }

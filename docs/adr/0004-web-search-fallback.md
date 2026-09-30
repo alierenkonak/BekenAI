@@ -65,3 +65,18 @@ Davranış şöyle değişti:
   söyleyen kısa bir not olur. Web'de bir şey çıkmazsa da bunu söyleyen bir not görünür.
 - Ek Gemini çağrısı yoktur: iki bölüm tek cevap çağrısında yazılır.
 
+
+## Güncelleme (2026-09-30): kısmi cevaplarda da teklif
+
+Teklif kartı yalnız hiç kaynak bulunamayınca çıkıyordu. Oysa kısmi cevaplarda eksik kalan
+bilgi çoğu zaman tam da web'de bulunacak türdendi: güncel bir tutar ya da değişen bir hükmün
+eski metni. Cevap artık teklifin nedenini de taşıyor (`web_search_offer`):
+
+- `no_sources`: cevap `insufficient_evidence` ya da doğrulanmış atfı yok (eski davranış).
+- `provision_changed`: atıf yapılan bir hüküm olay tarihinden sonra değişmiş (ADR 0006).
+  Eski metin bizde yok, Resmî Gazete'de var.
+- `missing_info`: model `web_would_help` alanını işaretledi. Gereken bilgi kaynaklarda yok ama
+  web'de bulunabilecek türden (güncel tutar veya oran, yeni bir değişiklik, güncel uygulama).
+
+Ek Gemini çağrısı yoktur; alan cevapla birlikte yazılır. Arayüz kartın metnini nedene göre
+seçer. Nedenden önceki cevaplarda alan yoktur ve `no_sources` sayılır.
