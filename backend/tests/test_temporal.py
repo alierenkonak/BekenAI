@@ -3,11 +3,14 @@ from __future__ import annotations
 from datetime import date
 
 from app.chat.temporal import (
+    MAX_AMENDMENT_SEARCHES,
     MAX_ANNOTATION_CHARS,
     MAX_CHECKS,
     CaseDate,
     ProvisionChange,
+    amendment_query,
     assess,
+    changed_after,
     changes_by_chunk,
     check_text,
     dates_in,
@@ -179,3 +182,24 @@ def test_checks_report_each_change_once_and_firm_warnings_first() -> None:
 
     many = [change(event_id=str(number)) for number in range(20)]
     assert len(temporal_checks([("P1", "Kanun", many)], {"P1": MEDIATION})) == MAX_CHECKS
+
+
+def test_the_old_text_is_searched_by_law_and_provision_only() -> None:
+    [check] = temporal_checks([("P1", "7036 sayılı İş Mahkemeleri Kanunu", [change()])],
+                              {"P1": MEDIATION})
+    query = amendment_query(check)
+    assert query == (
+        "7036 sayılı İş Mahkemeleri Kanunu m.3, 12. fıkra 7531 sayılı Kanun "
+        "değişiklik öncesi eski hali"
+    )
+    # Nothing the user wrote or the file says reaches the search engine.
+    assert "2023" not in query and "arabulucu" not in query
+    annulled = check | {"amending_law": None, "event_type": "annulled"}
+    assert "Anayasa Mahkemesi iptal kararı" in amendment_query(annulled)
+
+
+def test_only_firm_warnings_are_searched_and_only_a_few() -> None:
+    checks = [{"level": "near_change"}] + [{"level": "changed_after", "n": n} for n in range(5)]
+    found = changed_after(checks)
+    assert len(found) == MAX_AMENDMENT_SEARCHES
+    assert all(check["level"] == "changed_after" for check in found)

@@ -408,9 +408,10 @@ function TemporalChecks({
 }
 
 const WEB_OFFER_TEXT: Record<WebSearchOfferReason, string> = {
-  no_sources: "BekenAI'nin kaynaklarında bu soruya dayanak bulunamadı.",
-  provision_changed: "Atıf yapılan bir hüküm olay tarihinden sonra değişmiş; eski metni BekenAI'nin kaynaklarında yok.",
-  missing_info: "Bu cevap için gereken bazı bilgiler BekenAI'nin kaynaklarında yok.",
+  no_sources: "BekenAI'nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web'de de arayabilirim;",
+  provision_changed:
+    "Atıf yapılan bir hüküm olay tarihinden sonra değişmiş ve eski metni BekenAI'nin kaynaklarında yok. İsterseniz sorunuzu web'de bu hükmün eski haliyle birlikte arayabilirim;",
+  missing_info: "Bu cevap için gereken bazı bilgiler BekenAI'nin kaynaklarında yok. İsterseniz web'de de arayabilirim;",
 };
 
 /** Offered when a web search could help a legal question; never runs on its own. */
@@ -418,8 +419,7 @@ function WebSearchOffer({ reason, onSearch, busy }: { reason: WebSearchOfferReas
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-center">
       <p className="m-0 grow text-[13px] leading-normal text-fg2">
-        {WEB_OFFER_TEXT[reason]} İsterseniz web&apos;de de arayabilirim; bulunanlar cevabın sonuna ayrı ve etiketli bir bölüm olarak
-        eklenir.
+        {WEB_OFFER_TEXT[reason]} bulunanlar cevabın sonuna ayrı ve etiketli bir bölüm olarak eklenir.
       </p>
       <button
         type="button"

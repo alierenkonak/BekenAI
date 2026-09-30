@@ -992,7 +992,32 @@ class AppRepository:
                     (work["conversation_id"], work["user_message_id"], work["user_created_at"]),
                 )
             ).fetchall()
-        return {**work, "history": list(reversed(history))}
+            checks: list[dict[str, Any]] = []
+            if work["search_mode"] == "web":
+                # The "Web'de ara" offer re-asks the same question. If the earlier answer
+                # found provisions that changed after the case date, their old text is
+                # searched too.
+                earlier = await (
+                    await conn.execute(
+                        """select a.structured_content->'temporal_checks' as checks
+                        from public.chat_generations g
+                        join public.messages u on u.id=g.user_message_id
+                        join public.messages a on a.id=g.assistant_message_id
+                        where g.conversation_id=%s and g.id<>%s and g.status='completed'
+                          and u.created_at<%s and u.content=%s
+                          and a.structured_content->>'web_search_offer'='provision_changed'
+                        order by u.created_at desc limit 1""",
+                        (
+                            work["conversation_id"],
+                            work["id"],
+                            work["user_created_at"],
+                            work["user_message"],
+                        ),
+                    )
+                ).fetchone()
+                if earlier and isinstance(earlier["checks"], list):
+                    checks = earlier["checks"]
+        return {**work, "history": list(reversed(history)), "amended_checks": checks}
 
     async def complete_generation(self, generation_id: UUID, result: Any) -> None:
         async with await self.database.connect() as conn:

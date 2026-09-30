@@ -80,3 +80,18 @@ eski metni. Cevap artık teklifin nedenini de taşıyor (`web_search_offer`):
 
 Ek Gemini çağrısı yoktur; alan cevapla birlikte yazılır. Arayüz kartın metnini nedene göre
 seçer. Nedenden önceki cevaplarda alan yoktur ve `no_sources` sayılır.
+
+`provision_changed` kartından açılan web turu, eski metni ayrıca hedefli olarak arar:
+
+- Worker, aynı sohbette aynı soruya verilmiş önceki cevabın kesin yürürlük uyarılarını okur
+  (en fazla iki). Web'de sorunun kendi sorgusuna ek olarak her uyarı için ayrı bir sorgu
+  çalıştırır, örneğin "7036 sayılı İş Mahkemeleri Kanunu m.3, 12. fıkra 7531 sayılı Kanun
+  değişiklik öncesi eski hali".
+- Bu sorguyu kod kurar ve yalnız kaynağımızdaki kanun ve madde bilgisini içerir. Dosyadan ya
+  da mesajdan isim veya tarih web'e gitmez.
+- Aramalar paralel çalışır. İki aramada da çıkan sayfa bir kez tutulur, sorunun sonuçları
+  önce gelir. Biri başarısız olursa diğerleri kullanılır. Böyle bir tur Tavily'de en fazla 6
+  kredi harcar.
+- Ana cevap yine soruyu cevaplar; değişiklik bilgisi onun yerini almaz. Web bölümü önce
+  sorunun web'deki karşılığını yazar, sonra eski metni ya da geçiş hükmünü bulduysa aktarır ve
+  bunun cevabı değiştirip değiştirmediğini söyler.

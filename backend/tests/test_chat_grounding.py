@@ -867,3 +867,94 @@ async def test_a_failing_provision_history_never_fails_the_answer(caplog) -> Non
     assert result.structured_content["temporal_checks"] == []
     assert "<amendments>\n" not in provider.prompts["ChatAnswer"]
     assert "Provision history skipped (RuntimeError)" in caplog.text
+
+
+AMENDED_CHECK = {
+    "source_id": P,
+    "level": "changed_after",
+    "title": "7036 sayılı İş Mahkemeleri Kanunu",
+    "event_type": "amended",
+    "change_date": "2024-11-07",
+    "effective_from": None,
+    "amending_law": "7531",
+    "provision": "m.3, 12. fıkra",
+    "annotation": "Değişik ikinci cümle:7/11/2024-7531/28 md.",
+    "case_date": "2023-07-05",
+    "case_date_label": "arabulucu başvurusu",
+    "text": "7036 sayılı İş Mahkemeleri Kanunu m.3, 12. fıkra (Değişik ikinci cümle:7/11/2024-"
+    "7531/28 md.): bu değişiklik arabulucu başvurusu olan 05.07.2023 tarihinden sonra; olay "
+    "tarihinde hükmün metni bugünkünden farklıydı.",
+}
+OLD_TEXT_QUERY = (
+    "7036 sayılı İş Mahkemeleri Kanunu m.3, 12. fıkra 7531 sayılı Kanun değişiklik öncesi eski hali"
+)
+OLD_TEXT = WebHit(
+    url="https://www.resmigazete.gov.tr/7531",
+    title="7531 sayılı Kanun",
+    site="www.resmigazete.gov.tr",
+    text="MADDE 28- 7036 sayılı Kanunun 3 üncü maddesinin on ikinci fıkrasının ikinci cümlesi...",
+    score=0.9,
+    retrieved_on="2026-09-30",
+    published_date="2024-11-14",
+)
+
+
+class RoutedWebSearch(FakeWebSearch):
+    """Answers the question's query and the old-text query with different pages."""
+
+    def __init__(self, *, old_text_error: Exception | None = None) -> None:
+        super().__init__()
+        self.old_text_error = old_text_error
+
+    async def search(self, query: str) -> list[WebHit]:
+        self.queries.append(query)
+        if query == OLD_TEXT_QUERY:
+            if self.old_text_error:
+                raise self.old_text_error
+            # The question's page turns up here too.
+            return [OLD_TEXT, web_hit()]
+        return [web_hit()]
+
+
+@pytest.mark.asyncio
+async def test_a_web_search_from_a_changed_provision_still_answers_the_question() -> None:
+    provider = FakeProvider(WEB_ANSWER, plan=WEB_PLAN)
+    web = RoutedWebSearch()
+    near = AMENDED_CHECK | {"level": "near_change", "text": "yalnız kontrol notu"}
+    result = await ask(
+        service(provider, web=web), search_mode="web", amended_checks=[AMENDED_CHECK, near]
+    )
+
+    # The question is searched as always; the firm warning's old text is searched too.
+    assert web.queries == [WEB_QUERY, OLD_TEXT_QUERY]
+    prompt = provider.prompts["ChatAnswer"]
+    # A page both searches found is kept once, the question's results first.
+    assert "source_id=SOURCE_WEB_01\nchannel=web\nsite=hukuk.example.com" in prompt
+    assert "source_id=SOURCE_WEB_02\nchannel=web\nsite=www.resmigazete.gov.tr" in prompt
+    assert "SOURCE_WEB_03" not in prompt
+    # The model is told what changed, and that the question stays the point.
+    assert AMENDED_CHECK["text"] in prompt and "yalnız kontrol notu" not in prompt
+    assert "cevabın yerini almaz" in prompt
+    assert "web_blocks'ta önce kullanıcının sorusuna web'de ne dendiğini yaz" in prompt
+    assert result.structured_content["web_search_status"] == "found"
+    assert web_sentences(result)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_old_text_search_leaves_the_questions_web_results() -> None:
+    provider = FakeProvider(WEB_ANSWER, plan=WEB_PLAN)
+    web = RoutedWebSearch(old_text_error=TransientWebSearchError("web_search_failed"))
+    chat = service(provider, web=web)
+    result = await ask(chat, search_mode="web", amended_checks=[AMENDED_CHECK])
+    assert web.queries == [WEB_QUERY, OLD_TEXT_QUERY]
+    assert result.structured_content["web_search_status"] == "found"
+    assert "SOURCE_WEB_01" in provider.prompts["ChatAnswer"]
+
+
+@pytest.mark.asyncio
+async def test_changed_provisions_never_send_a_corpus_turn_to_the_web() -> None:
+    provider = FakeProvider(MIXED)
+    web = RoutedWebSearch()
+    await ask(service(provider, web=web), amended_checks=[AMENDED_CHECK])
+    assert web.queries == []
+    assert "cevabın yerini almaz" not in provider.prompts["ChatAnswer"]
