@@ -621,3 +621,62 @@ async def test_provision_changes_follow_the_units_each_law_chunk_covers(tmp_path
     finally:
         with psycopg.connect(database_url()) as connection:
             connection.execute("delete from legal.documents where id=%s", (imported.document_id,))
+
+
+@pytest.mark.asyncio
+async def test_a_web_turn_finds_the_changed_provisions_of_the_same_earlier_question() -> None:
+    user_id = uuid4()
+    repository = AppRepository(AppDatabase(database_url()))
+    question = "Arabuluculuk toplantısına katılmama kuralı davamızı etkiler mi?"
+    check = {"level": "changed_after", "title": "7036 sayılı İş Mahkemeleri Kanunu"}
+
+    def answered(structured: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            answer_status="answered",
+            content="Cevap",
+            structured_content=structured,
+            citations=[],
+            actual_model="fixture-model",
+            verifier_model=None,
+            fallback_used=False,
+            input_tokens=1,
+            output_tokens=1,
+            latency_ms=1,
+            corpus_versions={},
+            index_versions={},
+        )
+
+    async def ask(key: str, conversation_id, search_mode: str) -> dict:
+        queued = await repository.enqueue_chat(
+            user_id,
+            idempotency_key=key,
+            conversation_id=conversation_id,
+            case_id=None,
+            message=question,
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="arabuluculuk toplantısına katılmama",
+            requested_model="fixture-model",
+            search_mode=search_mode,
+        )
+        job = await repository.claim_job("integration-worker")
+        assert job and job["subject_id"] == queued["generation_id"]
+        return queued
+
+    try:
+        await repository.bootstrap(user_id, "amended@example.test")
+        first = await ask("amended-corpus", None, "corpus")
+        assert (await repository.get_chat_work(first["generation_id"]))["amended_checks"] == []
+        await repository.complete_generation(
+            first["generation_id"],
+            answered({"web_search_offer": "provision_changed", "temporal_checks": [check]}),
+        )
+
+        # The offer re-asks the same question with web search on.
+        second = await ask("amended-web", first["conversation_id"], "web")
+        work = await repository.get_chat_work(second["generation_id"])
+        assert work["amended_checks"] == [check]
+    finally:
+        with psycopg.connect(database_url()) as conn:
+            conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
+            conn.execute("delete from public.profiles where user_id=%s", (user_id,))

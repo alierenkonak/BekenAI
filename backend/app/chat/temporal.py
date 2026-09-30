@@ -266,3 +266,30 @@ def temporal_checks(
             )
     checks.sort(key=lambda check: check["level"] != "changed_after")
     return checks[:MAX_CHECKS]
+
+
+# Each targeted search costs Tavily credits; two changed provisions cover almost every answer.
+MAX_AMENDMENT_SEARCHES = 2
+
+
+def changed_after(checks: Iterable[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """The firm warnings of an earlier answer, the ones whose old text a web search may find."""
+    return [check for check in checks if check.get("level") == "changed_after"][
+        :MAX_AMENDMENT_SEARCHES
+    ]
+
+
+def amendment_query(check: Mapping[str, Any]) -> str:
+    """A web query for a provision's text before it changed.
+
+    Built from the corpus's own note (law, provision, amending law); nothing from the user's
+    file or message, such as a name or the case date, reaches the search engine this way.
+    """
+    if check.get("amending_law"):
+        changed_by = f"{check['amending_law']} sayılı Kanun"
+    elif check.get("event_type") == "annulled":
+        changed_by = "Anayasa Mahkemesi iptal kararı"
+    else:
+        changed_by = ""
+    parts = (check.get("title"), check.get("provision"), changed_by, "değişiklik öncesi eski hali")
+    return " ".join(" ".join(str(part).split()) for part in parts if part)

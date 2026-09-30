@@ -247,6 +247,7 @@ class Worker:
             on_stage=report_stage,
             private_scope=scope,
             search_mode=search_mode,
+            amended_checks=work.get("amended_checks") or [],
         )
         await self.repository.complete_generation(job["subject_id"], result)
 
