@@ -77,8 +77,56 @@ Before restarting Qdrant after a unit update, preload the exact multi-architectu
 by the service:
 
 ```bash
-sudo docker pull qdrant/qdrant:v1.15.4@sha256:6ac4807063bbecddca0250bfbcff52acf18c22263b904d12919349e6d0a408f1
+sudo docker pull qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
 ```
+
+Qdrant reads storage written by the previous minor version only, so upgrade one minor at a time
+and let each start once (1.15 → 1.16 → 1.17 → 1.18 → 1.19 on 2026-09-30; 1.17 dropped RocksDB).
+Copy `/var/lib/bekenai-qdrant` while the service is stopped first; it is the rollback. After each
+step compare every collection's `points/count` with the value before. The Python client
+(`qdrant-client`) is pinned to the server's minor version in both `pyproject.toml` files.
+
+## Service virtual environment
+
+All three services run from `/opt/bekenai/venv`, a symlink to a venv built only from the
+hash-locked files. Since 2026-09-30 `deploy/oracle/requirements.lock` also covers the backend's
+dependencies; torch comes from `torch.lock`. Build a new venv next to the current one, test it,
+then move the symlink; the previous venv stays as the rollback:
+
+```bash
+V=/opt/bekenai/venvs/$(date +%Y%m%d)
+sudo install -m 0644 requirements.lock torch.lock /opt/bekenai/locks/
+sudo python3.12 -m venv "$V"
+sudo "$V/bin/python" -m pip install --no-deps --require-hashes --only-binary=:all: -r /opt/bekenai/locks/requirements.lock
+sudo "$V/bin/python" -m pip install --no-deps --require-hashes --only-binary=:all: -r /opt/bekenai/locks/torch.lock
+sudo "$V/bin/python" -m pip check
+```
+
+Before moving the symlink, start the model service from the new venv on port 8082 (a transient
+`systemd-run` unit with the service's environment) and send the same queries, passages and
+rerank pairs to both services. Embeddings must match (cosine 1.0) and reranker scores must be
+equal, or the stored vectors and the validated reranker (ADR 0005) no longer hold. On
+2026-09-30 onnxruntime 1.30 changed int8 reranker scores by up to 0.16 while tokenization was
+identical, so onnxruntime stays at 1.29.0.
+
+transformers 5 also reads `config.json` when it loads a tokenizer; the offline cache filled by
+transformers 4 lacked it for BAAI/bge-m3, and the service failed to start. Fetch any such file
+once, online, at the catalog's pinned revision:
+
+```bash
+sudo systemd-run --pipe --wait --uid=bekenai --gid=bekenai -E HF_HOME=/var/cache/bekenai-model-service/huggingface "$V/bin/python" -c 'from huggingface_hub import hf_hub_download; hf_hub_download("BAAI/bge-m3", "config.json", revision="5617a9f61b028005a4858fdac845db406aefb181", token=False)'
+```
+
+Then switch and restart; the model service restarts api and worker with it:
+
+```bash
+sudo ln -sfn "$V" /opt/bekenai/venv.next && sudo mv -Tf /opt/bekenai/venv.next /opt/bekenai/venv
+sudo systemctl restart bekenai-model-service bekenai-api bekenai-worker
+```
+
+The first switch (2026-09-30) replaced a plain directory: it was moved to
+`/opt/bekenai/venvs/legacy-20260901` before the symlink was created. Its console scripts point at
+`/opt/bekenai/venv/bin/python`, so pointing the symlink back at it is still a working rollback.
 
 ## Oracle A1 MVP baseline
 
