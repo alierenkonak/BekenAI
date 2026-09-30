@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-beken}
       POSTGRES_USER: ${POSTGRES_USER:-beken}
@@ -8,7 +8,8 @@ services:
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 17 like Supabase; a new volume, as 16's data directory cannot be reused.
+      - postgres17_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -17,7 +18,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.15.4@sha256:6ac4807063bbecddca0250bfbcff52acf18c22263b904d12919349e6d0a408f1
+    image: qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
     ports:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"
@@ -31,5 +32,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  postgres17_data:
   qdrant_storage:

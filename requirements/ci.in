@@ -1,5 +1,5 @@
 # Build tooling is included so editable project installs can run with
 # --no-build-isolation after the hash-verified dependency install.
 pip==26.2.1
-hatchling==1.32.0
+hatchling==1.32.4
 editables==0.6

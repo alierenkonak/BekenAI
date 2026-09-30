@@ -1,6 +1,8 @@
 # Direct Oracle ARM inference requirements. The generated requirements.lock
 # contains every transitive dependency and its accepted SHA-256 hashes.
-torch @ https://download-r2.pytorch.org/whl/cpu/torch-2.13.0%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl#sha256=6f307c2c32d764ffc6ff6893b801fad6d4752f3e67966cb8abf1843427c02604
+torch @ https://download-r2.pytorch.org/whl/cpu/torch-2.14.1%2Bcpu-cp312-cp312-manylinux_2_28_aarch64.whl#sha256=2af649994b36dffc627175c3f306d9e513a309b58d4619ac7107577613336454
+# The int8 reranker's scores depend on the runtime's kernels: 1.30 moved them by up to 0.16
+# on the same inputs. Bump only after repeating the ADR 0005 check against PyTorch.
 onnxruntime==1.29.0
-sentence-transformers==5.7.0
-transformers==5.16.1
+sentence-transformers==6.1.0
+transformers==5.18.0
