@@ -120,7 +120,7 @@ class PrivateFileRetriever:
         ranked = sorted(
             zip(candidates, scores, strict=True), key=lambda item: (-item[1], item[0]["id"])
         )
-        return [_hit(row, score) for row, score in ranked[: self.limit]]
+        return [hit_from_row(row, score) for row, score in ranked[: self.limit]]
 
 
 def _reciprocal_rank_fusion(rankings: Sequence[Sequence[UUID]]) -> list[UUID]:
@@ -131,7 +131,7 @@ def _reciprocal_rank_fusion(rankings: Sequence[Sequence[UUID]]) -> list[UUID]:
     return sorted(scores, key=lambda chunk_id: (-scores[chunk_id], str(chunk_id)))
 
 
-def _hit(row: dict[str, Any], score: float) -> PrivateHit:
+def hit_from_row(row: dict[str, Any], score: float) -> PrivateHit:
     return PrivateHit(
         chunk_id=row["id"],
         file_id=row["file_id"],

@@ -5,8 +5,11 @@ export type GenerationStage = 'retrieving' | 'generating' | 'verifying';
 export type AnswerStatus = 'answered' | 'insufficient_evidence';
 export type SourceChannel = 'primary' | 'doctrine' | 'file' | 'web';
 export type SourceScope = 'global' | 'private' | 'web';
-/** corpus: the legal corpus and the user's files; web: a web search the user asked for. */
-export type SearchMode = 'corpus' | 'web';
+/**
+ * corpus: the legal corpus and the user's files; web: the same plus a labelled web section;
+ * analysis: a report over every ready file of a case (the case page's button).
+ */
+export type SearchMode = 'corpus' | 'web' | 'analysis';
 
 export interface Page<T> {
   items: T[];

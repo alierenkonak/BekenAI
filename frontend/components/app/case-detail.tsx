@@ -1,11 +1,20 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon, Spinner } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
-import { FILE_ACCEPT, SAMPLE_FILE_URL, TRANSIENT_STATUSES, fileDetail, mediaTypeOf, uploadProblem } from '@/lib/files';
+import {
+  FILE_ACCEPT,
+  PROCESSING_STATUSES,
+  SAMPLE_FILE_URL,
+  TRANSIENT_STATUSES,
+  fileDetail,
+  mediaTypeOf,
+  uploadProblem,
+} from '@/lib/files';
 import { describeError, formatBytes, formatRelativeDay, isRetryableIngestFailure } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
 import type { Conversation, LegalCase, UserFile } from '@/lib/types';
@@ -23,8 +32,12 @@ const FILE_STATUS: Record<UserFile['status'], { label: string; tone: 'ok' | 'acc
   deleted: { label: 'Silindi', tone: 'neutral' },
 };
 
+export const ANALYSIS_MESSAGE = 'Dava dosyalarını analiz et';
+
 export function CaseDetail({ caseId }: { caseId: string }) {
+  const router = useRouter();
   const now = useNow(60_000);
+  const [analysing, setAnalysing] = useState(false);
   const [legalCase, setLegalCase] = useState<LegalCase | null>(null);
   const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [files, setFiles] = useState<UserFile[] | null>(null);
@@ -128,6 +141,25 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   };
 
   const usedBytes = (files ?? []).reduce((sum, file) => sum + (file.verified_size_bytes ?? file.expected_size_bytes), 0);
+  const readyFiles = (files ?? []).filter((file) => file.status === 'ready').length;
+  const processingFiles = (files ?? []).some((file) => PROCESSING_STATUSES.has(file.status));
+
+  // The report opens as the first answer of a new chat, so follow-up questions continue there.
+  const analyse = async () => {
+    if (analysing) return;
+    setAnalysing(true);
+    setError(null);
+    try {
+      const queued = await api.sendChat(
+        { case_id: caseId, message: ANALYSIS_MESSAGE, include_doctrine: false, search_mode: 'analysis' },
+        crypto.randomUUID(),
+      );
+      router.push(`/sohbet/${queued.conversation_id}`);
+    } catch (analysisError) {
+      setError(describeError(analysisError));
+      setAnalysing(false);
+    }
+  };
 
   if (!legalCase) {
     return (
@@ -228,6 +260,10 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">
             {error}
           </p>
+        )}
+
+        {files && files.length > 0 && (
+          <CaseAnalysisCard readyFiles={readyFiles} processing={processingFiles} busy={analysing} onStart={() => void analyse()} />
         )}
 
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -386,5 +422,53 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Runs only when asked: reads every ready file of the case and opens the report in a new chat. */
+export function CaseAnalysisCard({
+  readyFiles,
+  processing,
+  busy,
+  onStart,
+}: {
+  readyFiles: number;
+  processing: boolean;
+  busy: boolean;
+  onStart: () => void;
+}) {
+  const blocked = processing || readyFiles === 0;
+  return (
+    <section
+      aria-labelledby="case-analysis"
+      className="flex flex-col gap-3 rounded-[14px] border border-file-line bg-surface px-5 py-4 sm:flex-row sm:items-center"
+    >
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-file-bg text-file">
+        <Icon name="layers" size={18} />
+      </span>
+      <div className="flex min-w-0 grow flex-col gap-1">
+        <h2 id="case-analysis" className="m-0 text-[14.5px] font-semibold">
+          Dosya analizi
+        </h2>
+        <p className="m-0 text-[13px] leading-normal text-fg2">
+          Davadaki bütün hazır dosyalar okunur, davanın hukuki konuları çıkarılır ve her biri mevzuat ve Yargıtay kararlarıyla
+          karşılaştırılır. Rapor yeni bir sohbette açılır; 2–4 dakika sürer.
+        </p>
+        {blocked && (
+          <p className="m-0 text-[12.5px] text-fg3">
+            {processing ? 'Dosyalar işleniyor; tamamlanınca analiz başlatılabilir.' : 'Analiz için işlenmesi tamamlanmış bir dosya gerekiyor.'}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onStart}
+        disabled={busy || blocked}
+        className="flex h-9 w-fit shrink-0 items-center gap-1.5 rounded-[9px] bg-inv px-3.5 text-[13.5px] font-medium text-inv-fg disabled:opacity-40"
+      >
+        {busy ? <Spinner size={14} /> : <Icon name="layers" size={15} />}
+        Dosyayı analiz et
+      </button>
+    </section>
   );
 }

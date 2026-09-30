@@ -356,6 +356,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
                   !conversational &&
                   (generation?.answer_status === 'insufficient_evidence' || structured?.answer_status === 'insufficient_evidence');
                 const webTurn = generation?.search_mode === 'web';
+                const analysisTurn = generation?.search_mode === 'analysis';
                 return (
                   <section key={turn.user.id} data-turn={index} aria-label={`${index + 1}. soru`} className="flex flex-col gap-5">
                     <div className="flex max-w-[500px] flex-col items-end gap-1.5 self-end">
@@ -363,6 +364,12 @@ export function ConversationView({ conversationId }: { conversationId: string })
                         <span className="flex items-center gap-1 text-xs font-medium text-web">
                           <Icon name="globe" size={13} />
                           Web araması açık
+                        </span>
+                      )}
+                      {analysisTurn && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-file">
+                          <Icon name="layers" size={13} />
+                          Davadaki bütün dosyalar
                         </span>
                       )}
                       <div className="whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">

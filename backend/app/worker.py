@@ -19,6 +19,7 @@ from beken_retrieval.remote_inference import (
 from qdrant_client import QdrantClient
 
 from app.api.search import _load_search_coordinator
+from app.chat.analysis import CaseAnalysisService
 from app.chat.grounded import GroundedChatService
 from app.core.config import get_settings
 from app.core.database import get_database
@@ -57,6 +58,7 @@ _SAFE_FILE_ERRORS = frozenset(
         "empty_document",
         "too_many_pages",
         "document_too_large",
+        "case_has_no_ready_files",
     }
 )
 
@@ -224,6 +226,17 @@ class Worker:
             except Exception as exc:
                 logger.warning("Stage update skipped (%s)", type(exc).__name__)
 
+        scope = PrivateScope(
+            workspace_id=work["workspace_id"],
+            conversation_id=work["conversation_id"],
+            case_id=work["case_id"],
+        )
+        if search_mode == "analysis":
+            result = await CaseAnalysisService(service, self.repository, self.settings).analyze(
+                domain=work["domain_code"], private_scope=scope, on_stage=report_stage
+            )
+            await self.repository.complete_generation(job["subject_id"], result)
+            return
         result = await service.answer(
             message=work["user_message"],
             retrieval_query=work["retrieval_query"],
@@ -231,11 +244,7 @@ class Worker:
             include_doctrine=work["include_doctrine"],
             history=work["history"],
             on_stage=report_stage,
-            private_scope=PrivateScope(
-                workspace_id=work["workspace_id"],
-                conversation_id=work["conversation_id"],
-                case_id=work["case_id"],
-            ),
+            private_scope=scope,
             search_mode=search_mode,
         )
         await self.repository.complete_generation(job["subject_id"], result)

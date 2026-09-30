@@ -13,6 +13,13 @@ const CORPUS_STEPS = [
   { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
 ];
 
+const ANALYSIS_STEPS = [
+  CORPUS_STEPS[0],
+  { title: 'Dosyalar okunuyor', detail: 'Bütün dosyalar okunup davanın hukuki konuları çıkarılıyor ve her biri için kanun aranıyor' },
+  { title: 'Rapor yazılıyor', detail: 'Her konu için kanunun aradığı, dosyada olan ve değerlendirme yazılıyor' },
+  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı kanun pasajı ya da dosya pasajıyla karşılaştırılıyor' },
+];
+
 // With web search on, the usual search runs and the web is searched alongside it.
 const WEB_STEPS = [
   CORPUS_STEPS[0],
@@ -38,7 +45,7 @@ export function GenerationProgress({
   cancelling: boolean;
 }) {
   const now = useNow(1000);
-  const steps = generation.search_mode === 'web' ? WEB_STEPS : CORPUS_STEPS;
+  const steps = generation.search_mode === 'analysis' ? ANALYSIS_STEPS : generation.search_mode === 'web' ? WEB_STEPS : CORPUS_STEPS;
   const active = currentStep(generation);
   const elapsed = now ? formatElapsed(now - new Date(generation.created_at).getTime()) : null;
 
@@ -86,7 +93,8 @@ export function GenerationProgress({
         </ol>
         <div className="flex flex-wrap items-center gap-4 border-t border-line px-5 py-3">
           <span className="min-w-[220px] grow text-[12.5px] leading-normal text-fg3">
-            Genellikle 1–2 dakika sürer. Sayfadan ayrılabilirsiniz; cevap hazır olduğunda bu sohbette görünür.
+            {generation.search_mode === 'analysis' ? 'Genellikle 2–4 dakika sürer.' : 'Genellikle 1–2 dakika sürer.'} Sayfadan
+            ayrılabilirsiniz; cevap hazır olduğunda bu sohbette görünür.
           </span>
           <button
             type="button"
