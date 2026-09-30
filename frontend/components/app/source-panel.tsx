@@ -6,6 +6,46 @@ import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { sourceKind, sourceSubtitle, type SourceRef } from '@/lib/answer';
 import { describeError } from '@/lib/format';
+import type { ProvisionChange } from '@/lib/types';
+
+const CHANGE_NAME: Record<ProvisionChange['event_type'], string> = {
+  added: 'Eklendi',
+  amended: 'Değiştirildi',
+  repealed: 'Yürürlükten kaldırıldı',
+  annulled: 'AYM iptal etti',
+};
+
+/** The official amendment notes of a law passage, newest first. */
+function ProvisionHistory({ changes }: { changes: ProvisionChange[] }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] border border-line px-3.5 py-3">
+      <div className="flex items-center gap-2 text-[12.5px]">
+        <Icon name="history" size={14} className="text-fg2" />
+        <span className="font-semibold">Değişiklik geçmişi</span>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+        {changes.map((change) => (
+          <li key={`${change.change_date}:${change.provision}:${change.annotation}`} className="flex gap-3 text-[12.5px] leading-normal">
+            <span className="w-[74px] shrink-0 font-mono text-[11.5px] text-fg3">
+              {new Date(change.change_date).toLocaleDateString('tr-TR')}
+            </span>
+            <span className="text-fg2">
+              <span className="font-medium text-fg">
+                {CHANGE_NAME[change.event_type]}
+                {change.provision ? ` · ${change.provision}` : ''}
+              </span>
+              {change.amending_law ? ` (${change.amending_law} sayılı Kanun)` : ''}
+              <span className="block text-fg3">{change.annotation}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 text-[12px] leading-normal text-fg3">
+        Resmî değişiklik notları. Tarih, değiştiren kanunun kabul tarihidir (AYM iptalinde karar tarihi); değişiklikten önceki metin kaynaklarda yok.
+      </p>
+    </div>
+  );
+}
 
 export function SourcePanel({
   selected,
@@ -121,6 +161,9 @@ export function SourcePanel({
             <blockquote className="m-0 max-h-[360px] overflow-y-auto whitespace-pre-line rounded-[10px] bg-muted px-4 py-3.5 text-[13.5px] leading-[1.65] text-fg2">
               {snapshot.exact_passage}
             </blockquote>
+          )}
+          {!file && !web && snapshot.provision_changes && snapshot.provision_changes.length > 0 && (
+            <ProvisionHistory changes={snapshot.provision_changes} />
           )}
           {web && (
             <p className="m-0 text-[12.5px] leading-normal text-fg3">

@@ -22,6 +22,10 @@ class CaseIssue(BaseModel):
     title: str = Field(min_length=3, max_length=200)
     # How to find the law on it: general legal terms, no names. Clipped in code.
     search_query: str = Field(min_length=3, max_length=2000)
+    # The date in the file that decides which text of the law applies (e.g. the date of
+    # dismissal), and what it is; empty when the file has none. Checked against the file.
+    date: str = Field(default="", max_length=200)
+    date_label: str = Field(default="", max_length=300)
 
 
 class CaseIssues(BaseModel):
@@ -55,6 +59,13 @@ class ChatAnswer(BaseModel):
     # contradict in the answer above. Cites web pages only; shown after the answer.
     web_blocks: list[AnswerBlock] = Field(default_factory=list, max_length=10)
     limitations: list[str] = Field(default_factory=list, max_length=5)
+    # The date of the case that decides which text of the law applies, as written in the
+    # file or message, and what it is; empty otherwise. Used only if the file states it.
+    case_date: str = Field(default="", max_length=200)
+    case_date_label: str = Field(default="", max_length=300)
+    # Something the answer needed is missing from the sources but could be on the web
+    # (a current amount, a recent change, a provision's earlier text).
+    web_would_help: bool = False
 
 
 class SupportAssessment(BaseModel):

@@ -6,6 +6,7 @@ import type {
   SourceChannel,
   SourceSnapshot,
   StructuredAnswer,
+  TemporalCheck,
 } from './types';
 
 export interface SourceClaim {
@@ -28,6 +29,8 @@ export interface Chip {
   label: string;
   channel: SourceChannel;
   partial: boolean;
+  /** The provision changed after the case date (see the Yürürlük kontrolü). */
+  changed?: boolean;
 }
 
 export interface RenderedClaim {
@@ -54,6 +57,14 @@ export interface RenderedLegacyAnswer {
   sources: SourceRef[];
 }
 
+export interface RenderedTemporalCheck {
+  sourceId: string;
+  /** The cited source's chip label; null if the source is not shown. */
+  label: string | null;
+  level: TemporalCheck['level'];
+  text: string;
+}
+
 export interface RenderedConversation {
   kind: 'conversational';
   blocks: RenderedBlock[];
@@ -61,6 +72,7 @@ export interface RenderedConversation {
   webBlocks: RenderedBlock[];
   sources: SourceRef[];
   unverifiedCount: number;
+  temporalChecks: RenderedTemporalCheck[];
 }
 
 export type RenderedAnswer = RenderedLegacyAnswer | RenderedConversation;
@@ -107,6 +119,8 @@ export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): R
 
 function renderConversation(answer: ConversationalAnswer, citations: Citation[]): RenderedConversation {
   const { chipsFor, sources } = createNumbering(citations);
+  const checks = answer.temporal_checks ?? [];
+  const changed = new Set(checks.filter((check) => check.level === 'changed_after').map((check) => check.source_id));
   let number = 0;
   const render = (items: AnswerBlock[]): RenderedBlock[] =>
     items.map((block) => ({
@@ -116,7 +130,9 @@ function renderConversation(answer: ConversationalAnswer, citations: Citation[])
         return {
           number,
           text: sentence.text,
-          chips: chipsFor(sentence.id, number, sentence.text, sentence.source_ids),
+          chips: chipsFor(sentence.id, number, sentence.text, sentence.source_ids).map((chip) =>
+            changed.has(chip.sourceId) ? { ...chip, changed: true } : chip,
+          ),
           unverified: sentence.verification === 'unverified',
         };
       }),
@@ -124,7 +140,21 @@ function renderConversation(answer: ConversationalAnswer, citations: Citation[])
   // Numbered in reading order: the answer first, then the web section.
   const blocks = render(answer.blocks);
   const webBlocks = render(answer.web_blocks ?? []);
-  return { kind: 'conversational', blocks, webBlocks, sources: sources(), unverifiedCount: answer.unverified_count ?? 0 };
+  const refs = sources();
+  const labels = new Map(refs.map((ref) => [ref.sourceId, ref.label]));
+  return {
+    kind: 'conversational',
+    blocks,
+    webBlocks,
+    sources: refs,
+    unverifiedCount: answer.unverified_count ?? 0,
+    temporalChecks: checks.map((check) => ({
+      sourceId: check.source_id,
+      label: labels.get(check.source_id) ?? null,
+      level: check.level,
+      text: check.text,
+    })),
+  };
 }
 
 function renderLegacy(answer: LegacyAnswer, citations: Citation[]): RenderedLegacyAnswer {

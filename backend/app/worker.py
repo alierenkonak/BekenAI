@@ -217,6 +217,7 @@ class Worker:
             self.settings,
             private_retriever=self.private_retriever,
             web_search=self.web_search if search_mode == "web" else None,
+            provisions=self.repository,
         )
 
         async def report_stage(stage: str) -> None:

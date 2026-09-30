@@ -12,9 +12,10 @@ import {
   type RenderedConversation,
   type RenderedLegacyAnswer,
   type RenderedSentence,
+  type RenderedTemporalCheck,
 } from '@/lib/answer';
 import { describeError, formatSeconds, isRetryableFailure } from '@/lib/format';
-import type { ConversationalAnswer, GenerationSummary, LegacyAnswer, StructuredAnswer } from '@/lib/types';
+import type { ConversationalAnswer, GenerationSummary, LegacyAnswer, StructuredAnswer, WebSearchOfferReason } from '@/lib/types';
 
 const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipTone; selected: ChipTone; partial: ChipTone }> = {
   primary: { base: 'primary', selected: 'selected', partial: 'partial' },
@@ -147,8 +148,9 @@ function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedS
             key={chip.sourceId}
             label={chip.label}
             tone={tone}
+            flagged={chip.changed}
             onClick={() => onSelect(chip.sourceId)}
-            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
+            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}${chip.changed ? ', olay tarihinden sonra değişmiş' : ''}`}
           />
         );
       })}
@@ -209,6 +211,9 @@ function ConversationalAnswerView({
         .join('\n\n');
     const lines = [
       text(rendered.blocks),
+      ...(rendered.temporalChecks.length
+        ? ['', 'Yürürlük kontrolü:', ...rendered.temporalChecks.map((check) => `- ${check.label ? `[${check.label}] ` : ''}${check.text}`)]
+        : []),
       ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
       ...(rendered.webBlocks.length ? ['', 'Web araması (resmî kaynak değildir):', text(rendered.webBlocks)] : []),
       ...(rendered.sources.length
@@ -259,6 +264,10 @@ function ConversationalAnswerView({
         </p>
       )}
 
+      {rendered.temporalChecks.length > 0 && (
+        <TemporalChecks checks={rendered.temporalChecks} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
+      )}
+
       {answer.limitations.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-xl bg-muted px-3.5 py-3">
           <span className="text-[12.5px] font-semibold text-fg2">Sınırlamalar</span>
@@ -281,7 +290,7 @@ function ConversationalAnswerView({
         </section>
       )}
 
-      {onWebSearch && <WebSearchOffer onSearch={onWebSearch} busy={webSearchBusy} />}
+      {onWebSearch && <WebSearchOffer reason={answer.web_search_offer ?? 'no_sources'} onSearch={onWebSearch} busy={webSearchBusy} />}
 
       <div className="flex flex-wrap items-center gap-1">
         <button
@@ -348,13 +357,69 @@ function Blocks({
   );
 }
 
-/** Offered only when the corpus could not ground a legal question; never runs on its own. */
-function WebSearchOffer({ onSearch, busy }: { onSearch: () => void; busy: boolean }) {
+/**
+ * Yürürlük kontrolü: which cited provisions read differently on the case date. Built by
+ * code from the official amendment notes, never written by the model.
+ */
+function TemporalChecks({
+  checks,
+  selectedSourceId,
+  onSelect,
+}: {
+  checks: RenderedTemporalCheck[];
+  selectedSourceId: string | null;
+  onSelect: (sourceId: string) => void;
+}) {
+  return (
+    <section aria-label="Yürürlük kontrolü" className="flex flex-col gap-2 rounded-xl border border-line-strong px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
+        <Icon name="history" size={14} className="text-fg2" />
+        <span className="font-semibold">Yürürlük kontrolü</span>
+        <span className="text-fg3">Atıf yapılan hükümlerin olay tarihindeki hali</span>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[13px] leading-normal text-fg2">
+        {checks.map((check) => (
+          <li key={`${check.sourceId}:${check.text}`} className="flex gap-2">
+            <Icon
+              name={check.level === 'changed_after' ? 'alert' : 'history'}
+              size={14}
+              className={`mt-[3px] shrink-0 ${check.level === 'changed_after' ? 'text-err' : 'text-fg3'}`}
+            />
+            <span>
+              {check.text}
+              {check.label && (
+                <CitationChip
+                  label={check.label}
+                  tone={check.sourceId === selectedSourceId ? 'selected' : 'primary'}
+                  onClick={() => onSelect(check.sourceId)}
+                  ariaLabel={`Kaynak ${check.label}`}
+                />
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="m-0 text-[12px] leading-normal text-fg3">
+        Değişiklikten önceki metin BekenAI&apos;nin kaynaklarında yok; mevzuat.gov.tr&apos;den ya da ilgili Resmî Gazete&apos;den kontrol
+        edin.
+      </p>
+    </section>
+  );
+}
+
+const WEB_OFFER_TEXT: Record<WebSearchOfferReason, string> = {
+  no_sources: "BekenAI'nin kaynaklarında bu soruya dayanak bulunamadı.",
+  provision_changed: "Atıf yapılan bir hüküm olay tarihinden sonra değişmiş; eski metni BekenAI'nin kaynaklarında yok.",
+  missing_info: "Bu cevap için gereken bazı bilgiler BekenAI'nin kaynaklarında yok.",
+};
+
+/** Offered when a web search could help a legal question; never runs on its own. */
+function WebSearchOffer({ reason, onSearch, busy }: { reason: WebSearchOfferReason; onSearch: () => void; busy: boolean }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-center">
       <p className="m-0 grow text-[13px] leading-normal text-fg2">
-        BekenAI&apos;nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web&apos;de de arayabilirim; bulunanlar cevabın
-        sonuna ayrı ve etiketli bir bölüm olarak eklenir.
+        {WEB_OFFER_TEXT[reason]} İsterseniz web&apos;de de arayabilirim; bulunanlar cevabın sonuna ayrı ve etiketli bir bölüm olarak
+        eklenir.
       </p>
       <button
         type="button"

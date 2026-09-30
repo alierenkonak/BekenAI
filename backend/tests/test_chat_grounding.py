@@ -181,7 +181,7 @@ MIXED = chat_answer(
 
 
 def service(
-    provider, *, primary=None, doctrine=None, files=None, web=None
+    provider, *, primary=None, doctrine=None, files=None, web=None, provisions=None
 ) -> GroundedChatService:
     return GroundedChatService(
         FakeCoordinator([hit()] if primary is None else primary, doctrine),
@@ -189,6 +189,7 @@ def service(
         app_settings(),
         private_retriever=FakePrivateRetriever([file_hit()] if files is None else files),
         web_search=web,
+        provisions=provisions,
     )
 
 
@@ -745,3 +746,124 @@ async def test_web_search_is_offered_only_for_legal_questions_the_corpus_could_n
     small_talk = FakeProvider(greeting, plan=QueryPlan(intent="conversation"))
     result = await ask(service(small_talk), message="Merhaba")
     assert result.structured_content["web_search_offered"] is False
+
+
+AMENDED = {
+    "event_id": uuid4(),
+    "event_type": "amended",
+    "target_type": "sentence",
+    "unit_type": "paragraph",
+    "event_date": date(2024, 11, 7),
+    "effective_from": None,
+    "source_law_number": "7531",
+    "raw_annotation": "Değişik ikinci\ncümle:7/11/2024-7531/28 md.",
+    "unit_path": ["article:3", "paragraph:12"],
+}
+MEDIATION_FILE = "Müvekkil 05.07.2023 tarihinde arabulucuya başvurmuştur."
+
+
+class FakeProvisions:
+    """Every law chunk asked about carries the same amendment notes."""
+
+    def __init__(self, rows: list[dict] | None = None, *, error: Exception | None = None) -> None:
+        self.rows = [AMENDED] if rows is None else rows
+        self.error = error
+        self.requests: list[list[str]] = []
+
+    async def provision_changes(self, chunk_ids):
+        self.requests.append(list(chunk_ids))
+        if self.error is not None:
+            raise self.error
+        return [row | {"chunk_id": chunk_id} for chunk_id in chunk_ids for row in self.rows]
+
+
+def dated(answer: ChatAnswer, when: str, label: str = "arabulucu başvurusu", **extra) -> ChatAnswer:
+    return answer.model_copy(update={"case_date": when, "case_date_label": label, **extra})
+
+
+@pytest.mark.asyncio
+async def test_a_provision_changed_after_the_case_date_is_flagged_with_its_note() -> None:
+    law = hit(text="(12) Taraflardan birinin ilk toplantıya katılmaması halinde...")
+    provider = FakeProvider(dated(MIXED, "05.07.2023"))
+    provisions = FakeProvisions()
+    chat = service(provider, primary=[law], files=[file_hit(MEDIATION_FILE)], provisions=provisions)
+    result = await ask(chat)
+
+    assert provisions.requests == [[law.record.chunk_id]]
+    # The model reads the notes under the passage, and the verifier can check a claim
+    # about them.
+    note = "Değişik ikinci cümle:7/11/2024-7531/28 md."
+    block = f"<amendments>\n- m.3, 12. fıkra: {note}\n</amendments>"
+    assert block in provider.prompts["ChatAnswer"]
+    assert "Resmî değişiklik notları" in provider.prompts["SupportReport"]
+
+    structured = result.structured_content
+    [check] = structured["temporal_checks"]
+    assert (check["source_id"], check["level"], check["case_date"]) == (
+        P,
+        "changed_after",
+        "2023-07-05",
+    )
+    assert "arabulucu başvurusu olan 05.07.2023 tarihinden sonra" in check["text"]
+    # The earlier text is not in our sources, but it may be on the web.
+    assert structured["web_search_offer"] == "provision_changed"
+    assert structured["web_search_offered"] is True
+    assert "Yürürlük kontrolü:\n- İş Kanunu m.3, 12. fıkra (Değişik ikinci" in result.content
+    snapshot = next(c["source_snapshot"] for c in result.citations if c["source_id"] == P)
+    assert snapshot["provision_changes"] == [
+        {
+            "event_type": "amended",
+            "change_date": "2024-11-07",
+            "effective_from": None,
+            "amending_law": "7531",
+            "provision": "m.3, 12. fıkra",
+            "annotation": note,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_case_date_the_sources_do_not_state_is_never_compared() -> None:
+    provider = FakeProvider(dated(MIXED, "01.03.2023"))
+    chat = service(provider, files=[file_hit(MEDIATION_FILE)], provisions=FakeProvisions())
+    result = await ask(chat)
+    structured = result.structured_content
+    assert structured["temporal_checks"] == [] and structured["web_search_offer"] is None
+    # The passage's history is still shown with the source.
+    snapshot = next(c["source_snapshot"] for c in result.citations if c["source_id"] == P)
+    assert snapshot["provision_changes"][0]["amending_law"] == "7531"
+
+
+@pytest.mark.asyncio
+async def test_a_date_from_the_users_own_message_is_compared_too() -> None:
+    provider = FakeProvider(dated(MIXED, "10.03.2017", "fesih tarihi"))
+    result = await ask(
+        service(provider, provisions=FakeProvisions()),
+        message="İşçi 10.03.2017'de işten çıkarıldı, arabulucuya gitmesi gerekir miydi?",
+    )
+    [check] = result.structured_content["temporal_checks"]
+    assert check["case_date_label"] == "fesih tarihi"
+
+
+@pytest.mark.asyncio
+async def test_a_partial_answer_offers_the_web_when_the_missing_part_could_be_there() -> None:
+    provider = FakeProvider(MIXED.model_copy(update={"web_would_help": True}))
+    result = await ask(service(provider))
+    assert result.structured_content["web_search_offer"] == "missing_info"
+    assert result.structured_content["web_search_offered"] is True
+
+    # Nothing to compare and nothing missing: no offer.
+    result = await ask(service(FakeProvider(MIXED), provisions=FakeProvisions()))
+    assert result.structured_content["web_search_offer"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_failing_provision_history_never_fails_the_answer(caplog) -> None:
+    provisions = FakeProvisions(error=RuntimeError("database down"))
+    provider = FakeProvider(dated(MIXED, "05.07.2023"))
+    chat = service(provider, files=[file_hit(MEDIATION_FILE)], provisions=provisions)
+    with caplog.at_level(logging.WARNING, logger="bekenai.chat"):
+        result = await ask(chat)
+    assert result.structured_content["temporal_checks"] == []
+    assert "<amendments>\n" not in provider.prompts["ChatAnswer"]
+    assert "Provision history skipped (RuntimeError)" in caplog.text
