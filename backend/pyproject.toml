@@ -12,7 +12,7 @@ dependencies = [
   "google-genai>=1.64,<2",
   "httpx>=0.28,<1",
   # 2.14 fixes JWKS denial-of-service issues (CVE-2026-101917, CVE-2026-102274).
-  "pyjwt[crypto]>=2.14,<3",
+  "pyjwt[crypto]>=2.15,<3",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.7,<3",
   "pypdf>=6,<7",
