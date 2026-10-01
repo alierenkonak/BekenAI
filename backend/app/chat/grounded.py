@@ -139,7 +139,17 @@ AMENDMENTS_RULE = """- Bir kanun pasajının altındaki <amendments> listesi o h
 - Bir Yargıtay kararının altındaki <cited_provision_changes> listesi, kararın dayandığı
   maddelerde karar tarihinden sonra yapılan değişikliklerdir: karar o maddelerin eski haline
   göre verilmiştir. Böyle bir karara dayanırken bunu söyle; olay da değişiklikten önceyse karar
-  olaya uygundur."""
+  olaya uygundur.
+- Sorunun konusunu düzenleyen hüküm yürürlükten kaldırılmışsa (notlarda "Mülga"):
+  - Soruda ya da dosyada olay tarihi yoksa soru bugüne dairdir: cevaba hükmün kaldırıldığını
+    söyleyerek başla; ilk cümle "evet" ya da "açabilirsiniz" gibi kaldırılan hükmü bugün
+    uygulanabilir gösteren bir ifade içermesin. Kaynaklarda yerine gelen bir düzenleme varsa onu
+    anlat, yoksa bunu belirt.
+  - Olay kaldırılmadan önceyse olay tarihindeki hükme göre cevapla, güncel durumda
+    kaldırıldığını da belirt ve geçiş hükmünün kontrol edilmesini öner.
+  - Usule ilişkin hükümlerde (dava açma, dava türü, talebin artırılması, usul süreleri)
+    belirleyici tarih davanın açıldığı tarihtir; dava henüz açılmadıysa bugündür.
+  Yürürlükte olup sonradan değişmiş hükümleri ilgili yerde belirtmen yeterlidir."""
 # A sentence that states a rule, deadline, amount or ruling needs a source. Without
 # one it is marked unverified instead of being passed off as grounded.
 _SPECIFIC_LEGAL_FACT = re.compile(
@@ -947,8 +957,9 @@ Kaynaklar:
 - limitations yalnız kullanıcı için önemli bir sınırlama varsa, doğal dille yazılır.
 - case_date: Soru dava dosyasındaki ya da kullanıcının anlattığı bir olayla ilgiliyse, hangi
   kanun metninin uygulanacağını belirleyen tarihi (örneğin fesih, arabulucuya başvuru veya dava
-  tarihi) GG.AA.YYYY biçiminde yaz; case_date_label alanına kısaca ne olduğunu yaz (örneğin
-  "fesih tarihi"). Tarih dosyada veya mesajda açıkça yazmalı; yoksa ikisini de boş bırak.
+  tarihi; usul sorularında davanın açıldığı tarih) GG.AA.YYYY biçiminde yaz; case_date_label
+  alanına kısaca ne olduğunu yaz (örneğin "fesih tarihi"). Tarih dosyada veya mesajda açıkça
+  yazmalı; yoksa ikisini de boş bırak.
 - web_would_help: Cevap için gereken bir bilgi kaynaklarda yoksa ve web'de bulunabilecek
   türdense (güncel tutar veya oran, yeni bir değişiklik, bir hükmün değişiklikten önceki metni,
   güncel uygulama) true, değilse false.
