@@ -1426,6 +1426,46 @@ class AppRepository:
                 )
             ).fetchall()
 
+    async def decision_texts(self, parse_ids: Sequence[str]) -> dict[str, str]:
+        """The whole text of each decision parse, in reading order."""
+        if not parse_ids:
+            return {}
+        async with await self.database.connect() as conn:
+            rows = await (
+                await conn.execute(
+                    """select parse_id,string_agg(text,E'\\n' order by chunk_index) as body
+                       from legal.document_chunks where parse_id=any(%s) group by parse_id""",
+                    ([UUID(str(parse_id)) for parse_id in parse_ids],),
+                )
+            ).fetchall()
+        return {str(row["parse_id"]): row["body"] for row in rows}
+
+    async def article_changes(self, articles: Sequence[tuple[str, str]]) -> list[dict[str, Any]]:
+        """Dated amendment notes of whole articles, by law number and article number.
+
+        A law is found by the number that starts its title ("4857 sayılı İş Kanunu"); a note
+        counts for an article when it is tied to the article or anything inside it.
+        """
+        if not articles:
+            return []
+        async with await self.database.connect() as conn:
+            return await (
+                await conn.execute(
+                    """select r.law_number,r.article,d.title as law_title,
+                              e.id as event_id,e.event_type,e.target_type,e.event_date,
+                              e.effective_from,e.source_law_number,e.raw_annotation,
+                              u.unit_path,u.unit_type
+                       from unnest(%s::text[],%s::text[]) as r(law_number,article)
+                       join legal.documents d on d.title ~ ('^' || r.law_number || ' sayılı ')
+                       join legal.provision_events e on e.parse_id=d.current_parse_id
+                       join legal.legal_units u on u.id=e.legal_unit_id and u.parse_id=e.parse_id
+                       where e.event_date is not null
+                         and ('article:' || r.article)=any(u.unit_path)
+                       order by r.law_number,r.article,e.event_date desc,e.event_index""",
+                    ([law for law, _ in articles], [article for _, article in articles]),
+                )
+            ).fetchall()
+
     async def _assert_citation_integrity(
         self, conn: AsyncConnection, result: Any, workspace_id: UUID
     ) -> None:

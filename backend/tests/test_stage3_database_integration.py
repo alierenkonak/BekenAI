@@ -680,3 +680,75 @@ async def test_a_web_turn_finds_the_changed_provisions_of_the_same_earlier_quest
         with psycopg.connect(database_url()) as conn:
             conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
             conn.execute("delete from public.profiles where user_id=%s", (user_id,))
+
+
+@pytest.mark.asyncio
+async def test_a_decisions_text_and_the_changes_of_the_articles_it_cites(tmp_path) -> None:
+    from beken_ingestion.database import CorpusRepository
+    from beken_ingestion.models import RawDocument
+    from beken_ingestion.pipeline import IngestionPipeline
+    from beken_ingestion.storage import FilesystemRawStorage
+
+    pipeline = IngestionPipeline(CorpusRepository(database_url()), FilesystemRawStorage(tmp_path))
+    law = pipeline.ingest(
+        RawDocument(
+            source_name="manual",
+            source_document_id="integration-cited-law",
+            source_url="file:///integration-cited-law.txt",
+            media_type="text/plain",
+            content=(
+                "MADDE 1 - (1) Birinci madde işverenin bildirim yükümlülüğünü düzenler.\n"
+                "MADDE 2 - (1) (Değişik: 6/5/2016-6715/1 md.) İkinci madde başvuru süresini "
+                "ayrıntılı biçimde düzenler.\n(2) İkinci fıkra süreyi işçi lehine uzatır.\n"
+            ).encode(),
+            metadata={
+                "source_kind": "legislation",
+                "document_type": "law",
+                "domain": "labour_law",
+                "title": "9991 sayılı Deneme Kanunu",
+            },
+        )
+    )
+    decision = pipeline.ingest(
+        RawDocument(
+            source_name="manual",
+            source_document_id="integration-citing-decision",
+            source_url="file:///integration-citing-decision.txt",
+            media_type="text/plain",
+            content=(
+                "GEREKÇE\n9991 sayılı Deneme Kanunu'nun 2. maddesine göre süre geçmiştir.\n\n"
+                "HÜKÜM\nDavanın reddine karar verilmiştir."
+            ).encode(),
+            metadata={
+                "source_kind": "court_decision",
+                "document_type": "court_decision",
+                "domain": "labour_law",
+                "authority": "Yargıtay",
+                "chamber": "9. Hukuk Dairesi",
+                "case_number": "2099/7",
+                "decision_number": "2099/8",
+                "document_date": "2015-01-01",
+            },
+        )
+    )
+    repository = AppRepository(AppDatabase(database_url()))
+    try:
+        with psycopg.connect(database_url()) as connection:
+            [parse_id] = connection.execute(
+                "select current_parse_id from legal.documents where id=%s",
+                (decision.document_id,),
+            ).fetchone()
+        texts = await repository.decision_texts([str(parse_id)])
+        assert "Deneme Kanunu'nun 2. maddesine" in texts[str(parse_id)]
+
+        rows = await repository.article_changes([("9991", "1"), ("9991", "2")])
+        assert [
+            (row["law_title"], row["article"], row["event_type"], row["event_date"].isoformat())
+            for row in rows
+        ] == [("9991 sayılı Deneme Kanunu", "2", "amended", "2016-05-06")]
+    finally:
+        with psycopg.connect(database_url()) as connection:
+            connection.execute(
+                "delete from legal.documents where id = any(%s)",
+                ([law.document_id, decision.document_id],),
+            )

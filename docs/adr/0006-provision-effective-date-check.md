@@ -48,3 +48,33 @@ hukuki bir hüküm değil, bir kontrol hatırlatmasıdır:
 
 Web araması eski metni bulabileceği için bu durumda teklif kartı çıkar (ADR 0004,
 `provision_changed`). Notların sorgusu başarısız olursa cevap notsuz devam eder.
+
+## Güncelleme (2026-10-01): Yargıtay kararlarının güncelliği
+
+Kontrol yalnız kanun pasajlarına bakıyordu. Oysa bir Yargıtay kararı, dayandığı madde sonradan
+değiştiyse o maddenin eski haline göre verilmiştir. Örnek: 2012–2015 işe iade kararları,
+İş Kanunu m.21'e 2017'de 7036 sayılı Kanunla fıkra eklenmeden önce verildi. 2023 kararlarının
+bir kısmı ise 16.07.2026'da yürürlükten kaldırılan HMK m.107'ye dayanıyor.
+
+- **Kararın dayandığı maddeler metinden okunur.** Atıf kalıpları: "4857 sayılı İş Kanunu'nun
+  21 inci maddesinin beşinci fıkrası", "Türk Borçlar Kanunu'nun ... kenar başlıklı 400 üncü
+  maddesi", "İŞ KANUNU (4857) Madde 21", "Kanun'un 25 inci maddesi".
+- **Kural kesinlikten yanadır; emin olunmayan atıf alınmaz.** Bir madde numarası ancak
+  kaynağımızın tanıyabildiği bir kanunun hemen ardından gelirse sayılır.
+  - Adıyla anılan bir kanun, yürürlüğe girmeden önce verilmiş kararlarda sayılmaz (2013'teki
+    "İş Mahkemeleri Kanunu" 5521'dir).
+  - Yabancı kanunlar ("Rusya Federasyonu İş Kanunu") ve HUMK alınmaz.
+- **Kararın verildiği tarihten sonraki değişiklikler karşılaştırılır.** Bunun için kanun
+  pasajlarında kullanılan değişiklik kayıtları kullanılır.
+  - Karar belirli bir fıkraya dayanıyorsa başka bir fıkradaki değişiklik ya da maddeye eklenen
+    bir fıkra sayılmaz.
+  - Olay tarihi biliniyorsa yalnız olaydan önce yürürlüğe giren değişiklikler uyarı üretir: hem
+    karar hem olay eski metin dönemindeyse karar olaya uygundur. Olay tarihi yoksa karar
+    bugünkü metinle karşılaştırılır.
+- **Karar metni ve maddelerin değişiklikleri cevap başına iki sorguyla gelir.**
+  - Değişiklikler modele kararın altında `<cited_provision_changes>` olarak gider.
+  - Kaynak panelinde "Dayandığı maddelerde karardan sonraki değişiklikler" bölümünde görünür.
+  - Uyarı aynı "Yürürlük kontrolü" kutusunda `decision_outdated` olarak çıkar.
+
+Canlı veride 49 kararın 194 farklı madde atfı okundu ve 12 karar için uyarı çıktı. Hepsi elle
+gözden geçirildi. Bulunamayan atıflar uyarı üretmez; bu, yanlış uyarı vermekten iyidir.

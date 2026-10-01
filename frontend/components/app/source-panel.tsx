@@ -15,13 +15,13 @@ const CHANGE_NAME: Record<ProvisionChange['event_type'], string> = {
   annulled: 'AYM iptal etti',
 };
 
-/** The official amendment notes of a law passage, newest first. */
-function ProvisionHistory({ changes }: { changes: ProvisionChange[] }) {
+/** Official amendment notes, newest first: a law passage's own, or those of a decision's articles. */
+function ProvisionHistory({ changes, title }: { changes: ProvisionChange[]; title: string }) {
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-line px-3.5 py-3">
       <div className="flex items-center gap-2 text-[12.5px]">
         <Icon name="history" size={14} className="text-fg2" />
-        <span className="font-semibold">Değişiklik geçmişi</span>
+        <span className="font-semibold">{title}</span>
       </div>
       <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {changes.map((change) => (
@@ -163,7 +163,13 @@ export function SourcePanel({
             </blockquote>
           )}
           {!file && !web && snapshot.provision_changes && snapshot.provision_changes.length > 0 && (
-            <ProvisionHistory changes={snapshot.provision_changes} />
+            <ProvisionHistory changes={snapshot.provision_changes} title="Değişiklik geçmişi" />
+          )}
+          {!file && !web && snapshot.cited_provision_changes && snapshot.cited_provision_changes.length > 0 && (
+            <ProvisionHistory
+              changes={snapshot.cited_provision_changes}
+              title="Dayandığı maddelerde karardan sonraki değişiklikler"
+            />
           )}
           {web && (
             <p className="m-0 text-[12.5px] leading-normal text-fg3">

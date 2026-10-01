@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
@@ -958,3 +959,104 @@ async def test_changed_provisions_never_send_a_corpus_turn_to_the_web() -> None:
     await ask(service(provider, web=web), amended_checks=[AMENDED_CHECK])
     assert web.queries == []
     assert "cevabın yerini almaz" not in provider.prompts["ChatAnswer"]
+
+
+DECISION_TEXT = (
+    "Bu durumda işverence yapılan fesih, 4857 sayılı İş Kanunu'nun 20 nci maddesinin birinci "
+    "fıkrasına göre bir ay içinde açılan dava ile denetlenir."
+)
+P2 = "SOURCE_PRIMARY_02"
+
+
+def decision_hit() -> SearchHit:
+    record = replace(
+        hit(text=DECISION_TEXT).record,
+        title="Yargıtay 22. Hukuk Dairesi, E. 2012/24085, K. 2013/13502",
+        document_type="court_decision",
+        case_number="2012/24085",
+        decision_number="2013/13502",
+        document_date=date(2013, 6, 4),
+    )
+    return SearchHit(record=record, score=0.9, rank=2)
+
+
+class FakeDecisionProvisions(FakeProvisions):
+    """No notes on the passages themselves; article 20 changed in 2017."""
+
+    def __init__(self) -> None:
+        super().__init__(rows=[])
+        self.decision_requests: list[list[str]] = []
+        self.article_requests: list[list[tuple[str, str]]] = []
+
+    async def decision_texts(self, parse_ids):
+        self.decision_requests.append(list(parse_ids))
+        return {parse_id: DECISION_TEXT for parse_id in parse_ids}
+
+    async def article_changes(self, articles):
+        self.article_requests.append(list(articles))
+        return [
+            {
+                "law_number": "4857",
+                "article": "20",
+                "law_title": "4857 sayılı İş Kanunu",
+                "event_id": uuid4(),
+                "event_type": "amended",
+                "target_type": "paragraph",
+                "event_date": date(2017, 10, 12),
+                "effective_from": None,
+                "source_law_number": "7036",
+                "raw_annotation": "Değişik birinci fıkra: 12/10/2017-7036/11 md.",
+                "unit_path": ["chapter:İKİNCİ", "article:20"],
+                "unit_type": "article",
+            }
+        ]
+
+
+@pytest.mark.asyncio
+async def test_a_decision_given_before_its_article_changed_is_flagged() -> None:
+    old_decision = decision_hit()
+    answer = chat_answer(
+        paragraph(("İşe iade davası bir ay içinde açılmalıdır.", [P2]))
+    )
+    provider = FakeProvider(dated(answer, "14.06.2023", "fesih tarihi"))
+    provisions = FakeDecisionProvisions()
+    chat = service(
+        provider,
+        primary=[hit(), old_decision],
+        files=[file_hit("Fesih bildirimi 14.06.2023 tarihinde tebliğ edilmiştir.")],
+        provisions=provisions,
+    )
+    result = await ask(chat)
+
+    # The whole decision is read, only for the decision, and its article looked up.
+    assert provisions.decision_requests == [[old_decision.record.parse_id]]
+    assert provisions.article_requests == [[("4857", "20")]]
+    note = "- 4857 sayılı İş Kanunu m.20: Değişik birinci fıkra: 12/10/2017-7036/11 md."
+    prompt = provider.prompts["ChatAnswer"]
+    assert f"<cited_provision_changes>\n{note}\n</cited_provision_changes>" in prompt
+    assert "Kararın dayandığı maddelerde karardan sonra" in provider.prompts["SupportReport"]
+
+    [check] = result.structured_content["temporal_checks"]
+    assert (check["source_id"], check["level"]) == (P2, "decision_outdated")
+    assert check["text"].endswith(
+        "Karar maddenin eski haline göre verilmiş; fesih tarihi olan 14.06.2023 tarihinde ise "
+        "yeni metin yürürlükteydi."
+    )
+    snapshot = next(c["source_snapshot"] for c in result.citations if c["source_id"] == P2)
+    assert snapshot["cited_provision_changes"][0]["amending_law"] == "7036"
+    # The old text of a decision's article is not what a web search would add.
+    assert result.structured_content["web_search_offer"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_decision_and_a_case_both_before_the_change_raise_nothing() -> None:
+    answer = chat_answer(paragraph(("İşe iade davası bir ay içinde açılmalıdır.", [P2])))
+    provider = FakeProvider(dated(answer, "01.03.2016", "fesih tarihi"))
+    chat = service(
+        provider,
+        primary=[hit(), decision_hit()],
+        files=[file_hit("Fesih bildirimi 01.03.2016 tarihinde tebliğ edilmiştir.")],
+        provisions=FakeDecisionProvisions(),
+    )
+    result = await ask(chat)
+    assert result.structured_content["temporal_checks"] == []

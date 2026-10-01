@@ -75,6 +75,8 @@ export interface SourceSnapshot {
   retrieved_on?: string;
   /** Law passages only: the official amendment notes of the articles it covers, newest first. */
   provision_changes?: ProvisionChange[];
+  /** Decisions only: changes, after the decision, to the articles it rests on. */
+  cited_provision_changes?: ProvisionChange[];
 }
 
 export type ProvisionChangeType = 'added' | 'amended' | 'repealed' | 'annulled';
@@ -93,14 +95,18 @@ export interface ProvisionChange {
 
 /**
  * Yürürlük kontrolü: a cited provision changed after the case date (changed_after) or
- * shortly before it, so its effective date needs checking (near_change).
+ * shortly before it, so its effective date needs checking (near_change); or a cited
+ * decision rests on an article that changed after it was decided (decision_outdated).
  */
 export interface TemporalCheck extends ProvisionChange {
   source_id: string;
-  level: 'changed_after' | 'near_change';
+  level: 'changed_after' | 'near_change' | 'decision_outdated';
   title: string;
-  case_date: string;
-  case_date_label: string;
+  /** decision_outdated only. */
+  decision_date?: string;
+  /** Null for a decision checked without a case date. */
+  case_date: string | null;
+  case_date_label: string | null;
   text: string;
 }
 

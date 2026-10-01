@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any, Literal
 
+from app.chat.decision_refs import ArticleRef, annotation_paragraph
+
 ChangeType = Literal["added", "amended", "repealed", "annulled"]
-CheckLevel = Literal["changed_after", "near_change"]
+# changed_after / near_change: a cited provision against the case date. decision_outdated:
+# a cited Yargıtay decision rests on an article that changed after it was decided.
+CheckLevel = Literal["changed_after", "near_change", "decision_outdated"]
 
 # The date in a note is the amending law's adoption date; it usually takes effect with its
 # publication days later, sometimes months later. A case date this soon after it may
@@ -30,6 +34,8 @@ NEAR_ANNULMENT_DAYS = 366
 # Per law passage, in the prompt and the source panel; long articles carry dozens.
 MAX_CHANGES_PER_SOURCE = 12
 MAX_CHECKS = 8
+# A decision resting on many changed articles names the first few in its warning.
+MAX_NAMED_PROVISIONS = 3
 MAX_ANNOTATION_CHARS = 160
 MAX_LABEL_CHARS = 80
 
@@ -293,3 +299,108 @@ def amendment_query(check: Mapping[str, Any]) -> str:
         changed_by = ""
     parts = (check.get("title"), check.get("provision"), changed_by, "değişiklik öncesi eski hali")
     return " ".join(" ".join(str(part).split()) for part in parts if part)
+
+
+def _concerns(paragraph: int | None, row: Mapping[str, Any]) -> bool:
+    """Whether a change touches the paragraph a decision cites (any, if it cites none)."""
+    if paragraph is None:
+        return True
+    for element in row["unit_path"] or []:
+        kind, _, label = element.partition(":")
+        if kind == "paragraph":
+            return label.split("#", 1)[0] == str(paragraph)
+    if row["target_type"] in {"unit", "article"}:
+        return True
+    if (named := annotation_paragraph(str(row["raw_annotation"]))) is not None:
+        return named == paragraph
+    # A paragraph added to the article leaves the cited one as it was.
+    return not (row["event_type"] == "added" and row["target_type"] == "paragraph")
+
+
+def changes_after_decision(
+    refs: Sequence[ArticleRef], rows: Iterable[Mapping[str, Any]], decided: date
+) -> tuple[ProvisionChange, ...]:
+    """Changes made, after a decision, to the articles (and paragraphs) it rests on.
+
+    `rows` are the article changes of `refs`, each with its law_number, article and the
+    law's title; a change before the decision is part of the text the court applied.
+    """
+    cited: dict[tuple[str, str], list[int | None]] = {}
+    for ref in refs:
+        cited.setdefault((ref.law_number, ref.article), []).append(ref.paragraph)
+    changes: dict[str, ProvisionChange] = {}
+    for row in rows:
+        paragraphs = cited.get((row["law_number"], row["article"]))
+        if paragraphs is None or row["event_id"] in changes:
+            continue
+        took_effect = row["effective_from"] or row["event_date"]
+        if took_effect <= decided or not any(_concerns(p, row) for p in paragraphs):
+            continue
+        [change] = changes_by_chunk([row | {"chunk_id": "decision"}])["decision"]
+        changes[str(row["event_id"])] = replace(
+            change, provision=f"{row['law_title']} {change.provision}".strip()
+        )
+    return tuple(
+        sorted(changes.values(), key=lambda change: change.change_date, reverse=True)[
+            :MAX_CHANGES_PER_SOURCE
+        ]
+    )
+
+
+def decision_checks(
+    decisions: Sequence[tuple[str, str, date, Sequence[ProvisionChange]]],
+    dates: Mapping[str, CaseDate],
+) -> list[dict[str, Any]]:
+    """Cited decisions given before an article they rest on changed.
+
+    With a case date, only changes in force by then count: a decision on the old text fits
+    an event that also happened under it. Without one, the decision is compared with today.
+    """
+    checks: list[dict[str, Any]] = []
+    for source_id, title, decided, changes in decisions:
+        case = dates.get(source_id)
+        relevant = [
+            change
+            for change in changes
+            if case is None or case.value >= (change.effective_from or change.change_date)
+        ]
+        if not relevant:
+            continue
+        latest = relevant[0]
+        named = list(dict.fromkeys(change.provision for change in relevant))
+        provisions = ", ".join(named[:MAX_NAMED_PROVISIONS]) + (
+            f" ve {len(named) - MAX_NAMED_PROVISIONS} hüküm daha"
+            if len(named) > MAX_NAMED_PROVISIONS
+            else ""
+        )
+        notes = "; ".join(dict.fromkeys(change.annotation for change in relevant[:2]))
+        then = (
+            f"{case.label} olan {_day(case.value)} tarihinde ise yeni metin yürürlükteydi."
+            if case
+            else "bugünkü metinle uyumunu kontrol edin."
+        )
+        checks.append(
+            {
+                "source_id": source_id,
+                "level": "decision_outdated",
+                "title": title,
+                **latest.snapshot(),
+                "provision": provisions,
+                "decision_date": decided.isoformat(),
+                "case_date": case.value.isoformat() if case else None,
+                "case_date_label": case.label if case else None,
+                "text": (
+                    f"{title} ({_day(decided)}): dayandığı {provisions} bu karardan sonra "
+                    f"değişti ({notes}). Karar maddenin eski haline göre verilmiş; {then}"
+                ),
+            }
+        )
+    return checks
+
+
+_LEVEL_ORDER = {"changed_after": 0, "decision_outdated": 1, "near_change": 2}
+
+
+def ordered_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Firm warnings first, then outdated decisions, then notes; a bounded number."""
+    return sorted(checks, key=lambda check: _LEVEL_ORDER[check["level"]])[:MAX_CHECKS]

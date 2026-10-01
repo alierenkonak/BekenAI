@@ -29,17 +29,34 @@ class EvidenceSource:
     index_version: str
     # Official amendment notes of the articles this passage covers, newest first.
     changes: tuple[ProvisionChange, ...] = ()
+    # A decision only: changes, after it was decided, to the articles it rests on.
+    cited_changes: tuple[ProvisionChange, ...] = ()
+
+    @property
+    def is_decision(self) -> bool:
+        record = self.hit.record
+        return bool(record.case_number or record.decision_number)
 
     @property
     def amendments(self) -> str:
         return "\n".join(change.prompt_line for change in self.changes)
 
     @property
+    def cited_amendments(self) -> str:
+        return "\n".join(change.prompt_line for change in self.cited_changes)
+
+    @property
     def passage(self) -> str:
         # The verifier sees the notes too, so "this paragraph changed in 2024" can be checked.
-        if not self.changes:
-            return self.hit.record.text
-        return f"{self.hit.record.text}\n\nResmî değişiklik notları:\n{self.amendments}"
+        text = self.hit.record.text
+        if self.changes:
+            text += f"\n\nResmî değişiklik notları:\n{self.amendments}"
+        if self.cited_changes:
+            text += (
+                "\n\nKararın dayandığı maddelerde karardan sonra yapılan değişiklikler:\n"
+                + self.cited_amendments
+            )
+        return text
 
     def citation_reference(self) -> dict:
         record = self.hit.record
@@ -68,6 +85,9 @@ class EvidenceSource:
         block = "\n".join(metadata) + f"\n<passage>\n{record.text}\n</passage>"
         if self.changes:
             block += f"\n<amendments>\n{self.amendments}\n</amendments>"
+        if self.cited_changes:
+            tag = "cited_provision_changes"
+            block += f"\n<{tag}>\n{self.cited_amendments}\n</{tag}>"
         return block
 
     def snapshot(self) -> dict:
@@ -102,6 +122,10 @@ class EvidenceSource:
         } | (
             {"provision_changes": [change.snapshot() for change in self.changes]}
             if self.changes
+            else {}
+        ) | (
+            {"cited_provision_changes": [change.snapshot() for change in self.cited_changes]}
+            if self.cited_changes
             else {}
         )
 
