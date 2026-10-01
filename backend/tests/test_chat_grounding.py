@@ -797,6 +797,9 @@ async def test_a_provision_changed_after_the_case_date_is_flagged_with_its_note(
     block = f"<amendments>\n- m.3, 12. fıkra: {note}\n</amendments>"
     assert block in provider.prompts["ChatAnswer"]
     assert "Resmî değişiklik notları" in provider.prompts["SupportReport"]
+    # A repealed rule is not told as today's law, and an older case keeps its own law.
+    assert "cevaba hükmün kaldırıldığını\n    söyleyerek başla" in provider.prompts["ChatAnswer"]
+    assert "olay tarihindeki hükme göre cevapla" in provider.prompts["ChatAnswer"]
 
     structured = result.structured_content
     [check] = structured["temporal_checks"]
