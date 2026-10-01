@@ -42,14 +42,7 @@ jobs:
       - name: Install hash-locked Python dependencies
         run: "python -m pip install --require-hashes --only-binary=:all: -r requirements/ci.lock"
       - name: Audit Python dependencies
-        run: |
-          pip-audit --requirement requirements/ci.lock --no-deps --disable-pip --progress-spinner off
-          pip-audit --requirement deploy/oracle/requirements.lock --no-deps --disable-pip --progress-spinner off
-          # pip-audit cannot infer a version from a direct wheel URL. Derive the
-          # public release version so the hash-pinned CPU wheel is still audited.
-          sed -n 's|^torch @ .*torch-\([^%]*\)%2Bcpu.*|torch==\1|p' deploy/oracle/requirements.in > /tmp/bekenai-torch-audit.txt
-          test -s /tmp/bekenai-torch-audit.txt
-          pip-audit --requirement /tmp/bekenai-torch-audit.txt --no-deps --disable-pip --progress-spinner off
+        run: .github/scripts/audit-python-locks.sh
       - name: Install local projects without dependency resolution
         run: |
           python -m pip install --no-deps --no-build-isolation -e "./backend[dev]" -e "./ingestion[dev]" -e "./retrieval[dev,server]"
