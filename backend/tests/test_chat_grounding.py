@@ -1060,3 +1060,73 @@ async def test_a_decision_and_a_case_both_before_the_change_raise_nothing() -> N
     )
     result = await ask(chat)
     assert result.structured_content["temporal_checks"] == []
+
+
+class FakeRepealProvisions(FakeDecisionProvisions):
+    """The decision rests on HMK article 107, which Law 7589 repealed on 16 July 2026."""
+
+    async def article_changes(self, articles):
+        self.article_requests.append(list(articles))
+        return [
+            {
+                "law_number": "6100",
+                "article": "107",
+                "law_title": "6100 sayılı Hukuk Muhakemeleri Kanunu",
+                "event_id": uuid4(),
+                "event_type": "repealed",
+                "target_type": "unit",
+                "event_date": date(2026, 7, 16),
+                "effective_from": None,
+                "source_law_number": "7589",
+                "raw_annotation": "Mülga:16/7/2026-7589/19 md.",
+                "unit_path": ["part:ikinci", "article:107"],
+                "unit_type": "article",
+            }
+        ]
+
+    async def decision_texts(self, parse_ids):
+        self.decision_requests.append(list(parse_ids))
+        text = "6100 sayılı Hukuk Muhakemeleri Kanunu'nun 107. maddesine göre dava açılır"
+        return {parse_id: text for parse_id in parse_ids}
+
+
+def unclear_claim_hit(text: str) -> SearchHit:
+    decision = decision_hit()
+    return SearchHit(record=replace(decision.record, text=text), score=0.9, rank=2)
+
+
+@pytest.mark.asyncio
+async def test_an_answer_resting_on_a_repealed_provision_leads_with_the_repeal() -> None:
+    answer = chat_answer(paragraph(("Belirsiz alacak davası açabilirsiniz.", [P2])))
+    passage = "HMK'nın 107. maddesinde düzenlenen belirsiz alacak davası açılabilir."
+    chat = service(FakeProvider(answer), primary=[hit(), unclear_claim_hit(passage)], files=[],
+                   provisions=FakeRepealProvisions())
+    result = await ask(chat, message="Belirsiz alacak davası açabilir miyim?", history=[])
+
+    notice = result.structured_content["repeal_notice"]
+    assert notice.startswith(
+        "Dikkat: cevapta atıf yapılan kaynaklarda geçen 6100 sayılı Hukuk Muhakemeleri Kanunu "
+        "m.107 16.07.2026 tarihinde"
+    )
+    # Whatever the model wrote, the plain-text answer (history, copy) opens with it too.
+    assert result.content.startswith(notice)
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_answer_carries_no_repeal_notice() -> None:
+    result = await ask(service(FakeProvider(MIXED), provisions=FakeProvisions()))
+    assert result.structured_content["repeal_notice"] is None
+    assert result.content.startswith("Evet, bu feshe itiraz edebilirsiniz.")
+
+
+@pytest.mark.asyncio
+async def test_a_cited_passage_on_another_topic_raises_no_repeal_notice() -> None:
+    # The decision rests on the repealed article elsewhere; the cited passage is about notice.
+    answer = chat_answer(paragraph(("İhbar süresi iki haftadır.", [P2])))
+    passage = "İşi altı aydan az sürmüş işçi için bildirim süresi iki haftadır."
+    chat = service(FakeProvider(answer), primary=[hit(), unclear_claim_hit(passage)], files=[],
+                   provisions=FakeRepealProvisions())
+    result = await ask(chat, message="İhbar süresi ne kadar?", history=[])
+    assert result.structured_content["repeal_notice"] is None
+    # The decision's later change is still listed with the source and in the box.
+    assert result.structured_content["temporal_checks"][0]["level"] == "decision_outdated"

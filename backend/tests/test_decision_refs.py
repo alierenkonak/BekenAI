@@ -4,7 +4,12 @@ from datetime import date
 
 import pytest
 
-from app.chat.decision_refs import ArticleRef, annotation_paragraph, article_references
+from app.chat.decision_refs import (
+    ArticleRef,
+    annotation_paragraph,
+    article_references,
+    mentioned_articles,
+)
 
 LATE = date(2023, 1, 1)
 
@@ -87,3 +92,9 @@ def test_amendment_notes_name_their_paragraph() -> None:
     assert annotation_paragraph("İptal dördüncü fıkra: Anayasa Mahkemesinin ...") == 4
     assert annotation_paragraph("DEĞİŞİK ON İKİNCİ FIKRA") == 12
     assert annotation_paragraph("Ek fıkra: 1/7/2006-5538/18 md.") is None
+
+
+def test_a_passage_names_the_articles_it_discusses_whatever_the_law() -> None:
+    assert mentioned_articles("HMK'nın 107. maddesinde ve 109 uncu maddesinde") == {"107", "109"}
+    assert mentioned_articles("Kanun'un 17., 18. ve 19. maddeleri") == {"17", "18", "19"}
+    assert mentioned_articles("bildirim süresi iki haftadır") == set()

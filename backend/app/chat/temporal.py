@@ -81,6 +81,9 @@ class ProvisionChange:
     amending_law: str | None
     provision: str
     annotation: str
+    # Set on changes found through a decision's citations: the article they changed.
+    law_number: str | None = None
+    article: str | None = None
 
     @property
     def whole(self) -> bool:
@@ -338,7 +341,10 @@ def changes_after_decision(
             continue
         [change] = changes_by_chunk([row | {"chunk_id": "decision"}])["decision"]
         changes[str(row["event_id"])] = replace(
-            change, provision=f"{row['law_title']} {change.provision}".strip()
+            change,
+            provision=f"{row['law_title']} {change.provision}".strip(),
+            law_number=row["law_number"],
+            article=row["article"],
         )
     return tuple(
         sorted(changes.values(), key=lambda change: change.change_date, reverse=True)[
@@ -409,3 +415,50 @@ _LEVEL_ORDER = {"changed_after": 0, "decision_outdated": 1, "near_change": 2}
 def ordered_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Firm warnings first, then outdated decisions, then notes; a bounded number."""
     return sorted(checks, key=lambda check: _LEVEL_ORDER[check["level"]])[:MAX_CHECKS]
+
+
+def repeal_notice(
+    items: Iterable[tuple[str, ProvisionChange, CaseDate | None]], *, today: date
+) -> str | None:
+    """A warning to lead the answer when a cited decision explains a since-repealed provision.
+
+    `items` are (provision, change, case date) for the later changes behind cited passages.
+    Only a whole provision the legislature repealed ("Mülga") counts: an annulment is often
+    partial ("... yönünden iptal"), and both stay listed in the Yürürlük box anyway. A case
+    on facts from before the repeal was governed by the provision, so it raises nothing.
+    """
+    found: dict[str, ProvisionChange] = {}
+    case_label: CaseDate | None = None
+    for provision, change, case in items:
+        took_effect = change.effective_from or change.change_date
+        if change.event_type != "repealed" or not change.whole or took_effect > today:
+            continue
+        if case is not None and case.value < took_effect:
+            continue
+        found.setdefault(provision, change)
+        case_label = case_label or case
+    if not found:
+        return None
+    named = [
+        f"{provision} {_day(change.effective_from or change.change_date)} tarihinde "
+        f"({change.annotation})"
+        for provision, change in list(found.items())[:MAX_NAMED_PROVISIONS]
+    ]
+    then = (
+        f" {_capitalized(case_label.label)} olan {_day(case_label.value)} tarihinde bu hüküm "
+        "artık yürürlükte değildi."
+        if case_label
+        else " Aşağıdaki açıklamaların bir kısmı kaldırılan hükme dayanıyor olabilir; bugün "
+        "uygulanacak düzenlemeyi kontrol edin."
+    )
+    return (
+        "Dikkat: cevapta atıf yapılan kaynaklarda geçen "
+        + " ve ".join(named)
+        + " yürürlükten kaldırıldı."
+        + then
+    )
+
+
+def _capitalized(text: str) -> str:
+    first = "İ" if text[:1] == "i" else text[:1].upper()
+    return first + text[1:]

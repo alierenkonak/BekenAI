@@ -184,6 +184,8 @@ export interface ConversationalAnswer {
   web_search_offer?: WebSearchOfferReason | null;
   /** Absent on answers written before the check existed. */
   temporal_checks?: TemporalCheck[];
+  /** A cited decision explains a provision repealed since; shown above the answer. */
+  repeal_notice?: string | null;
 }
 
 export type StructuredAnswer = LegacyAnswer | ConversationalAnswer;

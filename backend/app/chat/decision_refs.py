@@ -144,6 +144,16 @@ def article_references(text: str, *, decided: date | None = None) -> list[Articl
     return sorted(refs, key=lambda ref: (ref.law_number, int(ref.article), ref.paragraph or 0))
 
 
+def mentioned_articles(text: str) -> set[str]:
+    """Article numbers a passage cites as articles, of whatever law ("107. maddesi")."""
+    folded = fold(" ".join(text.split()))
+    found = {match.group(1) for match in _ARTICLE_AFTER.finditer(folded)}
+    found |= {match.group(1) for match in _ARTICLE_BEFORE.finditer(folded)}
+    for match in _LIST.finditer(folded):
+        found.update(re.findall(r"\d{1,3}", match.group(1)))
+    return found
+
+
 def annotation_paragraph(annotation: str) -> int | None:
     """The paragraph an amendment note names: "Değişik birinci fıkra: ..." is 1."""
     match = _CHANGED_PARAGRAPH.search(fold(" ".join(annotation.split())))
