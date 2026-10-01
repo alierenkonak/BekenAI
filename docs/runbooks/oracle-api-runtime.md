@@ -97,3 +97,16 @@ why (`web_search_status` in the answer records it).
 
 Deploy order: apply `20260928154731_add_web_search_citations.sql` (adds
 `chat_generations.search_mode` and the `web` citation scope), then restart the API and worker.
+
+## Dependency advisories
+
+Every pull request and push to `main` audits npm and both Python locks (CI). The
+`Security audit` workflow repeats this every Monday, and also checks the pinned Qdrant image
+against Qdrant's own advisories, so an advisory published while nothing changes still surfaces;
+a failed run emails the repository owner. It can be run by hand from the Actions tab.
+
+When it fails: npm and CI-only Python fixes are an ordinary pull request. A fix in
+`deploy/oracle/*.lock` reaches production only through a new service venv (see
+`oracle-model-service.md`), and a Qdrant fix through the stepwise upgrade described there.
+GitHub's own Dependabot alerts cover npm and the direct Python dependencies, not the locked
+transitive ones.
