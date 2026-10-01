@@ -357,7 +357,11 @@ def decision_checks(
     an event that also happened under it. Without one, the decision is compared with today.
     """
     checks: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for source_id, title, decided, changes in decisions:
+        # Several passages of one decision may be cited; it is one decision to check.
+        if title in seen:
+            continue
         case = dates.get(source_id)
         relevant = [
             change
@@ -366,6 +370,7 @@ def decision_checks(
         ]
         if not relevant:
             continue
+        seen.add(title)
         latest = relevant[0]
         named = list(dict.fromkeys(change.provision for change in relevant))
         provisions = ", ".join(named[:MAX_NAMED_PROVISIONS]) + (
