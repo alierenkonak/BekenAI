@@ -298,3 +298,9 @@ def test_a_decision_on_many_changed_articles_names_the_first_few() -> None:
     [check] = decision_checks([("P1", "Karar", date(2023, 1, 1), changes)], {})
     assert "dayandığı 6100 sayılı Kanun m.1, 6100 sayılı Kanun m.2, 6100 sayılı Kanun m.3 ve 2 " \
         "hüküm daha bu karardan sonra değişti" in check["text"]
+
+
+def test_a_decision_cited_through_several_passages_is_checked_once() -> None:
+    changes = changes_after_decision([ArticleRef("4857", "20")], ARTICLE_20, DECIDED)
+    passages = [(f"P{n}", "Yargıtay 22. HD, E. 2012/24085", DECIDED, changes) for n in (2, 3, 4)]
+    assert [check["source_id"] for check in decision_checks(passages, {})] == ["P2"]
