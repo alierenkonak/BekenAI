@@ -41,6 +41,11 @@ def refs(text: str, decided: date = LATE) -> list[tuple[str, str, int | None]]:
             "4857 sayılı Kanun'un 17., 18. ve 19. maddeleri uyarınca",
             [("4857", "17", None), ("4857", "18", None), ("4857", "19", None)],
         ),
+        # A paragraph after a slash is not an article of its own.
+        (
+            "6100 sayılı HMK'nın 369/1 ve 371. maddeleri uyarınca BOZULMASINA",
+            [("6100", "369", None), ("6100", "371", None)],
+        ),
         # Once a law is named, "Kanun'un" refers back to it.
         (
             "4857 sayılı İş Kanunu fesih hükümleri incelendiğinde, Kanun'un 25 inci maddesinin "

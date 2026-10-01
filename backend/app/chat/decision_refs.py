@@ -41,9 +41,13 @@ _ARTICLE_AFTER = re.compile(
     r"(?<![\d/.])(\d{1,3})(?:\s*/\s*(\d{1,2}))?" + _ORDINAL + r"\s*madde"
 )
 _ARTICLE_BEFORE = re.compile(r"\b(?:madde|md\.|m\.)\s*(\d{1,3})(?:\s*/\s*(\d{1,2}))?\b")
+# "17., 18. ve 19. maddeleri", "369/1 ve 371. maddeleri": an item may name its paragraph.
 _LIST = re.compile(
-    r"((?:\d{1,3}" + _ORDINAL + r"\s*(?:,|ve|ile)\s*)+\d{1,3})" + _ORDINAL + r"\s*maddeler"
+    r"(?<![\d/.])((?:\d{1,3}(?:/\d{1,2})?" + _ORDINAL + r"\s*(?:,|ve|ile)\s*)+"
+    r"\d{1,3}(?:/\d{1,2})?)" + _ORDINAL + r"\s*maddeler"
 )
+# The article numbers of a list, not the paragraph numbers after a slash.
+_LIST_ITEM = re.compile(r"(?<![/\d])\d{1,3}")
 
 _ORDINAL_ONES = [
     "", "birinci", "ikinci", "üçüncü", "dördüncü", "beşinci",
@@ -131,7 +135,7 @@ def article_references(text: str, *, decided: date | None = None) -> list[Articl
 
     for match in _LIST.finditer(folded):
         if (law := owner(match.start())) is not None:
-            for number in re.findall(r"\d{1,3}", match.group(1)):
+            for number in _LIST_ITEM.findall(match.group(1)):
                 refs.add(ArticleRef(law, number))
     for match in _ARTICLE_AFTER.finditer(folded):
         if (law := owner(match.start())) is not None:
@@ -150,7 +154,7 @@ def mentioned_articles(text: str) -> set[str]:
     found = {match.group(1) for match in _ARTICLE_AFTER.finditer(folded)}
     found |= {match.group(1) for match in _ARTICLE_BEFORE.finditer(folded)}
     for match in _LIST.finditer(folded):
-        found.update(re.findall(r"\d{1,3}", match.group(1)))
+        found.update(_LIST_ITEM.findall(match.group(1)))
     return found
 
 
