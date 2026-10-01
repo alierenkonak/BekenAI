@@ -210,6 +210,7 @@ function ConversationalAnswerView({
         )
         .join('\n\n');
     const lines = [
+      ...(answer.repeal_notice ? [answer.repeal_notice, ''] : []),
       text(rendered.blocks),
       ...(rendered.temporalChecks.length
         ? ['', 'Yürürlük kontrolü:', ...rendered.temporalChecks.map((check) => `- ${check.label ? `[${check.label}] ` : ''}${check.text}`)]
@@ -253,6 +254,16 @@ function ConversationalAnswerView({
           {seconds}
         </span>
       </div>
+
+      {answer.repeal_notice && (
+        <p
+          role="note"
+          className="m-0 flex items-start gap-2 rounded-xl border border-err-line bg-err-bg px-3.5 py-2.5 text-[13.5px] leading-normal text-fg"
+        >
+          <Icon name="alert" size={15} className="mt-[3px] shrink-0 text-err" />
+          <span>{answer.repeal_notice}</span>
+        </p>
+      )}
 
       <Blocks blocks={rendered.blocks} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
 

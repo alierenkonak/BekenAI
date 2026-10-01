@@ -19,6 +19,7 @@ from app.chat.temporal import (
     decision_checks,
     ordered_checks,
     provision_label,
+    repeal_notice,
     temporal_checks,
     verified_case_date,
 )
@@ -304,3 +305,48 @@ def test_a_decision_cited_through_several_passages_is_checked_once() -> None:
     changes = changes_after_decision([ArticleRef("4857", "20")], ARTICLE_20, DECIDED)
     passages = [(f"P{n}", "Yargıtay 22. HD, E. 2012/24085", DECIDED, changes) for n in (2, 3, 4)]
     assert [check["source_id"] for check in decision_checks(passages, {})] == ["P2"]
+
+
+TODAY = date(2026, 10, 1)
+REPEALED = change(
+    event_id="107",
+    event_type="repealed",
+    target_type="unit",
+    unit_type="article",
+    change_date=date(2026, 7, 16),
+    amending_law="7589",
+    provision="6100 sayılı Hukuk Muhakemeleri Kanunu m.107",
+    annotation="Mülga:16/7/2026-7589/19 md.",
+)
+
+
+def test_a_repealed_provision_leads_the_answer_unless_the_case_predates_it() -> None:
+    hmk = REPEALED.provision
+    assert repeal_notice([(hmk, REPEALED, None)], today=TODAY) == (
+        "Dikkat: cevapta atıf yapılan kaynaklarda geçen 6100 sayılı Hukuk Muhakemeleri Kanunu "
+        "m.107 16.07.2026 tarihinde (Mülga:16/7/2026-7589/19 md.) yürürlükten kaldırıldı. "
+        "Aşağıdaki açıklamaların bir kısmı kaldırılan hükme dayanıyor olabilir; bugün "
+        "uygulanacak düzenlemeyi kontrol edin."
+    )
+    filed = CaseDate(date(2026, 9, 1), "dava tarihi")
+    assert repeal_notice([(hmk, REPEALED, filed)], today=TODAY).endswith(
+        "Dava tarihi olan 01.09.2026 tarihinde bu hüküm artık yürürlükte değildi."
+    )
+    # Facts from before the repeal were governed by the provision.
+    before = CaseDate(date(2023, 6, 14), "fesih tarihi")
+    assert repeal_notice([(hmk, REPEALED, before)], today=TODAY) is None
+
+
+def test_only_a_whole_provision_repealed_and_in_force_leads() -> None:
+    hmk = REPEALED.provision
+    # Amendments, partial repeals and annulments stay in the Yürürlük box only.
+    assert repeal_notice([(hmk, change(), None)], today=TODAY) is None
+    sentence = change(event_type="repealed", target_type="sentence", unit_type="paragraph")
+    assert repeal_notice([(hmk, sentence, None)], today=TODAY) is None
+    annulled = change(event_type="annulled", target_type="unit", unit_type="article")
+    assert repeal_notice([(hmk, annulled, None)], today=TODAY) is None
+    # A repeal not yet in force.
+    assert repeal_notice([(hmk, REPEALED, None)], today=date(2026, 7, 1)) is None
+    # The same repeal seen through several sources is named once.
+    notice = repeal_notice([(hmk, REPEALED, None)] * 3, today=TODAY)
+    assert notice is not None and notice.count("m.107") == 1

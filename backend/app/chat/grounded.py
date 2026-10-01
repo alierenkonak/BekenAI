@@ -6,6 +6,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from time import monotonic
 from typing import Any, Literal, Protocol
 
@@ -21,7 +22,7 @@ from app.chat.context import (
     select_history,
     select_sources,
 )
-from app.chat.decision_refs import article_references
+from app.chat.decision_refs import article_references, mentioned_articles
 from app.chat.query import plan_query
 from app.chat.temporal import (
     CaseDate,
@@ -31,6 +32,7 @@ from app.chat.temporal import (
     changes_by_chunk,
     decision_checks,
     ordered_checks,
+    repeal_notice,
     temporal_checks,
     verified_case_date,
 )
@@ -358,6 +360,7 @@ class GroundedChatService:
         if source_dates is None:
             source_dates = self._answer_dates(answer, turn)
         checks = self._temporal_checks(citations, source_map, source_dates)
+        notice = self._repeal_notice(citations, source_map, source_dates)
 
         limitations = [
             item.strip()
@@ -382,10 +385,12 @@ class GroundedChatService:
             "web_search_offered": offer is not None,
             "web_search_offer": offer,
             "temporal_checks": checks,
+            # Shown above the answer, whatever the model wrote.
+            "repeal_notice": notice,
         }
         cited = [source_map[item["source_id"]] for item in citations]
         return CompletedAnswer(
-            content=self._render(blocks, limitations, web_blocks, checks),
+            content=self._render(blocks, limitations, web_blocks, checks, notice),
             structured_content=structured,
             citations=citations,
             answer_status=answer.answer_status,
@@ -442,6 +447,31 @@ class GroundedChatService:
                 )
         checks = temporal_checks(laws, dates) if laws and dates else []
         return ordered_checks(checks + decision_checks(decisions, dates))
+
+    @staticmethod
+    def _repeal_notice(
+        citations: list[dict[str, Any]],
+        sources: dict[str, Source],
+        dates: Mapping[str, CaseDate],
+    ) -> str | None:
+        """Lead with a repeal when a cited decision passage explains the repealed article.
+
+        A law passage already shows today's text, so only decisions (written before the
+        repeal) can present a repealed rule as law, and only the passage actually cited counts:
+        a decision about notice periods that elsewhere mentions the repealed article does not.
+        """
+        items: list[tuple[str, Any, CaseDate | None]] = []
+        for source_id in dict.fromkeys(item["source_id"] for item in citations):
+            source = sources[source_id]
+            if not isinstance(source, EvidenceSource) or not source.cited_changes:
+                continue
+            mentioned = mentioned_articles(source.hit.record.text)
+            items += [
+                (change.provision, change, dates.get(source_id))
+                for change in source.cited_changes
+                if change.article in mentioned
+            ]
+        return repeal_notice(items, today=date.today())
 
     @staticmethod
     def _web_offer(
@@ -813,6 +843,7 @@ class GroundedChatService:
         limitations: list[str],
         web_blocks: list[dict[str, Any]] | None = None,
         checks: list[dict[str, Any]] | None = None,
+        notice: str | None = None,
     ) -> str:
         """Plain text for history and copying; the UI renders the structured blocks."""
 
@@ -826,7 +857,7 @@ class GroundedChatService:
                     parts.append(" ".join(texts))
             return parts
 
-        parts = text(blocks)
+        parts = ([notice] if notice else []) + text(blocks)
         if checks:
             parts.append(
                 "Yürürlük kontrolü:\n" + "\n".join(f"- {check['text']}" for check in checks)
