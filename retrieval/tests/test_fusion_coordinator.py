@@ -227,3 +227,53 @@ def test_draft_relevance_only_marks_exact_legislation_article_as_high() -> None:
     assert _draft_relevance(["4857:18-19"], exact) == 2
     assert _draft_relevance(["4857:18-19"], cited_elsewhere) == 0
     assert _draft_relevance(["Yargıtay"], cited_elsewhere) == 1
+
+
+def test_cited_articles_are_looked_up_not_searched() -> None:
+    from beken_retrieval.bm25 import BM25LexicalRetriever
+    from beken_retrieval.coordinator import (
+        DomainSearchCoordinator,
+        HybridDomainIndex,
+        InMemoryIndexRegistry,
+    )
+    from beken_retrieval.models import ChunkRecord, SearchFilters
+
+    def record(chunk: str, law: str, articles: tuple[str, ...], role: str = "core") -> ChunkRecord:
+        return ChunkRecord(
+            chunk_id=chunk,
+            parse_id="p",
+            document_id=f"d-{law}",
+            source_document_id=None,
+            domain_code="labour_law",
+            corpus_version="v",
+            retrieval_scope_version="s",
+            domain_role=role,
+            document_type="law",
+            title=f"{law} sayılı Kanun",
+            text=f"Madde {articles[0]} metni",
+            section_type="article",
+            legislation_numbers=(law,),
+            article_labels=articles,
+        )
+
+    records = [
+        record("a", "4857", ("18",)),
+        record("b", "4857", ("19",)),
+        record("c", "4857", ("19",)),
+        record("d", "4857", ("19",)),
+        record("e", "6100", ("19",)),
+        record("f", "4857", ("19",), role="excluded"),
+    ]
+    lexical = object.__new__(BM25LexicalRetriever)
+    lexical.records = records
+    index = HybridDomainIndex(
+        domain_code="labour_law", corpus_version="v", index_version="i", lexical=lexical
+    )
+    coordinator = DomainSearchCoordinator(InMemoryIndexRegistry((index,)))
+    hits = coordinator.article_hits(
+        [("4857", "19"), ("6100", "19"), ("4857", "99")],
+        domain="labour_law",
+        filters=SearchFilters(domain_roles=("core",)),
+    )
+    # The first two chunks of each article, in reading order; the filter still applies.
+    assert [hit.record.chunk_id for hit in hits] == ["b", "c", "e"]

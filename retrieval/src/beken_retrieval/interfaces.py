@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Protocol
 
 from beken_retrieval.models import SearchFilters, SearchHit
@@ -36,4 +37,12 @@ class DomainIndex(Protocol):
         mode: str,
         filters: SearchFilters,
         limit: int,
+    ) -> list[SearchHit]: ...
+
+    def article_hits(
+        self,
+        references: Sequence[tuple[str, str]],
+        *,
+        filters: SearchFilters,
+        per_article: int = 2,
     ) -> list[SearchHit]: ...
