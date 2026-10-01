@@ -334,3 +334,31 @@ async def test_analysis_jobs_run_the_case_analysis(monkeypatch):
     [call] = calls
     assert call["domain"] == "labour_law" and call["private_scope"].case_id == "case-id"
     worker.repository.complete_generation.assert_awaited_once_with("generation-id", analysed)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["corpus", "web"])
+async def test_deep_research_jobs_run_the_research(monkeypatch, mode):
+    worker = _chat_worker(monkeypatch, AsyncMock())
+    reported = SimpleNamespace(answer_status="answered")
+    calls: list[dict] = []
+
+    class RecordingResearch:
+        def __init__(self, chat, settings) -> None:
+            assert settings is worker.settings
+
+        async def research(self, **kwargs):
+            calls.append(kwargs)
+            return reported
+
+    monkeypatch.setattr(worker_module, "DeepResearchService", RecordingResearch)
+    worker.web_search = "tavily-client"
+    work = worker.repository.get_chat_work.return_value
+    work["search_mode"] = mode
+    work["deep_research"] = True
+
+    await worker._chat({"id": "job-id", "subject_id": "generation-id"})
+
+    [call] = calls
+    assert call["message"] == work["user_message"] and call["web"] is (mode == "web")
+    worker.repository.complete_generation.assert_awaited_once_with("generation-id", reported)

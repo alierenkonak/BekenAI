@@ -101,6 +101,7 @@ export const api = {
       message: string;
       include_doctrine: boolean;
       search_mode?: SearchMode;
+      deep_research?: boolean;
     },
     idempotencyKey: string,
   ) =>

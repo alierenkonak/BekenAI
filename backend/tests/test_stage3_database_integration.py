@@ -752,3 +752,53 @@ async def test_a_decisions_text_and_the_changes_of_the_articles_it_cites(tmp_pat
                 "delete from legal.documents where id = any(%s)",
                 ([law.document_id, decision.document_id],),
             )
+
+
+@pytest.mark.asyncio
+async def test_a_deep_research_is_stored_and_listed_with_its_message() -> None:
+    user_id = uuid4()
+    repository = AppRepository(AppDatabase(database_url()))
+    try:
+        await repository.bootstrap(user_id, "research@example.test")
+        queued = await repository.enqueue_chat(
+            user_id,
+            idempotency_key="deep-research-fixture",
+            conversation_id=None,
+            case_id=None,
+            message="Performans feshinde ispat yükü kimdedir?",
+            domain_code="labour_law",
+            include_doctrine=False,
+            retrieval_query="performans feshinde ispat yükü",
+            requested_model="fixture-model",
+            search_mode="web",
+            deep_research=True,
+        )
+        job = await repository.claim_job("integration-worker")
+        assert job and job["subject_id"] == queued["generation_id"]
+        work = await repository.get_chat_work(queued["generation_id"])
+        assert work["deep_research"] is True and work["search_mode"] == "web"
+        assert work["prompt_version"] == "deep-research-v1"
+        page = await repository.list_messages(
+            user_id, queued["conversation_id"], limit=50, cursor=None
+        )
+        [user_message] = page.items
+        assert user_message["generation"]["deep_research"] is True
+
+        with pytest.raises(ConflictError, match="deep_research_not_for_analysis"):
+            await repository.enqueue_chat(
+                user_id,
+                idempotency_key="deep-research-analysis",
+                conversation_id=None,
+                case_id=None,
+                message="Dava dosyalarını analiz et",
+                domain_code="labour_law",
+                include_doctrine=False,
+                retrieval_query="dava dosyaları",
+                requested_model="fixture-model",
+                search_mode="analysis",
+                deep_research=True,
+            )
+    finally:
+        with psycopg.connect(database_url()) as conn:
+            conn.execute("delete from public.workspaces where owner_user_id=%s", (user_id,))
+            conn.execute("delete from public.profiles where user_id=%s", (user_id,))

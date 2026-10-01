@@ -22,6 +22,7 @@ GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
 # global: the legal corpus; private: the user's own files; web: pages a web search found.
 CITATION_SCOPES = frozenset({"global", "private", "web"})
 PROMPT_VERSIONS = {"web": "web-search-v2", "analysis": "case-analysis-v1"}
+DEEP_RESEARCH_PROMPT_VERSION = "deep-research-v1"
 # Files past verification: their object size is known and their bytes are readable.
 VERIFIED_FILE_STATUSES = ("uploaded", "indexing", "ready")
 # Indexing failures a later attempt can fix; format errors (scanned PDF…) cannot.
@@ -395,8 +396,9 @@ class AppRepository:
         generations = await (
             await conn.execute(
                 """select id,user_message_id,assistant_message_id,status,stage,answer_status,
-                          safe_error_code,include_doctrine,search_mode,latency_ms,
-                          corpus_versions,index_versions,created_at,started_at,completed_at
+                          safe_error_code,include_doctrine,search_mode,deep_research,
+                          latency_ms,corpus_versions,index_versions,created_at,started_at,
+                          completed_at
                    from public.chat_generations
                    where workspace_id=%s
                      and (user_message_id=any(%s) or assistant_message_id=any(%s))""",
@@ -443,9 +445,12 @@ class AppRepository:
         requested_model: str,
         max_active_jobs: int = 2,
         search_mode: str = "corpus",
+        deep_research: bool = False,
     ) -> dict[str, Any]:
         if max_active_jobs < 1:
             raise ValueError("max_active_jobs_must_be_positive")
+        if deep_research and search_mode == "analysis":
+            raise ConflictError("deep_research_not_for_analysis")
         job_key = f"chat:{idempotency_key}"
         async with await self.database.connect() as conn:
             workspace = await self._workspace(conn, user_id)
@@ -558,17 +563,20 @@ class AppRepository:
                 await conn.execute(
                     """insert into public.chat_generations
                     (workspace_id,conversation_id,user_message_id,requested_model,prompt_version,
-                     retrieval_query,include_doctrine,search_mode)
-                    values (%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
+                     retrieval_query,include_doctrine,search_mode,deep_research)
+                    values (%s,%s,%s,%s,%s,%s,%s,%s,%s) returning *""",
                     (
                         workspace["id"],
                         conversation["id"],
                         user_message["id"],
                         requested_model,
-                        PROMPT_VERSIONS.get(search_mode, "grounded-chat-v2"),
+                        DEEP_RESEARCH_PROMPT_VERSION
+                        if deep_research
+                        else PROMPT_VERSIONS.get(search_mode, "grounded-chat-v2"),
                         retrieval_query,
                         include_doctrine,
                         search_mode,
+                        deep_research,
                     ),
                 )
             ).fetchone()

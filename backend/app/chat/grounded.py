@@ -49,8 +49,9 @@ GenerationStage = Literal["retrieving", "generating", "verifying"]
 StageCallback = Callable[[GenerationStage], Awaitable[None]]
 # corpus: the legal corpus and the user's files. web: the same, plus a web search the
 # user turned on; what the web says is added after the answer, labelled. analysis: a
-# report over every file of a case (app.chat.analysis).
-ChatSearchMode = Literal["corpus", "web", "analysis"]
+# report over every file of a case (app.chat.analysis). research: a deep research report
+# (app.chat.research), with or without the web.
+ChatSearchMode = Literal["corpus", "web", "analysis", "research"]
 Source = EvidenceSource | FileEvidenceSource | WebEvidenceSource
 Verification = Literal["verified", "partial", "unverified", "plain"]
 
@@ -91,7 +92,7 @@ _WEB_NOTES = {
     ),
 }
 _WEB_FAILED_NOTE = "Web araması şu an yapılamadı; cevap yalnız BekenAI kaynaklarına dayanıyor."
-_WEB_RULES = """
+WEB_RULES = """
 Web araması (kullanıcı açtı):
 - Ana cevabı (blocks) yalnız yukarıdaki kaynaklara dayandır. SOURCE_WEB_* kaynaklarını ana
   cevapta kullanma ve web'deki bilgiyi oraya taşıma.
@@ -290,7 +291,7 @@ class GroundedChatService:
                 queries = [plan.web_query or retrieval_query]
                 queries += [amendment_query(check) for check in amended]
                 sources, (web_sources, web_status) = await asyncio.gather(
-                    corpus, self._search_web(list(dict.fromkeys(queries)))
+                    corpus, self.search_web(list(dict.fromkeys(queries)))
                 )
                 sources += select_sources(
                     [],
@@ -365,7 +366,9 @@ class GroundedChatService:
             await self._report(on_stage, "verifying")
             support = await self._verify_support(pairs, source_map)
         citations = self._apply_support([*blocks, *web_blocks], support, source_map)
-        if turn.search_mode == "web" and plan.intent == "legal" and not web_blocks:
+        # A web search ran (web mode, or a deep research with web on): never leave its
+        # section silently empty.
+        if turn.web_status is not None and plan.intent == "legal" and not web_blocks:
             web_blocks = [self._web_note(turn.web_status, [*blocks, *web_blocks])]
         if source_dates is None:
             source_dates = self._answer_dates(answer, turn)
@@ -602,7 +605,7 @@ class GroundedChatService:
             files=await self._file_sources(query, private_scope),
         )
 
-    async def _search_web(self, queries: list[str]) -> tuple[list[WebEvidenceSource], str]:
+    async def search_web(self, queries: list[str]) -> tuple[list[WebEvidenceSource], str]:
         """Search the web for the supplement; a failure only leaves it out, with a note.
 
         The first query is the planner's general web query for the question; any others look
@@ -909,7 +912,7 @@ class GroundedChatService:
             )
         else:
             task = "Soruyu aşağıdaki kaynaklara dayanarak cevapla."
-        web_rules = _WEB_RULES if web else "- web_blocks alanını boş bırak."
+        web_rules = WEB_RULES if web else "- web_blocks alanını boş bırak."
         if web and amended:
             web_rules += _AMENDED_WEB_RULES.format(
                 amended="\n".join(f"  - {text}" for text in amended)

@@ -21,6 +21,7 @@ from qdrant_client import QdrantClient
 from app.api.search import _load_search_coordinator
 from app.chat.analysis import CaseAnalysisService
 from app.chat.grounded import GroundedChatService
+from app.chat.research import DeepResearchService
 from app.core.config import get_settings
 from app.core.database import get_database
 from app.core.repository import AppRepository, CitationIntegrityError, ConflictError
@@ -235,6 +236,18 @@ class Worker:
         if search_mode == "analysis":
             result = await CaseAnalysisService(service, self.repository, self.settings).analyze(
                 domain=work["domain_code"], private_scope=scope, on_stage=report_stage
+            )
+            await self.repository.complete_generation(job["subject_id"], result)
+            return
+        if work.get("deep_research"):
+            result = await DeepResearchService(service, self.settings).research(
+                message=work["user_message"],
+                history=work["history"],
+                domain=work["domain_code"],
+                include_doctrine=work["include_doctrine"],
+                private_scope=scope,
+                web=search_mode == "web",
+                on_stage=report_stage,
             )
             await self.repository.complete_generation(job["subject_id"], result)
             return

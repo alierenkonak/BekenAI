@@ -15,7 +15,14 @@ import {
   type RenderedTemporalCheck,
 } from '@/lib/answer';
 import { describeError, formatSeconds, isRetryableFailure } from '@/lib/format';
-import type { ConversationalAnswer, GenerationSummary, LegacyAnswer, StructuredAnswer, WebSearchOfferReason } from '@/lib/types';
+import type {
+  ConversationalAnswer,
+  GenerationSummary,
+  LegacyAnswer,
+  ResearchSummary,
+  StructuredAnswer,
+  WebSearchOfferReason,
+} from '@/lib/types';
 
 const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipTone; selected: ChipTone; partial: ChipTone }> = {
   primary: { base: 'primary', selected: 'selected', partial: 'partial' },
@@ -301,6 +308,8 @@ function ConversationalAnswerView({
         </section>
       )}
 
+      {answer.research && <ResearchDetails research={answer.research} />}
+
       {onWebSearch && <WebSearchOffer reason={answer.web_search_offer ?? 'no_sources'} onSearch={onWebSearch} busy={webSearchBusy} />}
 
       <div className="flex flex-wrap items-center gap-1">
@@ -415,6 +424,37 @@ function TemporalChecks({
         edin.
       </p>
     </section>
+  );
+}
+
+/** What a deep research covered: its parts, and how much it searched and read. */
+function ResearchDetails({ research }: { research: ResearchSummary }) {
+  const followed = research.followed_articles.length;
+  return (
+    <details className="group rounded-xl border border-line px-3.5 py-2.5 text-[13px] text-fg2">
+      <summary className="flex cursor-pointer list-none items-center gap-2">
+        <Icon name="search" size={14} className="text-accent" />
+        <span className="font-semibold text-fg">Araştırma özeti</span>
+        <span className="text-fg3">
+          {research.parts.length} alt soru · {research.searches} arama · {research.passages} pasaj
+          {followed > 0 ? ` · ${followed} madde atıftan getirildi` : ''}
+        </span>
+        <Icon name="chevDown" size={14} className="ml-auto shrink-0 transition-transform group-open:rotate-180" />
+      </summary>
+      <ol className="m-0 mt-2.5 flex flex-col gap-1 pl-5 leading-normal">
+        {research.parts.map((part) => (
+          <li key={part.question}>
+            {part.question} <span className="text-fg3">({part.sources} kaynak)</span>
+          </li>
+        ))}
+      </ol>
+      {(research.follow_ups > 0 || followed > 0) && (
+        <p className="m-0 mt-2 leading-normal text-fg3">
+          {research.follow_ups > 0 ? `İlk turdan sonra ${research.follow_ups} eksik ayrıca arandı. ` : ''}
+          {followed > 0 ? `Kararların dayandığı maddeler getirildi: ${research.followed_articles.join(', ')}.` : ''}
+        </p>
+      )}
+    </details>
   );
 }
 

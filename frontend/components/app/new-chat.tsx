@@ -28,6 +28,7 @@ export function NewChat() {
   const [includeDoctrine, setIncludeDoctrine] = useState(false);
   const webSearchAvailable = useWebSearchAvailable();
   const [webSearch, setWebSearch] = useState(false);
+  const [deepResearch, setDeepResearch] = useState(false);
   const withWeb = webSearchAvailable && webSearch;
   const [caseId, setCaseId] = useState(() => searchParams.get('dava') ?? '');
   const [cases, setCases] = useState<LegalCase[]>([]);
@@ -62,8 +63,14 @@ export function NewChat() {
     try {
       const queued = await api.sendChat(
         target
-          ? { conversation_id: target, message, include_doctrine: includeDoctrine, search_mode: searchMode }
-          : { message, include_doctrine: includeDoctrine, case_id: caseId || null, search_mode: searchMode },
+          ? { conversation_id: target, message, include_doctrine: includeDoctrine, search_mode: searchMode, deep_research: deepResearch }
+          : {
+              message,
+              include_doctrine: includeDoctrine,
+              case_id: caseId || null,
+              search_mode: searchMode,
+              deep_research: deepResearch,
+            },
         crypto.randomUUID(),
       );
       // The switch stays on for the rest of this chat.
@@ -165,6 +172,7 @@ export function NewChat() {
             includeDoctrine={includeDoctrine}
             onDoctrineChange={setIncludeDoctrine}
             webSearch={webSearchAvailable ? { checked: webSearch, onChange: setWebSearch } : undefined}
+            deepResearch={{ checked: deepResearch, onChange: setDeepResearch }}
             busy={sending || attaching}
             autoFocus
             placeholder="Örneğin: İşveren ihbar süresine uymadan sözleşmemi feshetti. Hangi alacaklarımı talep edebilirim?"
