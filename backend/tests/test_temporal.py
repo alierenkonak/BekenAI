@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from app.chat.decision_refs import ArticleRef
 from app.chat.temporal import (
     MAX_AMENDMENT_SEARCHES,
     MAX_ANNOTATION_CHARS,
@@ -11,9 +12,12 @@ from app.chat.temporal import (
     amendment_query,
     assess,
     changed_after,
+    changes_after_decision,
     changes_by_chunk,
     check_text,
     dates_in,
+    decision_checks,
+    ordered_checks,
     provision_label,
     temporal_checks,
     verified_case_date,
@@ -203,3 +207,94 @@ def test_only_firm_warnings_are_searched_and_only_a_few() -> None:
     found = changed_after(checks)
     assert len(found) == MAX_AMENDMENT_SEARCHES
     assert all(check["level"] == "changed_after" for check in found)
+
+
+def article_row(event: str, when: date, annotation: str, **overrides) -> dict:
+    values = {
+        "law_number": "4857",
+        "article": "20",
+        "law_title": "4857 sayılı İş Kanunu",
+        "event_id": event,
+        "event_type": "amended",
+        "target_type": "paragraph",
+        "event_date": when,
+        "effective_from": None,
+        "source_law_number": "7036",
+        "raw_annotation": annotation,
+        "unit_path": ["chapter:İKİNCİ", "article:20"],
+        "unit_type": "article",
+    }
+    return values | overrides
+
+
+ARTICLE_20 = [
+    article_row("first", date(2017, 10, 12), "Değişik birinci fıkra: 12/10/2017-7036/11 md."),
+    article_row("third", date(2017, 10, 12), "Değişik üçüncü fıkra: 12/10/2017-7036/11 md."),
+    # Before the decision: part of the text the court applied.
+    article_row("old", date(2005, 10, 19), "İptal dördüncü fıkra: Anayasa Mahkemesinin ...",
+                event_type="annulled"),
+    article_row("added", date(2017, 10, 12), "Ek fıkra: 12/10/2017-7036/12 md.",
+                event_type="added"),
+]
+DECIDED = date(2013, 6, 4)
+
+
+def test_only_changes_after_the_decision_to_what_it_cites_count() -> None:
+    whole = changes_after_decision([ArticleRef("4857", "20")], ARTICLE_20, DECIDED)
+    assert [c.event_id for c in whole] == ["first", "third", "added"]
+    assert whole[0].provision == "4857 sayılı İş Kanunu m.20"
+
+    # A decision on the first paragraph: another paragraph's change, or a paragraph added
+    # to the article, leaves the cited text as it was.
+    first = changes_after_decision([ArticleRef("4857", "20", 1)], ARTICLE_20, DECIDED)
+    assert [c.event_id for c in first] == ["first"]
+
+    # Numbered paragraphs are matched by the unit the note is tied to.
+    numbered = article_row("p12", date(2024, 11, 7), "Değişik ikinci cümle: 7/11/2024-7531/28",
+                           law_number="7036", article="3", law_title="7036 sayılı Kanun",
+                           target_type="sentence", unit_path=["article:3", "paragraph:12"])
+    assert changes_after_decision([ArticleRef("7036", "3", 12)], [numbered], DECIDED)
+    assert not changes_after_decision([ArticleRef("7036", "3", 11)], [numbered], DECIDED)
+    # An article the decision does not cite.
+    assert not changes_after_decision([ArticleRef("4857", "21")], ARTICLE_20, DECIDED)
+
+
+def test_an_old_decision_warns_unless_the_case_is_old_too() -> None:
+    changes = changes_after_decision([ArticleRef("4857", "20", 1)], ARTICLE_20, DECIDED)
+    decision = ("P2", "Yargıtay 22. Hukuk Dairesi, E. 2012/24085, K. 2013/13502", DECIDED, changes)
+
+    [today] = decision_checks([decision], {})
+    assert today["level"] == "decision_outdated" and today["decision_date"] == "2013-06-04"
+    assert today["text"] == (
+        "Yargıtay 22. Hukuk Dairesi, E. 2012/24085, K. 2013/13502 (04.06.2013): dayandığı "
+        "4857 sayılı İş Kanunu m.20 bu karardan sonra değişti (Değişik birinci fıkra: "
+        "12/10/2017-7036/11 md.). Karar maddenin eski haline göre verilmiş; bugünkü metinle "
+        "uyumunu kontrol edin."
+    )
+
+    dismissal = CaseDate(date(2023, 6, 14), "fesih tarihi")
+    [late] = decision_checks([decision], {"P2": dismissal})
+    then = "fesih tarihi olan 14.06.2023 tarihinde ise yeni metin yürürlükteydi."
+    assert late["text"].endswith(then)
+
+    # The event, too, happened under the old text: the decision fits it.
+    assert decision_checks([decision], {"P2": CaseDate(date(2016, 3, 1), "fesih tarihi")}) == []
+
+
+def test_firm_warnings_come_before_old_decisions_and_notes() -> None:
+    checks = [{"level": "near_change"}, {"level": "decision_outdated"}, {"level": "changed_after"}]
+    assert [c["level"] for c in ordered_checks(checks)] == [
+        "changed_after",
+        "decision_outdated",
+        "near_change",
+    ]
+
+
+def test_a_decision_on_many_changed_articles_names_the_first_few() -> None:
+    changes = [
+        change(event_id=str(n), provision=f"6100 sayılı Kanun m.{n}", change_date=date(2026, 7, n))
+        for n in range(1, 6)
+    ]
+    [check] = decision_checks([("P1", "Karar", date(2023, 1, 1), changes)], {})
+    assert "dayandığı 6100 sayılı Kanun m.1, 6100 sayılı Kanun m.2, 6100 sayılı Kanun m.3 ve 2 " \
+        "hüküm daha bu karardan sonra değişti" in check["text"]

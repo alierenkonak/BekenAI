@@ -21,12 +21,16 @@ from app.chat.context import (
     select_history,
     select_sources,
 )
+from app.chat.decision_refs import article_references
 from app.chat.query import plan_query
 from app.chat.temporal import (
     CaseDate,
     amendment_query,
     changed_after,
+    changes_after_decision,
     changes_by_chunk,
+    decision_checks,
+    ordered_checks,
     temporal_checks,
     verified_case_date,
 )
@@ -58,6 +62,12 @@ class WebSearch(Protocol):
 
 class ProvisionHistory(Protocol):
     async def provision_changes(self, chunk_ids: Sequence[str]) -> list[dict[str, Any]]: ...
+
+    async def decision_texts(self, parse_ids: Sequence[str]) -> dict[str, str]: ...
+
+    async def article_changes(
+        self, articles: Sequence[tuple[str, str]]
+    ) -> list[dict[str, Any]]: ...
 
 
 ANSWER_FORMAT = "conversational-v1"
@@ -123,7 +133,11 @@ _WRITING = """Yazım:
 AMENDMENTS_RULE = """- Bir kanun pasajının altındaki <amendments> listesi o hükmün resmî değişiklik
   notlarıdır (değişikliği yapan kanunun kabul tarihi ve sayısı). Olay tarihinden sonra değişmiş
   bir hükmü olaya uyguluyorsan bunu söyle: olay tarihinde metin farklı olabilir. Değişiklikten
-  önceki metin kaynaklarda yok; ne olduğunu tahmin etme."""
+  önceki metin kaynaklarda yok; ne olduğunu tahmin etme.
+- Bir Yargıtay kararının altındaki <cited_provision_changes> listesi, kararın dayandığı
+  maddelerde karar tarihinden sonra yapılan değişikliklerdir: karar o maddelerin eski haline
+  göre verilmiştir. Böyle bir karara dayanırken bunu söyle; olay da değişiklikten önceyse karar
+  olaya uygundur."""
 # A sentence that states a rule, deadline, amount or ruling needs a source. Without
 # one it is marked unverified instead of being passed off as grounded.
 _SPECIFIC_LEGAL_FACT = re.compile(
@@ -412,13 +426,22 @@ class GroundedChatService:
         sources: dict[str, Source],
         dates: Mapping[str, CaseDate],
     ) -> list[dict[str, Any]]:
-        """Yürürlük kontrolü for the law passages the answer actually cites."""
-        cited: list[tuple[str, str, Sequence[Any]]] = []
+        """Yürürlük kontrolü for the law passages and decisions the answer actually cites."""
+        laws: list[tuple[str, str, Sequence[Any]]] = []
+        decisions: list[tuple[str, str, Any, Sequence[Any]]] = []
         for source_id in dict.fromkeys(item["source_id"] for item in citations):
             source = sources[source_id]
-            if isinstance(source, EvidenceSource) and source.changes:
-                cited.append((source_id, source.hit.record.title, source.changes))
-        return temporal_checks(cited, dates) if cited and dates else []
+            if not isinstance(source, EvidenceSource):
+                continue
+            record = source.hit.record
+            if source.changes:
+                laws.append((source_id, record.title, source.changes))
+            if source.cited_changes and record.document_date:
+                decisions.append(
+                    (source_id, record.title, record.document_date, source.cited_changes)
+                )
+        checks = temporal_checks(laws, dates) if laws and dates else []
+        return ordered_checks(checks + decision_checks(decisions, dates))
 
     @staticmethod
     def _web_offer(
@@ -437,23 +460,62 @@ class GroundedChatService:
         return "missing_info" if answer.web_would_help else None
 
     async def with_provision_changes(self, sources: list[EvidenceSource]) -> list[EvidenceSource]:
-        """Attach each law passage's amendment notes; the answer goes on without them."""
+        """Attach amendment notes: a law passage's own, and for a decision those made later
+        to the articles it rests on. The answer goes on without them."""
         if self.provisions is None or not sources:
             return sources
         try:
             rows = await self.provisions.provision_changes(
                 [source.hit.record.chunk_id for source in sources]
             )
+            cited = await self._decision_changes(
+                [source for source in sources if source.is_decision]
+            )
         except Exception as exc:
             logger.warning("Provision history skipped (%s)", type(exc).__name__)
             return sources
         changes = changes_by_chunk(rows)
-        return [
-            replace(source, changes=found)
-            if (found := changes.get(source.hit.record.chunk_id.lower()))
-            else source
-            for source in sources
-        ]
+        attached = []
+        for source in sources:
+            found = changes.get(source.hit.record.chunk_id.lower(), ())
+            later = cited.get(source.source_id, ())
+            attached.append(
+                replace(source, changes=found, cited_changes=later)
+                if found or later
+                else source
+            )
+        return attached
+
+    async def _decision_changes(
+        self, decisions: list[EvidenceSource]
+    ) -> dict[str, tuple[Any, ...]]:
+        """Read each decision's cited articles from its whole text, then their later changes."""
+        decisions = [source for source in decisions if source.hit.record.document_date]
+        if self.provisions is None or not decisions:
+            return {}
+        texts = await self.provisions.decision_texts(
+            list(dict.fromkeys(source.hit.record.parse_id for source in decisions))
+        )
+        refs = {
+            source.source_id: article_references(
+                texts.get(str(source.hit.record.parse_id).lower(), ""),
+                decided=source.hit.record.document_date,
+            )
+            for source in decisions
+        }
+        articles = list(
+            dict.fromkeys((ref.law_number, ref.article) for found in refs.values() for ref in found)
+        )
+        rows = await self.provisions.article_changes(articles) if articles else []
+        return {
+            source.source_id: found
+            for source in decisions
+            if (
+                found := changes_after_decision(
+                    refs[source.source_id], rows, source.hit.record.document_date
+                )
+            )
+        }
 
     @staticmethod
     def _index_key(source: Source) -> str:

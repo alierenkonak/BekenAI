@@ -150,7 +150,7 @@ function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedS
             tone={tone}
             flagged={chip.changed}
             onClick={() => onSelect(chip.sourceId)}
-            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}${chip.changed ? ', olay tarihinden sonra değişmiş' : ''}`}
+            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}${chip.changed ? ', yürürlük uyarısı var' : ''}`}
           />
         );
       })}
@@ -375,15 +375,15 @@ function TemporalChecks({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
         <Icon name="history" size={14} className="text-fg2" />
         <span className="font-semibold">Yürürlük kontrolü</span>
-        <span className="text-fg3">Atıf yapılan hükümlerin olay tarihindeki hali</span>
+        <span className="text-fg3">Atıf yapılan hükümlerin ve kararların güncelliği</span>
       </div>
       <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[13px] leading-normal text-fg2">
         {checks.map((check) => (
           <li key={`${check.sourceId}:${check.text}`} className="flex gap-2">
             <Icon
-              name={check.level === 'changed_after' ? 'alert' : 'history'}
+              name={check.level === 'near_change' ? 'history' : 'alert'}
               size={14}
-              className={`mt-[3px] shrink-0 ${check.level === 'changed_after' ? 'text-err' : 'text-fg3'}`}
+              className={`mt-[3px] shrink-0 ${check.level === 'near_change' ? 'text-fg3' : 'text-err'}`}
             />
             <span>
               {check.text}

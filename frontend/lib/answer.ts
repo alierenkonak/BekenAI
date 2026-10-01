@@ -29,7 +29,8 @@ export interface Chip {
   label: string;
   channel: SourceChannel;
   partial: boolean;
-  /** The provision changed after the case date (see the Yürürlük kontrolü). */
+  /** The source has a firm Yürürlük kontrolü warning: a provision changed after the case
+   * date, or a decision rests on an article that changed after it. */
   changed?: boolean;
 }
 
@@ -120,7 +121,7 @@ export function renderAnswer(answer: StructuredAnswer, citations: Citation[]): R
 function renderConversation(answer: ConversationalAnswer, citations: Citation[]): RenderedConversation {
   const { chipsFor, sources } = createNumbering(citations);
   const checks = answer.temporal_checks ?? [];
-  const changed = new Set(checks.filter((check) => check.level === 'changed_after').map((check) => check.source_id));
+  const changed = new Set(checks.filter((check) => check.level !== 'near_change').map((check) => check.source_id));
   let number = 0;
   const render = (items: AnswerBlock[]): RenderedBlock[] =>
     items.map((block) => ({
