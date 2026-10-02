@@ -332,12 +332,14 @@ class GroundedChatService:
         on_stage: StageCallback | None = None,
         model: str | None = None,
         source_dates: Mapping[str, CaseDate] | None = None,
+        shape: Callable[[ChatAnswer], ChatAnswer] | None = None,
     ) -> CompletedAnswer:
         """Generate a ChatAnswer for any prompt over the turn's sources and verify it.
 
         Shared by chat answers and case analysis reports; `model` overrides the primary.
         `source_dates` gives each law passage the case date it is checked against (the
         analysis has one per issue); without it the answer's own case date applies to all.
+        `shape` changes the answer before it is verified (the analysis adds its deadlines).
         """
         started, plan, sources = turn.started, turn.plan, turn.sources
         await self._report(on_stage, "generating")
@@ -345,6 +347,8 @@ class GroundedChatService:
         answer = generated.value
         if not isinstance(answer, ChatAnswer):
             raise PermanentLLMError("invalid_structured_output")
+        if shape is not None:
+            answer = shape(answer)
 
         source_map = {source.source_id: source for source in sources}
         blocks, web_blocks = self._number_sentences(answer, source_map)

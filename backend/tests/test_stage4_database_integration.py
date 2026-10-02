@@ -785,7 +785,7 @@ async def test_an_analysis_needs_a_case_with_ready_files_and_reads_them_in_order
         # An analysis searches doctrine beside the law for each issue, like every answer.
         assert generation == {
             "search_mode": "analysis",
-            "prompt_version": "case-analysis-v2",
+            "prompt_version": "case-analysis-v3",
             "include_doctrine": True,
         }
 
