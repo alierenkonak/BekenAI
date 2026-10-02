@@ -40,9 +40,11 @@ ANALYSIS_MESSAGE = "Dava dosyalarını analiz et"
 # Each issue costs a reranked law and doctrine search (~15 s each); six keep a report
 # within minutes.
 MAX_ISSUES = 6
+# The reranker scores 25 candidates whatever the limit, so these cost tokens, not time.
+# On 72 evaluation questions the expected article was in the top 8 as often as in the top
+# 12 (78%), and in the top 25 only 5 points more often (ADR 0008).
 LAW_PASSAGES_PER_ISSUE = 8
-# Doctrine supplements the law, so it gets fewer passages (ADR 0008).
-DOCTRINE_PASSAGES_PER_ISSUE = 4
+DOCTRINE_PASSAGES_PER_ISSUE = 8
 # A technical guard for very large cases; what does not fit is named in the report.
 MAX_FILE_CHUNKS = 600
 ANALYSIS_FILE_TOKENS = 100_000

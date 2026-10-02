@@ -19,8 +19,8 @@ Anahtarlar kaldırıldı. Doktrin her soruda, sohbetle aynı sorguyla aranır:
   değişmedi.
 - **Derin araştırma:** Soru için bir doktrin araması yapılır.
 - **Kaynak arama sayfası:** Doktrin sonuçları her zaman ayrı bir listede gelir.
-- **Dosya analizi:** Kanun gibi her hukuki konu için ayrı aranır, konu başına en fazla 4
-  pasaj (kanunda 8). Raporda her konunun altında, katkısı varsa bir "Öğretide:" maddesi
+- **Dosya analizi:** Kanun gibi her hukuki konu için ayrı aranır, konu başına en fazla 8
+  pasaj (kanunla aynı). Raporda her konunun altında, katkısı varsa bir "Öğretide:" maddesi
   yer alır. Analiz başta doktrinsiz kuruldu ve bir anahtarı yoktu; doktrin aynı gün
   ona da eklendi (`case-analysis-v2`).
 
@@ -47,3 +47,19 @@ Dosya analizinde doktrin her konu için ayrı arandığından bedel konu sayıs�
 dava dosyasında (5 konu) doktrin aramaları 87 sn, bütün analiz 231 sn sürdü. Raporda her
 konunun altında bir "Öğretide:" maddesi çıktı; 7 doktrin atfının hepsi doğrulandı. Analizin
 beklenen süresi 2–4 dakikadan 3–5 dakikaya çıktı.
+
+Analizde konu başına kaç pasaj verileceği ölçülerek seçildi. Reranker sayıdan bağımsız olarak
+25 adayı sıraladığı için sayı süreyi değil, modele giden metni değiştirir. Sunucuda
+değerlendirme kümesinin 72 sorusunda (12 konudan 6'şar, beklenen maddesi belli olanlar)
+kanun araması yapıldı; beklenen maddenin bulunduğu ilk sıra:
+
+| İlk k sonuç | 4 | 6 | 8 | 10 | 12 | 16 | 20 | 25 |
+|---|---|---|---|---|---|---|---|---|
+| Beklenen madde içinde | %75 | %78 | %78 | %78 | %78 | %82 | %83 | %83 |
+
+Bulunduğunda madde 60 sorunun 35'inde ilk sırada, 54'ünde ilk 4'teydi. 8'den 12'ye çıkmak
+hiçbir soru kazandırmadı; 25'e çıkmak 4 soru kazandırıp modele konu başına üç kat metin
+gönderirdi. 12 soruda (%17) madde ilk 25'te hiç yoktu: bu, sayıyla değil aday üretimiyle
+(BM25 ve BGE-M3) ilgili bir eksiktir. Kanun ve doktrin bu yüzden konu başına 8'dir.
+Doktrinin etiketli bir değerlendirmesi yok; 4 pasajla yapılan canlı denemede modele verilen
+doktrin pasajlarının yarısına yakını rapora girmişti (21'den 10'u; kanunda 31'den 9'u).

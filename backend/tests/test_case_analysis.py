@@ -226,13 +226,13 @@ async def test_the_analysis_reads_every_file_and_searches_the_law_once_per_issue
     assert all(row["text"] in report_prompt for row in ROWS)
     assert "file_name=Cevap Dilekçesi.pdf" in report_prompt
 
-    # One reranked law search per distinct issue, then a smaller doctrine search for each; a
-    # passage found twice is cited once.
+    # One reranked law search per distinct issue, then a doctrine search for each; a passage
+    # found twice is cited once.
     assert coordinator.searches == [
         ("savunma alınmadan geçerli fesih", "primary:hybrid_rerank", 8),
         ("iş güvencesi şartları kıdem", "primary:hybrid_rerank", 8),
-        ("savunma alınmadan geçerli fesih", "doctrine:hybrid_rerank", 4),
-        ("iş güvencesi şartları kıdem", "doctrine:hybrid_rerank", 4),
+        ("savunma alınmadan geçerli fesih", "doctrine:hybrid_rerank", 8),
+        ("iş güvencesi şartları kıdem", "doctrine:hybrid_rerank", 8),
     ]
     issue_map = json.loads(report_prompt.rsplit("<issues>", 1)[1].split("</issues>")[0])
     assert issue_map == [
