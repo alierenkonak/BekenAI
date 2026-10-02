@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 GENERATION_STAGES = frozenset({"retrieving", "generating", "verifying"})
 # global: the legal corpus; private: the user's own files; web: pages a web search found.
 CITATION_SCOPES = frozenset({"global", "private", "web"})
-PROMPT_VERSIONS = {"web": "web-search-v2", "analysis": "case-analysis-v1"}
+PROMPT_VERSIONS = {"web": "web-search-v2", "analysis": "case-analysis-v2"}
 DEEP_RESEARCH_PROMPT_VERSION = "deep-research-v1"
 # Files past verification: their object size is known and their bytes are readable.
 VERIFIED_FILE_STATUSES = ("uploaded", "indexing", "ready")
@@ -567,8 +567,8 @@ class AppRepository:
                         if deep_research
                         else PROMPT_VERSIONS.get(search_mode, "grounded-chat-v2"),
                         retrieval_query,
-                        # Doctrine is always searched, except by a case analysis.
-                        search_mode != "analysis",
+                        # Every answer, report and analysis searches doctrine (ADR 0008).
+                        True,
                         search_mode,
                         deep_research,
                     ),

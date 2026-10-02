@@ -26,6 +26,7 @@ from app.llm.provider import StructuredResult, TransientLLMError
 
 SCOPE = PrivateScope(workspace_id=uuid4(), conversation_id=uuid4(), case_id=uuid4())
 F1, P1, P2, P3 = "SOURCE_FILE_01", "SOURCE_PRIMARY_01", "SOURCE_PRIMARY_02", "SOURCE_PRIMARY_03"
+D1 = "SOURCE_DOCTRINE_01"
 
 
 def law_hit(text: str, article: str) -> SearchHit:
@@ -75,6 +76,27 @@ ROWS = [
 DEFENCE = law_hit("Verimle ilgili fesihte savunma alınmalıdır.", "Madde 19")
 GUARANTEE = law_hit("Otuz işçi ve altı ay kıdem iş güvencesi şartıdır.", "Madde 18")
 SHARED = law_hit("Fesih bildirimi yazılı yapılır.", "Madde 19")
+VIEW = SearchHit(
+    record=ChunkRecord(
+        chunk_id=str(uuid4()),
+        parse_id=str(uuid4()),
+        document_id=str(uuid4()),
+        source_document_id="course-note",
+        domain_code="labour_law",
+        corpus_version="labour-law-doctrine-v1",
+        retrieval_scope_version="labour-law-doctrine-v1",
+        domain_role="supplemental",
+        source_kind="doctrine",
+        document_type="course_note",
+        title="İş Hukuku Ders Notu",
+        text="Öğretide savunma alınmadan yapılan verim feshi geçersiz sayılır.",
+        section_type="paragraph",
+        breadcrumb=(),
+        page_number=12,
+    ),
+    score=1.0,
+    rank=1,
+)
 ISSUES = CaseIssues(
     issues=[
         CaseIssue(title="Savunma alınması", search_query="savunma alınmadan geçerli fesih"),
@@ -95,6 +117,8 @@ REPORT = ChatAnswer(
             kind="bullets",
             sentences=[
                 AnswerSentence(text="**Kanun ve içtihat:** Savunma alınmalıdır.", source_ids=[P1]),
+                AnswerSentence(text="**Öğretide:** Savunmasız verim feshi geçersiz sayılır.",
+                               source_ids=[D1]),
                 AnswerSentence(text="**Dosyada:** Savunma alınmadığı ileri sürülmüş.",
                                source_ids=[F1]),
             ],
@@ -111,10 +135,17 @@ class FakeCoordinator:
             "savunma alınmadan geçerli fesih": [DEFENCE, SHARED],
             "iş güvencesi şartları kıdem": [SHARED, GUARANTEE],
         }
+        # Doctrine has a view on the defence only; it is found again for the second issue.
+        self.doctrine = {
+            "savunma alınmadan geçerli fesih": [VIEW],
+            "iş güvencesi şartları kıdem": [VIEW],
+        }
 
     def search(self, query: str, **kwargs):
-        self.searches.append((query, kwargs["mode"], kwargs["limit"]))
-        return self.results.get(query, [])
+        channel = kwargs.get("channel", "primary")
+        self.searches.append((query, f"{channel}:{kwargs['mode']}", kwargs["limit"]))
+        results = self.doctrine if channel == "doctrine" else self.results
+        return results.get(query, [])
 
 
 class FakeProvider:
@@ -195,17 +226,22 @@ async def test_the_analysis_reads_every_file_and_searches_the_law_once_per_issue
     assert all(row["text"] in report_prompt for row in ROWS)
     assert "file_name=Cevap Dilekçesi.pdf" in report_prompt
 
-    # One reranked search per distinct issue; a passage found twice is cited once.
+    # One reranked law search per distinct issue, then a smaller doctrine search for each; a
+    # passage found twice is cited once.
     assert coordinator.searches == [
-        ("savunma alınmadan geçerli fesih", "hybrid_rerank", 8),
-        ("iş güvencesi şartları kıdem", "hybrid_rerank", 8),
+        ("savunma alınmadan geçerli fesih", "primary:hybrid_rerank", 8),
+        ("iş güvencesi şartları kıdem", "primary:hybrid_rerank", 8),
+        ("savunma alınmadan geçerli fesih", "doctrine:hybrid_rerank", 4),
+        ("iş güvencesi şartları kıdem", "doctrine:hybrid_rerank", 4),
     ]
     issue_map = json.loads(report_prompt.rsplit("<issues>", 1)[1].split("</issues>")[0])
     assert issue_map == [
-        {"konu": "Savunma alınması", "kaynaklar": [P1, P2]},
-        {"konu": "İş güvencesi kapsamı", "kaynaklar": [P2, P3]},
+        {"konu": "Savunma alınması", "kaynaklar": [P1, P2], "doktrin": [D1]},
+        {"konu": "İş güvencesi kapsamı", "kaynaklar": [P2, P3], "doktrin": [D1]},
     ]
     assert report_prompt.count(SHARED.record.text) == 1
+    assert report_prompt.count(VIEW.record.text) == 1
+    assert "**Öğretide:**" in report_prompt and "SOURCE_DOCTRINE_* doktrindir" in report_prompt
 
     # The analysis model finds the issues and writes the report; verification is as usual.
     assert provider.calls == [
@@ -219,9 +255,23 @@ async def test_the_analysis_reads_every_file_and_searches_the_law_once_per_issue
     assert structured["search_mode"] == "analysis" and structured["web_search_offered"] is False
     assert {(c["source_id"], c["source_channel"]) for c in result.citations} == {
         (P1, "primary"),
+        (D1, "doctrine"),
         (F1, "file"),
     }
     assert result.retrieval_query == "Savunma alınması; İş güvencesi kapsamı"
+
+
+@pytest.mark.asyncio
+async def test_without_doctrine_the_report_is_written_from_the_law_and_files() -> None:
+    service, provider, coordinator = analysis()
+    coordinator.doctrine = {}
+
+    await service.analyze(domain="labour_law", private_scope=SCOPE)
+
+    report_prompt = provider.prompts["ChatAnswer"]
+    issue_map = json.loads(report_prompt.rsplit("<issues>", 1)[1].split("</issues>")[0])
+    assert all("doktrin" not in issue for issue in issue_map)
+    assert "**Öğretide:**" not in report_prompt and "SOURCE_DOCTRINE_*" not in report_prompt
 
 
 @pytest.mark.asyncio
@@ -242,7 +292,8 @@ async def test_the_number_of_issues_is_capped() -> None:
     )
     service, _, coordinator = analysis(provider=FakeProvider(many))
     await service.analyze(domain="labour_law", private_scope=SCOPE)
-    assert len(coordinator.searches) == MAX_ISSUES
+    # A law and a doctrine search for each issue kept.
+    assert len(coordinator.searches) == 2 * MAX_ISSUES
 
 
 @pytest.mark.asyncio
