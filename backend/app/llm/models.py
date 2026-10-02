@@ -17,6 +17,21 @@ class QueryPlan(BaseModel):
     web_query: str = Field(default="", max_length=4000)
 
 
+class CaseDeadline(BaseModel):
+    """The legal time limit an issue turns on, as facts only; code works out the last day."""
+
+    # The limit as the law states it, e.g. 1 and "ay" for applying to mediation.
+    amount: int = Field(ge=1, le=3650)
+    unit: Literal["gün", "iş günü", "hafta", "ay", "yıl"]
+    # The event in the file the limit runs from (e.g. "fesih bildiriminin tebliği") and its
+    # date as written there. Checked against the file.
+    start_label: str = Field(default="", max_length=300)
+    start_date: str = Field(default="", max_length=200)
+    # The act that had to be done in time, if the file says it was done, and its date.
+    act_label: str = Field(default="", max_length=300)
+    act_date: str = Field(default="", max_length=200)
+
+
 class CaseIssue(BaseModel):
     # A short heading for the report, e.g. "Savunma alınması".
     title: str = Field(min_length=3, max_length=200)
@@ -26,6 +41,8 @@ class CaseIssue(BaseModel):
     # dismissal), and what it is; empty when the file has none. Checked against the file.
     date: str = Field(default="", max_length=200)
     date_label: str = Field(default="", max_length=300)
+    # Only for an issue that turns on a time limit (filing, application, objection).
+    deadline: CaseDeadline | None = None
 
 
 class CaseIssues(BaseModel):

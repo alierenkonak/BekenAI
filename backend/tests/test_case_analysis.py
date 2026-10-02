@@ -16,6 +16,7 @@ from app.files.retrieval import PrivateScope
 from app.llm.models import (
     AnswerBlock,
     AnswerSentence,
+    CaseDeadline,
     CaseIssue,
     CaseIssues,
     ChatAnswer,
@@ -386,3 +387,82 @@ async def test_each_issue_is_checked_against_the_date_the_file_gives_for_it() ->
     )
     # A report is not re-run as a web search.
     assert result.structured_content["web_search_offer"] is None
+
+
+class OwnDeadlines(FakeProvider):
+    """The report model writes its own deadline section, with the comparison wrong."""
+
+    async def structured_output(self, *, model: str, prompt: str, schema, **options):
+        result = await super().structured_output(
+            model=model, prompt=prompt, schema=schema, **options
+        )
+        if schema is not ChatAnswer:
+            return result
+        blocks = [
+            *REPORT.blocks,
+            AnswerBlock(kind="heading", sentences=[AnswerSentence(text="Kritik süreler")]),
+            AnswerBlock(
+                kind="bullets",
+                sentences=[AnswerSentence(text="Başvuru süresi aşılmıştır.", source_ids=[F1])],
+            ),
+        ]
+        return StructuredResult(value=REPORT.model_copy(update={"blocks": blocks}), model=model)
+
+
+@pytest.mark.asyncio
+async def test_time_limits_are_worked_out_in_code_not_by_the_model() -> None:
+    issues = CaseIssues(
+        issues=[
+            CaseIssue(
+                title="Arabuluculuk başvuru süresi",
+                search_query="işe iade arabulucu başvuru süresi",
+                deadline=CaseDeadline(
+                    amount=1,
+                    unit="ay",
+                    start_label="fesih bildiriminin tebliği",
+                    start_date="14.06.2023",
+                    act_label="arabulucuya başvuru",
+                    act_date="05.07.2023",
+                ),
+            )
+        ]
+    )
+    rows = [
+        chunk_row("Fesih bildirimi 14.06.2023 tarihinde tebliğ edilmiştir.",
+                  file_name="Fesih Bildirimi.pdf", index=0, page=1),
+        chunk_row("Davacı 05.07.2023 tarihinde arabulucuya başvurmuştur.",
+                  file_name="Arabuluculuk Tutanağı.pdf", index=0, page=1),
+    ]
+    service, provider, coordinator = analysis(OwnDeadlines(issues), rows=rows)
+    coordinator.results["işe iade arabulucu başvuru süresi"] = [
+        law_hit("Tebliğ tarihinden itibaren bir ay içinde arabulucuya başvurulur.", "Madde 20")
+    ]
+
+    result = await service.analyze(domain="labour_law", private_scope=SCOPE)
+
+    # The report model is given the result and told not to work out deadlines itself.
+    report_prompt = provider.prompts["ChatAnswer"]
+    issue_map = json.loads(report_prompt.rsplit("<issues>", 1)[1].split("</issues>")[0])
+    assert issue_map[0]["sure"] == {
+        "kural": "1 ay",
+        "baslangic": "fesih bildiriminin tebliği: 14.06.2023",
+        "son_gun": "yaklaşık 14.07.2023",
+        "islem": "arabulucuya başvuru: 05.07.2023",
+        "sonuc": "süre içinde",
+    }
+    assert "Süre hesabı yapma." in report_prompt
+    assert "deadline: yalnız konu bir yasal süreye bağlıysa" in provider.prompts["CaseIssues"]
+
+    # Its own deadline section is replaced by the one worked out in code, then verified.
+    blocks = result.structured_content["blocks"]
+    texts = [sentence["text"] for block in blocks for sentence in block["sentences"]]
+    assert "Başvuru süresi aşılmıştır." not in texts
+    assert blocks[-2]["sentences"][0]["text"] == "Kritik süreler"
+    computed = blocks[-1]["sentences"][0]
+    assert computed["text"] == (
+        "**Arabuluculuk başvuru süresi:** fesih bildiriminin tebliği (14.06.2023) tarihinden "
+        "itibaren 1 ay; son gün yaklaşık 14.07.2023. Arabulucuya başvuru: 05.07.2023, süre "
+        "içinde."
+    )
+    assert computed["source_ids"] == [P1, F1, "SOURCE_FILE_02"]
+    assert computed["verification"] == "verified"
