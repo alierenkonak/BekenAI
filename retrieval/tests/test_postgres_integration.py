@@ -7,7 +7,7 @@ import psycopg
 import pytest
 
 from beken_retrieval.config import RetrievalSettings
-from beken_retrieval.postgres import PostgresCorpusRepository
+from beken_retrieval.postgres import ARTICLE_LABEL_SQL, PostgresCorpusRepository
 from beken_retrieval.scope import RetrievalScope
 
 pytestmark = pytest.mark.skipif(
@@ -150,3 +150,20 @@ def test_activating_new_backend_index_retires_previous_version() -> None:
                 "delete from legal.corpus_versions where version = %s",
                 (scope.corpus_version,),
             )
+
+
+def test_article_labels_keep_the_kind_of_article() -> None:
+    database_url = RetrievalSettings().database_url
+    with psycopg.connect(database_url) as connection:
+        rows = connection.execute(
+            f"""
+            select {ARTICLE_LABEL_SQL}
+            from (values
+              ('article', '3'), ('additional_article', '3'), ('temporary_article', '20'),
+              ('additional_temporary_article', '1'), ('repeated_article', '7'),
+              ('article', '18/A')
+            ) as u(unit_type, label)
+            """
+        ).fetchall()
+
+    assert [row[0] for row in rows] == ["3", "Ek3", "Geçici20", "EkGeçici1", "Mükerrer7", "18/A"]

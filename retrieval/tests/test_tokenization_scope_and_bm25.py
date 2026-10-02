@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -165,3 +166,61 @@ def test_bm25_roundtrip_and_filters(tmp_path: Path) -> None:
 
     assert [hit.record.chunk_id for hit in results] == [law.chunk_id]
     assert [hit.record.chunk_id for hit in reloaded_results] == [law.chunk_id]
+
+
+def test_an_annex_article_is_not_taken_for_the_plain_article(tmp_path: Path) -> None:
+    """Regression: "Ek Madde 3" (time limits) was labelled "3", like Madde 3."""
+    plain = record("İşyerini bildirme yükümlülüğü", article_labels=("3",))
+    annex = record("Kıdem tazminatı beş yıllık zamanaşımına tabidir.", article_labels=("Ek3",))
+    temporary = record("Geçiş dönemi hükmü", article_labels=("Geçici3",))
+    index = BM25LexicalRetriever.build(
+        [plain, annex, temporary], tmp_path / "index", scope_hash="a" * 64
+    )
+
+    def lookup(article: str) -> list[str]:
+        found = index.article_records("4857", article, filters=SearchFilters(), limit=5)
+        return [item.chunk_id for item in found]
+
+    assert lookup("3") == [plain.chunk_id]
+    assert lookup("Ek3") == [annex.chunk_id]
+    assert lookup("Geçici3") == [temporary.chunk_id]
+
+
+def test_the_records_digest_is_the_corpus_hash_a_build_writes(tmp_path: Path) -> None:
+    law = record("Fazla çalışma ücreti", article_labels=("41",))
+    index = BM25LexicalRetriever.build([law], tmp_path / "index", scope_hash="a" * 64)
+
+    assert BM25LexicalRetriever.records_digest([law]) == index.manifest["corpus_hash"]
+    # A metadata change alone gives a new digest, and so a new index version.
+    relabelled = replace(law, article_labels=("Ek41",))
+    assert BM25LexicalRetriever.records_digest([relabelled]) != index.manifest["corpus_hash"]
+
+
+def test_a_supplemental_allowlist_of_numbers_leaves_out_annex_articles(tmp_path: Path) -> None:
+    path = tmp_path / "scope.json"
+    path.write_text(
+        json.dumps(
+            {
+                "version": "labour-law-v1",
+                "domain": "labour_law",
+                "corpus_version": "labour-law-pilot-v4",
+                "review_status": "reviewed",
+                "roles": {"supplemental": {"include": True, "mode": "provision_allowlist"}},
+                "supplemental_allowlist": [{"legislation_number": "6098", "articles": ["1-5"]}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    scope = load_scope(path)
+
+    def supplemental(label: str) -> ChunkRecord:
+        return record(
+            "TBK",
+            role="supplemental",
+            legislation_numbers=("6098",),
+            primary_legislation_number="6098",
+            article_labels=(label,),
+        )
+
+    assert scope.allows(supplemental("3"))
+    assert not scope.allows(supplemental("Geçici3"))

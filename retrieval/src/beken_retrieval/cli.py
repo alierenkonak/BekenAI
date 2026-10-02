@@ -104,7 +104,10 @@ def build_bm25(args: argparse.Namespace, settings: RetrievalSettings) -> int:
     repository = PostgresCorpusRepository(settings.corpus_database_url)
     repository.register_scope(scope)
     records = repository.load_scope_records(scope)
-    version_seed = f"{scope.manifest_hash}:{len(records)}:bm25s:tr-legal-v1"
+    # The records' content, not only their number: a metadata fix such as the article
+    # labels gives a new index next to the active one instead of failing on it.
+    digest = BM25LexicalRetriever.records_digest(records)
+    version_seed = f"{scope.manifest_hash}:{digest}:bm25s:tr-legal-v1"
     index_version = hashlib.sha256(version_seed.encode()).hexdigest()[:16]
     channel_root = _channel_root(
         settings, domain=scope.domain, channel=scope.channel
