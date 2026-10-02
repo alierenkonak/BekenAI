@@ -32,7 +32,7 @@ sayılır. Veritabanındaki sütunlar kaldırılmadı:
 
 - `chat_generations.include_doctrine` cevabın doktrinle mi yazıldığını kaydetmeye devam
   eder; artık her yeni cevapta `true` olur.
-- `conversations.doctrine_enabled` artık yazılmaz.
+- `conversations.doctrine_enabled` artık kullanılmadığı için 2026-10-03'te kaldırıldı.
 
 ## Sonuç
 
