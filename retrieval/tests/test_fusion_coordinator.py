@@ -238,7 +238,13 @@ def test_cited_articles_are_looked_up_not_searched() -> None:
     )
     from beken_retrieval.models import ChunkRecord, SearchFilters
 
-    def record(chunk: str, law: str, articles: tuple[str, ...], role: str = "core") -> ChunkRecord:
+    def record(
+        chunk: str,
+        law: str,
+        articles: tuple[str, ...],
+        role: str = "core",
+        refers_to: tuple[str, ...] = (),
+    ) -> ChunkRecord:
         return ChunkRecord(
             chunk_id=chunk,
             parse_id="p",
@@ -252,7 +258,8 @@ def test_cited_articles_are_looked_up_not_searched() -> None:
             title=f"{law} sayılı Kanun",
             text=f"Madde {articles[0]} metni",
             section_type="article",
-            legislation_numbers=(law,),
+            primary_legislation_number=law,
+            legislation_numbers=(law, *refers_to),
             article_labels=articles,
         )
 
@@ -261,6 +268,8 @@ def test_cited_articles_are_looked_up_not_searched() -> None:
         record("b", "4857", ("19",)),
         record("c", "4857", ("19",)),
         record("d", "4857", ("19",)),
+        # Article 19 of another law that refers to the Labour Act is not its article 19.
+        record("g", "5510", ("19",), refers_to=("4857",)),
         record("e", "6100", ("19",)),
         record("f", "4857", ("19",), role="excluded"),
     ]

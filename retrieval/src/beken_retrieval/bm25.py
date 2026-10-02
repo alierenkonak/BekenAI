@@ -114,11 +114,14 @@ class BM25LexicalRetriever:
     def article_records(
         self, legislation_number: str, article_label: str, *, filters: SearchFilters, limit: int
     ) -> list[ChunkRecord]:
-        """The chunks of one article of one law, in reading order: a lookup, not a search."""
+        """The chunks of one article of one law, in reading order: a lookup, not a search.
+
+        The law is the chunk's own; `legislation_numbers` also lists the laws it refers to.
+        """
         found: list[ChunkRecord] = []
         for record in self.records:
             if (
-                legislation_number in record.legislation_numbers
+                record.primary_legislation_number == legislation_number
                 and article_label in record.article_labels
                 and matches_filters(record, filters)
             ):
