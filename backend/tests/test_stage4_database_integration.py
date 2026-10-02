@@ -782,11 +782,11 @@ async def test_an_analysis_needs_a_case_with_ready_files_and_reads_them_in_order
                    from public.chat_generations where id=%s""",
                 (queued["generation_id"],),
             ).fetchone()
-        # An analysis reads the case files and the law; it does not search doctrine.
+        # An analysis searches doctrine beside the law for each issue, like every answer.
         assert generation == {
             "search_mode": "analysis",
-            "prompt_version": "case-analysis-v1",
-            "include_doctrine": False,
+            "prompt_version": "case-analysis-v2",
+            "include_doctrine": True,
         }
 
         rows = await repository.scope_file_chunks(

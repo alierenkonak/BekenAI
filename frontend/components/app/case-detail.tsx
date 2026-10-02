@@ -445,8 +445,8 @@ export function CaseAnalysisCard({
           Dosya analizi
         </h2>
         <p className="m-0 text-[13px] leading-normal text-fg2">
-          Davadaki bütün hazır dosyalar okunur, davanın hukuki konuları çıkarılır ve her biri mevzuat ve Yargıtay kararlarıyla
-          karşılaştırılır. Rapor yeni bir sohbette açılır; 2–4 dakika sürer.
+          Davadaki bütün hazır dosyalar okunur, davanın hukuki konuları çıkarılır ve her biri mevzuat, Yargıtay kararları ve
+          doktrinle karşılaştırılır. Rapor yeni bir sohbette açılır; 3–5 dakika sürer.
         </p>
         {blocked && (
           <p className="m-0 text-[12.5px] text-fg3">

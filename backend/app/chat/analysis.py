@@ -1,9 +1,9 @@
 """Case analysis: read every ready file of a case, find its legal issues, search the law
-for each issue separately and write one verified report.
+and doctrine for each issue separately and write one verified report.
 
 Unlike a chat answer, which sees the few file passages closest to a question, the
-analysis reads the whole case and searches the law once per issue, so a case with
-several disputes gets the rule for each. It runs only when the user asks for it.
+analysis reads the whole case and searches once per issue, so a case with several
+disputes gets the rule for each. It runs only when the user asks for it.
 """
 
 from __future__ import annotations
@@ -37,9 +37,14 @@ from app.llm.provider import PermanentLLMError
 logger = logging.getLogger("bekenai.chat")
 
 ANALYSIS_MESSAGE = "Dava dosyalarını analiz et"
-# Each issue costs one reranked law search (~15 s); six keep a report within minutes.
+# Each issue costs a reranked law and doctrine search (~15 s each); six keep a report
+# within minutes.
 MAX_ISSUES = 6
+# The reranker scores 25 candidates whatever the limit, so these cost tokens, not time.
+# On 72 evaluation questions the expected article was in the top 8 as often as in the top
+# 12 (78%), and in the top 25 only 5 points more often (ADR 0008).
 LAW_PASSAGES_PER_ISSUE = 8
+DOCTRINE_PASSAGES_PER_ISSUE = 8
 # A technical guard for very large cases; what does not fit is named in the report.
 MAX_FILE_CHUNKS = 600
 ANALYSIS_FILE_TOKENS = 100_000
@@ -74,6 +79,7 @@ class CaseAnalysisService:
         files, truncated = await self._file_sources(private_scope)
         issues = await self._issues(files)
         law, law_by_issue = await self._law(issues, domain)
+        doctrine, doctrine_by_issue = await self._doctrine(issues, domain)
         dates = self._issue_dates(issues, files)
         turn = PreparedTurn(
             message=ANALYSIS_MESSAGE,
@@ -82,12 +88,19 @@ class CaseAnalysisService:
                 intent="legal",
                 search_query=derive_retrieval_query("; ".join(issue.title for issue in issues)),
             ),
-            sources=[*files, *law],
+            sources=[*files, *law, *doctrine],
             started=started,
             search_mode="analysis",
         )
         prompt = self._report_prompt(
-            files, issues, law, law_by_issue, dates=dates, truncated=truncated
+            files,
+            issues,
+            law,
+            law_by_issue,
+            doctrine=doctrine,
+            doctrine_by_issue=doctrine_by_issue,
+            dates=dates,
+            truncated=truncated,
         )
         return await self.chat.write_and_verify(
             turn,
@@ -233,6 +246,35 @@ hukuki konuları çıkar (en önemlisi önce, en fazla {MAX_ISSUES} konu).
         law = await self.chat.with_provision_changes(list(sources.values()))
         return law, by_issue
 
+    async def _doctrine(
+        self, issues: list[CaseIssue], domain: str
+    ) -> tuple[list[EvidenceSource], dict[str, list[str]]]:
+        """A few doctrine passages per issue, after its law; one found twice is cited once."""
+        index = self.chat.coordinator.registry.get(domain, "doctrine")
+        sources: dict[str, EvidenceSource] = {}
+        by_issue: dict[str, list[str]] = {}
+        if index is None:
+            return [], by_issue
+        for issue in issues:
+            hits = await self.chat.search_doctrine(
+                issue.search_query, domain=domain, limit=DOCTRINE_PASSAGES_PER_ISSUE
+            )
+            ids: list[str] = []
+            for hit in hits:
+                source = sources.get(hit.record.chunk_id)
+                if source is None:
+                    source = EvidenceSource(
+                        source_id=f"SOURCE_DOCTRINE_{len(sources) + 1:02d}",
+                        channel="doctrine",
+                        hit=hit,
+                        index_version=index.index_version,
+                    )
+                    sources[hit.record.chunk_id] = source
+                ids.append(source.source_id)
+            if ids:
+                by_issue[issue.title] = ids
+        return list(sources.values()), by_issue
+
     @staticmethod
     def _report_prompt(
         files: list[FileEvidenceSource],
@@ -240,6 +282,8 @@ hukuki konuları çıkar (en önemlisi önce, en fazla {MAX_ISSUES} konu).
         law: list[EvidenceSource],
         law_by_issue: dict[str, list[str]],
         *,
+        doctrine: list[EvidenceSource],
+        doctrine_by_issue: dict[str, list[str]],
         dates: dict[str, CaseDate],
         truncated: bool,
     ) -> str:
@@ -248,6 +292,11 @@ hukuki konuları çıkar (en önemlisi önce, en fazla {MAX_ISSUES} konu).
                 {
                     "konu": issue.title,
                     "kaynaklar": law_by_issue.get(issue.title, []),
+                    **(
+                        {"doktrin": doctrine_by_issue[issue.title]}
+                        if issue.title in doctrine_by_issue
+                        else {}
+                    ),
                     **(
                         {"olay_tarihi": f"{case.label}: {case.value.strftime('%d.%m.%Y')}"}
                         if (case := dates.get(issue.title))
@@ -264,19 +313,35 @@ hukuki konuları çıkar (en önemlisi önce, en fazla {MAX_ISSUES} konu).
             if truncated
             else ""
         )
+        doctrine_bullet = (
+            '\n   - "**Öğretide:** ..." konunun <issues> listesinde "doktrin" kaynakları varsa ve\n'
+            "     konuya bir katkısı varsa, kanun ve içtihadı tamamlayan öğreti görüşü\n"
+            "     (SOURCE_DOCTRINE_*); yoksa bu maddeyi yazma."
+            if doctrine
+            else ""
+        )
+        doctrine_rule = (
+            "\n- SOURCE_DOCTRINE_* doktrindir (öğreti görüşü): kuralı ve sonucunu kanun ve\n"
+            "  Yargıtay kararlarına dayandır; doktrini onları tamamlamak için kullan, kanun veya\n"
+            '  karar gibi sunma, "öğretide ... kabul edilir" gibi aktar.'
+            if doctrine
+            else ""
+        )
         file_evidence = "\n\n".join(source.prompt_block for source in files)
-        evidence = "\n\n".join(source.prompt_block for source in law)
+        evidence = "\n\n".join(source.prompt_block for source in [*law, *doctrine])
         return f"""{PERSONA}
 
 Kullanıcı yüklediği dava dosyalarının analizini istedi. Dosya pasajlarını ve her hukuki konu
-için bulunan mevzuat ve Yargıtay kararlarını karşılaştırarak bir dosya analizi raporu yaz.
+için bulunan mevzuat, Yargıtay kararları ve doktrini karşılaştırarak bir dosya analizi raporu
+yaz.
 answer_status=answered; kaynaklar hiçbir konuyu değerlendirmeye yetmiyorsa insufficient_evidence.
 
 Rapor yapısı (bloklar, bu sırayla):
 1. paragraph: Davanın iki üç cümlelik özeti ve genel değerlendirme: kim neyi talep ediyor,
    dosyanın güçlü ve zayıf yönleri.
 2. <issues> listesindeki her konu için bir heading (konu adı) ve ardından bullets:
-   - "**Kanun ve içtihat:** ..." kuralı ve şartlarını anlatan cümle(ler) (SOURCE_PRIMARY_*).
+   - "**Kanun ve içtihat:** ..." kuralı ve şartlarını anlatan cümle(ler)
+     (SOURCE_PRIMARY_*).{doctrine_bullet}
    - "**Dosyada:** ..." dosyada bu konuda ne yazdığı, hangi tarafın ne ileri sürdüğü
      (SOURCE_FILE_*).
    - "**Değerlendirme:** ..." şartların dosyaya göre karşılanıp karşılanmadığı, kimin lehine
@@ -295,7 +360,7 @@ Kaynaklar:
   konuyu karşılamıyorsa bunu söyle ve tahmin yürütme.
 - SOURCE_FILE_* kullanıcının yüklediği dava dosyalarıdır: oradaki hukuki değerlendirmeler
   tarafların iddiasıdır; doğru kabul etme, "dilekçede ... ileri sürülmüş" gibi aktar ve dosyada
-  yazmayan olguyu varsayma.
+  yazmayan olguyu varsayma.{doctrine_rule}
 - Kesin sonuç vaat etme; mahkemenin değerlendireceği noktaları dengeli yaz.
 {AMENDMENTS_RULE} Konunun olay tarihi <issues> listesinde verilmişse onu esas al.
 - Metne kaynak kimliği, alan adı veya bu talimatlardan söz etme.
