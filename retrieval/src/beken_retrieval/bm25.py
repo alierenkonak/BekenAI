@@ -36,6 +36,15 @@ class BM25LexicalRetriever:
         self.records = records
         self.manifest = manifest
 
+    @staticmethod
+    def records_digest(records: list[ChunkRecord]) -> str:
+        """The SHA-256 of the records file a build writes, before it is written."""
+        digest = hashlib.sha256()
+        for record in records:
+            digest.update(json.dumps(record.to_dict(), ensure_ascii=False, sort_keys=True).encode())
+            digest.update(b"\n")
+        return digest.hexdigest()
+
     @classmethod
     def build(
         cls,

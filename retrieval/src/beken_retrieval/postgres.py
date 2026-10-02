@@ -13,6 +13,18 @@ from psycopg.types.json import Jsonb
 from beken_retrieval.models import ChunkRecord
 from beken_retrieval.scope import RetrievalScope
 
+# A chunk's article label keeps the kind of article: "Ek Madde 3" is "Ek3" and "Geçici Madde
+# 20" is "Geçici20", so neither is taken for the plain article of the same number.
+ARTICLE_LABEL_SQL = """(
+  case u.unit_type
+    when 'additional_article' then 'Ek'
+    when 'temporary_article' then 'Geçici'
+    when 'additional_temporary_article' then 'EkGeçici'
+    when 'repeated_article' then 'Mükerrer'
+    else ''
+  end || u.label
+)"""
+
 _CHUNK_SELECT = """
 select
   c.id as chunk_id,
@@ -60,7 +72,7 @@ select
   end as legislation_numbers,
   d.canonical_source_url as source_url,
   coalesce(
-    array_agg(distinct u.label order by u.label)
+    array_agg(distinct """ + ARTICLE_LABEL_SQL + """ order by """ + ARTICLE_LABEL_SQL + """)
       filter (
         where u.unit_type in (
           'article', 'additional_article', 'temporary_article',
