@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
-import { DoctrineSwitch } from '@/components/ui';
 import { api } from '@/lib/api';
 import { describeError } from '@/lib/format';
 import type { SearchResponse, SearchResult } from '@/lib/types';
@@ -84,21 +83,21 @@ export function SourceSearch() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') ?? '';
   const [query, setQuery] = useState(initialQuery);
-  const [includeDoctrine, setIncludeDoctrine] = useState(true);
-  const [submitted, setSubmitted] = useState<{ query: string; doctrine: boolean } | null>(() =>
-    initialQuery.trim().length >= 3 ? { query: initialQuery.trim(), doctrine: true } : null,
+  // A new object per search, so searching the same text again runs it again.
+  const [submitted, setSubmitted] = useState<{ query: string } | null>(() =>
+    initialQuery.trim().length >= 3 ? { query: initialQuery.trim() } : null,
   );
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
-  const requestKey = submitted ? `${submitted.query}::${submitted.doctrine}` : null;
+  const requestKey = submitted ? submitted.query : null;
 
   useEffect(() => {
     if (!submitted || !requestKey) return;
     const controller = new AbortController();
     api
-      .search({ query: submitted.query, include_doctrine: submitted.doctrine }, controller.signal)
+      .search({ query: submitted.query }, controller.signal)
       .then((result) => {
         setResponse(result);
         setError(null);
@@ -115,8 +114,8 @@ export function SourceSearch() {
   const run = () => {
     const text = query.trim();
     if (text.length < 3) return;
-    setLoadingKey(`${text}::${includeDoctrine}`);
-    setSubmitted({ query: text, doctrine: includeDoctrine });
+    setLoadingKey(text);
+    setSubmitted({ query: text });
     router.replace(`/arama?q=${encodeURIComponent(text)}`, { scroll: false });
   };
 
@@ -162,10 +161,7 @@ export function SourceSearch() {
           </button>
         </form>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <DoctrineSwitch checked={includeDoctrine} onChange={setIncludeDoctrine} label="Doktrin dahil" />
-          <span className="text-[12.5px] text-fg3">Hibrit arama · BM25 + BGE-M3 · yeniden sıralama</span>
-        </div>
+        <p className="m-0 text-[12.5px] text-fg3">Mevzuat, Yargıtay kararları ve doktrin · Hibrit arama · BM25 + BGE-M3 · yeniden sıralama</p>
 
         {error && (
           <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">

@@ -32,7 +32,6 @@ export interface Conversation {
   case_id: string | null;
   title: string;
   domain_code: string;
-  doctrine_enabled: boolean;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -209,7 +208,6 @@ export interface GenerationSummary {
   stage: GenerationStage | null;
   answer_status: AnswerStatus | null;
   safe_error_code: string | null;
-  include_doctrine: boolean;
   search_mode: SearchMode;
   /** A deep research report rather than a chat answer; absent on older generations. */
   deep_research?: boolean;

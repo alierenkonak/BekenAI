@@ -223,7 +223,6 @@ def _chat_worker(monkeypatch, set_generation_stage: AsyncMock) -> worker_module.
                 "user_message": "Fesih nasıl yapılır?",
                 "retrieval_query": "fesih nasıl yapılır",
                 "domain_code": "labour_law",
-                "include_doctrine": False,
                 "history": [],
             }
         ),

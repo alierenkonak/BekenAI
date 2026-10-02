@@ -25,7 +25,7 @@ Derin araştırma kendi kaynaklarımız üzerinde, sınırlı adımlı bir döng
 1. **Plan:** Gemini 3.7 Flash, soruyu en fazla 5 alt soruya böler; her biri için bir arama
    sorgusu yazar.
 2. **Birinci tur:** Her alt soru için hibrit arama ve reranker çalışır. Sohbette dosya varsa
-   dosyada da aranır. Doktrin anahtarı açıksa bir doktrin araması eklenir.
+   dosyada da aranır. Soru için bir doktrin araması da yapılır (ADR 0008).
 3. **Eksik analizi:** 3.7 Flash, her alt sorunun bulduklarının kısa özetine bakar. Eksik kalan
    kanun hükmü, karar, istisna ya da süre için en fazla 4 ek sorgu yazar.
 4. **Atıf takibi:** Model kullanılmaz. Bulunan kararların ve doktrinin dayandığı maddeler

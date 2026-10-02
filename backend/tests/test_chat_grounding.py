@@ -199,7 +199,6 @@ async def ask(chat: GroundedChatService, **overrides):
         "message": "doğru mu söylemişler, itiraz edemez miyim?",
         "retrieval_query": "doğru mu söylemişler itiraz edemez miyim",
         "domain": "labour_law",
-        "include_doctrine": False,
         "history": [
             {"role": "user", "content": "İşveren fesih gerekçesi olarak ne göstermiş?"},
             {"role": "assistant", "content": "Performans düşüklüğü gösterilmiş."},
@@ -269,13 +268,46 @@ async def test_a_follow_up_is_searched_with_its_conversation_context() -> None:
     provider = FakeProvider(MIXED)
     chat = service(provider, doctrine=[hit(channel="doctrine")])
 
-    result = await ask(chat, include_doctrine=True)
+    result = await ask(chat)
 
     assert chat.coordinator.searches == [(REWRITTEN, "primary"), (REWRITTEN, "doctrine")]
     assert chat.private_retriever.calls == [(REWRITTEN, SCOPE)]
     assert result.retrieval_query == REWRITTEN
     assert "İşveren fesih gerekçesi" in provider.prompts["QueryPlan"]
     assert provider.calls[0] == "gemini-query:QueryPlan"
+    assert "SOURCE_DOCTRINE_* kaynakları doktrindir" in provider.prompts["ChatAnswer"]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_doctrine_search_leaves_doctrine_out_of_the_answer() -> None:
+    class DoctrineDown(FakeCoordinator):
+        def search(self, query: str, **kwargs):
+            if kwargs.get("channel") == "doctrine":
+                raise RuntimeError("doctrine collection missing")
+            return super().search(query, **kwargs)
+
+    provider = FakeProvider(MIXED)
+    chat = service(provider)
+    chat.coordinator = DoctrineDown([hit()], [hit(channel="doctrine")])
+
+    result = await ask(chat)
+
+    assert result.structured_content["answer_status"] == "answered"
+    assert "Doktrin kaynağı kullanılmıyor." in provider.prompts["ChatAnswer"]
+
+
+@pytest.mark.asyncio
+async def test_without_a_doctrine_index_only_the_law_is_searched() -> None:
+    provider = FakeProvider(MIXED)
+    chat = service(provider)
+    index = SimpleNamespace(index_version="primary-index")
+    chat.coordinator.registry = SimpleNamespace(
+        get=lambda _domain, channel="primary": None if channel == "doctrine" else index
+    )
+
+    await ask(chat)
+
+    assert [channel for _, channel in chat.coordinator.searches] == ["primary"]
 
 
 @pytest.mark.asyncio
@@ -578,7 +610,7 @@ async def test_web_search_adds_a_labelled_section_after_the_corpus_answer() -> N
     result = await ask(chat, search_mode="web")
 
     # Our usual search runs as always; the web gets only the planner's general query.
-    assert chat.coordinator.searches == [(REWRITTEN, "primary")]
+    assert chat.coordinator.searches == [(REWRITTEN, "primary"), (REWRITTEN, "doctrine")]
     assert chat.private_retriever.calls == [(REWRITTEN, SCOPE)]
     assert web.queries == [WEB_QUERY]
     assert "web_query alanına" in provider.prompts["QueryPlan"]

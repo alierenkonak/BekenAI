@@ -11,7 +11,7 @@ from time import monotonic
 from typing import Any, Literal, Protocol
 
 from beken_retrieval.coordinator import DomainSearchCoordinator, SearchMode
-from beken_retrieval.models import SearchFilters
+from beken_retrieval.models import SearchFilters, SearchHit
 from pydantic import BaseModel
 
 from app.chat.context import (
@@ -185,7 +185,6 @@ class CompletedAnswer:
 class PreparedTurn:
     message: str
     history: list[dict]
-    include_doctrine: bool
     plan: QueryPlan
     sources: list[Source]
     started: float
@@ -221,7 +220,6 @@ class GroundedChatService:
         message: str,
         retrieval_query: str,
         domain: str,
-        include_doctrine: bool,
         history: list[dict],
         on_stage: StageCallback | None = None,
         private_scope: PrivateScope | None = None,
@@ -232,7 +230,6 @@ class GroundedChatService:
             message=message,
             retrieval_query=retrieval_query,
             domain=domain,
-            include_doctrine=include_doctrine,
             history=history,
             on_stage=on_stage,
             private_scope=private_scope,
@@ -247,7 +244,6 @@ class GroundedChatService:
         message: str,
         retrieval_query: str,
         domain: str,
-        include_doctrine: bool,
         history: list[dict],
         on_stage: StageCallback | None = None,
         private_scope: PrivateScope | None = None,
@@ -282,7 +278,6 @@ class GroundedChatService:
             corpus = self._retrieve(
                 plan.search_query or retrieval_query,
                 domain=domain,
-                include_doctrine=include_doctrine,
                 private_scope=private_scope,
                 base_tokens=base_tokens,
             )
@@ -307,7 +302,6 @@ class GroundedChatService:
         return PreparedTurn(
             message=message,
             history=selected_history,
-            include_doctrine=include_doctrine,
             plan=plan,
             sources=sources,
             started=started,
@@ -324,7 +318,6 @@ class GroundedChatService:
             message=turn.message,
             history=turn.history,
             sources=turn.sources,
-            include_doctrine=turn.include_doctrine,
             plan=turn.plan,
             search_mode=turn.search_mode,
             amended=turn.amended,
@@ -571,7 +564,6 @@ class GroundedChatService:
         query: str,
         *,
         domain: str,
-        include_doctrine: bool,
         private_scope: PrivateScope | None,
         base_tokens: int,
     ) -> list[Source]:
@@ -584,17 +576,8 @@ class GroundedChatService:
             filters=filters,
             limit=25,
         )
-        doctrine_hits = []
-        if include_doctrine:
-            doctrine_hits = await asyncio.to_thread(
-                self.coordinator.search,
-                query,
-                domains=(domain,),
-                mode=SearchMode.HYBRID_RERANK.value,
-                filters=filters,
-                limit=25,
-                channel="doctrine",
-            )
+        # Doctrine is always searched; it fills what is left of the budget after the law.
+        doctrine_hits = await self.search_doctrine(query, domain=domain, limit=25)
         # No "file mode": whenever the chat can see ready files, they are searched too.
         return select_sources(
             await self.with_provision_changes(self._evidence(primary_hits, domain, "primary")),
@@ -604,6 +587,25 @@ class GroundedChatService:
             hard_tokens=self.settings.gemini_max_input_tokens,
             files=await self._file_sources(query, private_scope),
         )
+
+    async def search_doctrine(self, query: str, *, domain: str, limit: int) -> list[SearchHit]:
+        """Doctrine supplements the law: without a doctrine index, or when its search fails,
+        the answer is written without it rather than failing."""
+        if self.coordinator.registry.get(domain, "doctrine") is None:
+            return []
+        try:
+            return await asyncio.to_thread(
+                self.coordinator.search,
+                query,
+                domains=(domain,),
+                mode=SearchMode.HYBRID_RERANK.value,
+                filters=SearchFilters(domain_roles=("core", "supplemental")),
+                limit=limit,
+                channel="doctrine",
+            )
+        except Exception as exc:
+            logger.warning("Doctrine search skipped (%s)", type(exc).__name__)
+            return []
 
     async def search_web(self, queries: list[str]) -> tuple[list[WebEvidenceSource], str]:
         """Search the web for the supplement; a failure only leaves it out, with a note.
@@ -887,7 +889,6 @@ class GroundedChatService:
         message: str,
         history: list[dict],
         sources: list[Source],
-        include_doctrine: bool,
         plan: QueryPlan,
         search_mode: ChatSearchMode = "corpus",
         amended: Sequence[str] = (),
@@ -928,7 +929,10 @@ class GroundedChatService:
             "SOURCE_DOCTRINE_* kaynakları doktrindir (öğreti görüşü): kanun ve Yargıtay "
             "kaynaklarını tamamlamak için kullan, onların yerine değil; kanun veya karar gibi "
             "sunma, \"öğretide ... kabul edilir\" gibi aktar."
-            if include_doctrine
+            if any(
+                isinstance(source, EvidenceSource) and source.channel == "doctrine"
+                for source in sources
+            )
             else "Doktrin kaynağı kullanılmıyor."
         )
         evidence = "\n\n".join(

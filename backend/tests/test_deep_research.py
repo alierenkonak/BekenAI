@@ -66,6 +66,28 @@ CITING = law_hit(
     decision=True,
 )
 PROOF = law_hit("Feshin geçerli sebebe dayandığını ispat yükü işverene aittir.", "20")
+# Doctrine is searched for every research, once, with the question itself.
+DOCTRINE = SearchHit(
+    record=ChunkRecord(
+        chunk_id=str(uuid4()),
+        parse_id=str(uuid4()),
+        document_id=str(uuid4()),
+        source_document_id="course-note",
+        domain_code="labour_law",
+        corpus_version="labour-law-doctrine-v1",
+        retrieval_scope_version="labour-law-doctrine-v1",
+        domain_role="supplemental",
+        source_kind="doctrine",
+        document_type="course_note",
+        title="İş Hukuku Ders Notu",
+        text="Öğretide verim düşüklüğü, işçinin yeterliliğinden kaynaklanan bir sebep sayılır.",
+        section_type="paragraph",
+        breadcrumb=(),
+        page_number=12,
+    ),
+    score=1.0,
+    rank=1,
+)
 CRITERIA = law_hit("Performans ölçütü objektif ve herkese eşit uygulanmalıdır.", "", decision=True)
 
 PLAN = ResearchPlan(
@@ -119,8 +141,9 @@ class FakeCoordinator:
         }
 
     def search(self, query: str, **kwargs):
-        self.searches.append((query, kwargs.get("channel", "primary")))
-        return self.results.get(query, [])
+        channel = kwargs.get("channel", "primary")
+        self.searches.append((query, channel))
+        return [DOCTRINE] if channel == "doctrine" else self.results.get(query, [])
 
     def article_hits(self, references, **kwargs):
         self.article_requests.append(list(references))
@@ -223,7 +246,6 @@ async def run(service: DeepResearchService, **overrides):
         "message": QUESTION,
         "history": [],
         "domain": "labour_law",
-        "include_doctrine": False,
         "private_scope": None,
     }
     return await service.research(**{**values, **overrides})
@@ -239,11 +261,13 @@ async def test_a_research_searches_each_part_fills_the_gaps_and_follows_citation
 
     result = await run(service, on_stage=record)
 
-    # One search per part, then the gap the model named; repeats run once.
+    # One search per part, doctrine for the question, then the gap the model named; repeats
+    # run once.
     assert coordinator.searches == [
         ("geçerli fesih şartları", "primary"),
         ("savunma alınması verim fesih", "primary"),
         ("feshin ispat yükü", "primary"),
+        (QUESTION, "doctrine"),
         ("performans ölçütü objektif", "primary"),
     ]
     # Articles 18 and 19 were found; article 20, which the decision rests on, is looked up.
@@ -268,6 +292,7 @@ async def test_a_research_searches_each_part_fills_the_gaps_and_follows_citation
         {"alt_soru": "İspat yükü", "kaynaklar": ["SOURCE_PRIMARY_02"]},
     ]
     assert report.count(CITING.record.text) == 1 and PROOF.record.text in report
+    assert DOCTRINE.record.text in report and "SOURCE_DOCTRINE_*" in report
 
     content = result.structured_content
     assert content["search_mode"] == "research" and content["web_search_offer"] is None
@@ -277,10 +302,10 @@ async def test_a_research_searches_each_part_fills_the_gaps_and_follows_citation
             {"question": "Savunma alınması", "sources": 2},
             {"question": "İspat yükü", "sources": 1},
         ],
-        "searches": 4,
+        "searches": 5,
         "follow_ups": 1,
         "followed_articles": ["4857 m.20"],
-        "passages": 5,
+        "passages": 6,
     }
     assert {c["source_id"] for c in result.citations} == {"SOURCE_PRIMARY_03", "SOURCE_PRIMARY_05"}
     assert result.actual_model == "gemini-research"
@@ -300,7 +325,7 @@ async def test_the_parts_and_follow_ups_are_capped() -> None:
     )
     service, _, coordinator = research(FakeProvider(plan, gaps))
     result = await run(service)
-    assert len(coordinator.searches) == MAX_SUB_QUESTIONS + MAX_FOLLOW_UPS
+    assert len(coordinator.searches) == MAX_SUB_QUESTIONS + 1 + MAX_FOLLOW_UPS
     assert len(result.structured_content["research"]["parts"]) == MAX_SUB_QUESTIONS
 
 

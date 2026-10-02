@@ -171,7 +171,6 @@ async def test_chat_idempotency_and_stale_job_recovery() -> None:
             case_id=None,
             message="Fesih bildirimi nasıl yapılır?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="fesih bildirimi nasıl yapılır",
             requested_model="fixture-model",
         )
@@ -182,7 +181,6 @@ async def test_chat_idempotency_and_stale_job_recovery() -> None:
             case_id=None,
             message="Bu tekrar kaydedilmemeli.",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="bu tekrar kaydedilmemeli",
             requested_model="fixture-model",
         )
@@ -221,7 +219,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
             case_id=None,
             message="Birinci soru",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="birinci soru",
             requested_model="fixture-model",
             max_active_jobs=2,
@@ -233,7 +230,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
             case_id=None,
             message="İkinci soru",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="ikinci soru",
             requested_model="fixture-model",
             max_active_jobs=2,
@@ -246,7 +242,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
             case_id=None,
             message="Tekrar gönderim",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="tekrar gönderim",
             requested_model="fixture-model",
             max_active_jobs=2,
@@ -261,7 +256,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
                 case_id=uuid4(),
                 message="Geçersiz dosya",
                 domain_code="labour_law",
-                include_doctrine=False,
                 retrieval_query="geçersiz dosya",
                 requested_model="fixture-model",
                 max_active_jobs=2,
@@ -275,7 +269,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
                 case_id=None,
                 message="Üçüncü soru",
                 domain_code="labour_law",
-                include_doctrine=False,
                 retrieval_query="üçüncü soru",
                 requested_model="fixture-model",
                 max_active_jobs=2,
@@ -289,7 +282,6 @@ async def test_chat_capacity_is_bounded_without_breaking_idempotent_retries() ->
             case_id=None,
             message="Üçüncü soru",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="üçüncü soru",
             requested_model="fixture-model",
             max_active_jobs=2,
@@ -430,7 +422,6 @@ async def test_generation_rejects_unresolvable_citation_before_persisting_answer
             case_id=None,
             message="Fesih bildirimi nasıl yapılır?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="fesih bildirimi nasıl yapılır",
             requested_model="fixture-model",
         )
@@ -528,7 +519,6 @@ async def test_generation_stage_lifecycle_and_message_details() -> None:
             case_id=None,
             message="İhbar süresi kaç haftadır?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="ihbar süresi kaç haftadır",
             requested_model="fixture-model",
         )
@@ -654,7 +644,6 @@ async def test_a_web_turn_finds_the_changed_provisions_of_the_same_earlier_quest
             case_id=None,
             message=question,
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="arabuluculuk toplantısına katılmama",
             requested_model="fixture-model",
             search_mode=search_mode,
@@ -767,7 +756,6 @@ async def test_a_deep_research_is_stored_and_listed_with_its_message() -> None:
             case_id=None,
             message="Performans feshinde ispat yükü kimdedir?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="performans feshinde ispat yükü",
             requested_model="fixture-model",
             search_mode="web",
@@ -778,6 +766,8 @@ async def test_a_deep_research_is_stored_and_listed_with_its_message() -> None:
         work = await repository.get_chat_work(queued["generation_id"])
         assert work["deep_research"] is True and work["search_mode"] == "web"
         assert work["prompt_version"] == "deep-research-v1"
+        # Doctrine is always searched; the stored flag records it for the answer.
+        assert work["include_doctrine"] is True
         page = await repository.list_messages(
             user_id, queued["conversation_id"], limit=50, cursor=None
         )
@@ -792,7 +782,6 @@ async def test_a_deep_research_is_stored_and_listed_with_its_message() -> None:
                 case_id=None,
                 message="Dava dosyalarını analiz et",
                 domain_code="labour_law",
-                include_doctrine=False,
                 retrieval_query="dava dosyaları",
                 requested_model="fixture-model",
                 search_mode="analysis",

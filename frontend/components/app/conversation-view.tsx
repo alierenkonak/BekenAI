@@ -66,7 +66,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [reloadKey, setReloadKey] = useState(0);
   // A question typed on "new chat" before attaching a file continues here.
   const [draft, setDraft] = useState(() => readDraftHandoff(conversationId));
-  const [doctrineOverride, setDoctrineOverride] = useState<boolean | null>(null);
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -118,7 +117,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const turns = useMemo(() => (messages ? buildTurns(messages) : []), [messages]);
   const activeGeneration = useMemo(() => [...turns].reverse().find((turn) => isActive(turn.generation))?.generation ?? null, [turns]);
   const activeId = activeGeneration?.id ?? null;
-  const includeDoctrine = doctrineOverride ?? conversation?.doctrine_enabled ?? false;
 
   // Poll the running generation; on a terminal state reload messages with citations.
   useEffect(() => {
@@ -199,7 +197,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
         {
           conversation_id: conversationId,
           message,
-          include_doctrine: includeDoctrine,
           search_mode: searchMode,
           deep_research: deepResearch,
         },
@@ -224,7 +221,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
             stage: null,
             answer_status: null,
             safe_error_code: null,
-            include_doctrine: includeDoctrine,
             search_mode: searchMode,
             deep_research: deepResearch,
             latency_ms: null,
@@ -265,11 +261,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const changeWebSearch = (value: boolean) => {
     setWebSearchOn(value);
     rememberWebSearch(conversationId, value);
-  };
-
-  const changeDoctrine = (value: boolean) => {
-    setDoctrineOverride(value);
-    void api.updateConversation(conversationId, { include_doctrine: value }).catch(() => {});
   };
 
   const loadOlder = async () => {
@@ -462,8 +453,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
                   deepResearch: deepResearchOn,
                 })
               }
-              includeDoctrine={includeDoctrine}
-              onDoctrineChange={changeDoctrine}
               webSearch={webSearchAvailable ? { checked: webSearchOn, onChange: changeWebSearch } : undefined}
               deepResearch={{ checked: deepResearchOn, onChange: setDeepResearchOn }}
               busy={sending}

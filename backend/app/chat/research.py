@@ -91,7 +91,6 @@ class DeepResearchService:
         message: str,
         history: list[dict],
         domain: str,
-        include_doctrine: bool,
         private_scope: PrivateScope | None,
         web: bool = False,
         on_stage: StageCallback | None = None,
@@ -113,8 +112,7 @@ class DeepResearchService:
         found = _Found()
         for number, part in enumerate(parts, start=1):
             await self._search(found, number, part.search_query, domain, private_scope)
-        if include_doctrine:
-            await self._doctrine(found, derive_retrieval_query(message), domain)
+        await self._doctrine(found, derive_retrieval_query(message), domain)
         follow_ups = await self._gaps(message, parts, found)
         for gap in follow_ups:
             await self._search(found, gap.serves, gap.search_query, domain, private_scope)
@@ -135,7 +133,6 @@ class DeepResearchService:
         turn = PreparedTurn(
             message=message,
             history=history,
-            include_doctrine=include_doctrine,
             plan=QueryPlan(
                 intent="legal",
                 search_query=derive_retrieval_query(message),
@@ -259,15 +256,7 @@ fazla {MAX_SUB_QUESTIONS} alt soruya böl; en belirleyici olan önce.
         index = coordinator.registry.get(domain, "doctrine")
         if index is None:
             return
-        hits = await asyncio.to_thread(
-            coordinator.search,
-            query,
-            domains=(domain,),
-            mode=SearchMode.HYBRID_RERANK.value,
-            filters=SearchFilters(domain_roles=("core", "supplemental")),
-            limit=DOCTRINE_PASSAGES,
-            channel="doctrine",
-        )
+        hits = await self.chat.search_doctrine(query, domain=domain, limit=DOCTRINE_PASSAGES)
         found.searches += 1
         for hit in hits:
             if hit.record.chunk_id not in found.doctrine:

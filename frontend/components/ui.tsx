@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 
 const SWITCH_TONES = {
-  doc: { on: 'border-doc-line bg-doc-bg font-medium text-doc', track: 'bg-doc' },
   web: { on: 'border-web-line bg-web-bg font-medium text-web', track: 'bg-web' },
   accent: { on: 'border-accent-line bg-accent-bg font-medium text-accent', track: 'bg-accent' },
 } as const;
@@ -43,19 +42,6 @@ function Switch({
       {label}
     </button>
   );
-}
-
-export function DoctrineSwitch({
-  label = 'Doktrin kaynakları',
-  ...props
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label?: string;
-  compact?: boolean;
-  disabled?: boolean;
-}) {
-  return <Switch {...props} label={label} tone="doc" />;
 }
 
 type HintedSwitchProps = {

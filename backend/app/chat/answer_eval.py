@@ -188,7 +188,6 @@ async def run(questions_path: Path, out_dir: Path) -> dict[str, Any]:
             message=item["question"],
             retrieval_query=item["question"][:500],
             domain="labour_law",
-            include_doctrine=bool(item.get("include_doctrine")),
             history=item.get("history", []),
         )
         answers[item["id"]] = {}

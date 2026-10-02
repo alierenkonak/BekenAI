@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
-import { DeepResearchSwitch, DoctrineSwitch, WebSearchSwitch } from '@/components/ui';
+import { DeepResearchSwitch, WebSearchSwitch } from '@/components/ui';
 import { CHAT_MESSAGE_MAX } from '@/lib/config';
 import { DEEP_RESEARCH_HINT } from '@/lib/research';
 import { WEB_SEARCH_HINT } from '@/lib/web-search';
@@ -11,8 +11,6 @@ export function Composer({
   value,
   onChange,
   onSubmit,
-  includeDoctrine,
-  onDoctrineChange,
   webSearch,
   deepResearch,
   busy = false,
@@ -25,8 +23,6 @@ export function Composer({
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  includeDoctrine: boolean;
-  onDoctrineChange: (value: boolean) => void;
   /** Present only when the server can search the web. */
   webSearch?: { checked: boolean; onChange: (value: boolean) => void };
   deepResearch?: { checked: boolean; onChange: (value: boolean) => void };
@@ -88,7 +84,6 @@ export function Composer({
             İş Hukuku
           </span>
         )}
-        <DoctrineSwitch checked={includeDoctrine} onChange={onDoctrineChange} compact={variant === 'compact'} label={variant === 'hero' ? 'Doktrin kaynakları' : 'Doktrin'} />
         {webSearch && (
           <WebSearchSwitch
             checked={webSearch.checked}

@@ -21,7 +21,6 @@ class ChatRequest(BaseModel):
     # Room for a pasted fact pattern; whole documents belong in an uploaded file.
     message: str = Field(min_length=3, max_length=4000)
     domain: Literal["labour_law"] = "labour_law"
-    include_doctrine: bool = False
     # "web": the usual answer plus a labelled web section after it (the composer switch or
     # the offer under a sourceless answer). Accepted only when a search key is configured.
     # "analysis": a report over every ready file of the chat's case (the case page button).
@@ -69,7 +68,6 @@ async def enqueue_chat(
             case_id=payload.case_id,
             message=payload.message,
             domain_code=payload.domain,
-            include_doctrine=payload.include_doctrine,
             retrieval_query=derive_retrieval_query(payload.message),
             requested_model=settings.gemini_primary_model,
             max_active_jobs=settings.chat_max_active_jobs,
