@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 import bm25s
@@ -12,6 +14,7 @@ from beken_retrieval.models import ChunkRecord, SearchFilters, SearchHit
 from beken_retrieval.tokenization import (
     TOKENIZER_VERSION,
     canonical_token_string,
+    lexical_tokens,
     tokenize_legal_text,
 )
 
@@ -21,6 +24,14 @@ _MANIFEST_FILE = "manifest.json"
 
 def _splitter(value: str) -> list[str]:
     return tokenize_legal_text(value)
+
+
+def _splitter_for(stemming: str | None) -> Callable[[str], list[str]]:
+    """The index's own tokenizer: a query must be stemmed as its index was built."""
+    if not stemming:
+        return _splitter
+    lexical_tokens("", stemming)  # rejects an unknown method before anything is built
+    return partial(lexical_tokens, stemming=stemming)
 
 
 class BM25LexicalRetriever:
@@ -52,6 +63,7 @@ class BM25LexicalRetriever:
         index_dir: Path,
         *,
         scope_hash: str,
+        stemming: str | None = None,
     ) -> BM25LexicalRetriever:
         if not records:
             raise ValueError("Cannot build a BM25 index from an empty corpus")
@@ -59,7 +71,9 @@ class BM25LexicalRetriever:
             raise FileExistsError(f"Immutable BM25 index already exists: {index_dir}")
         index_dir.mkdir(parents=True, exist_ok=True)
 
-        tokenizer = Tokenizer(lower=False, stemmer=None, stopwords=[], splitter=_splitter)
+        tokenizer = Tokenizer(
+            lower=False, stemmer=None, stopwords=[], splitter=_splitter_for(stemming)
+        )
         tokenized = tokenizer.tokenize([record.text for record in records])
         retriever = bm25s.BM25(method="lucene", k1=1.2, b=0.75)
         retriever.index(tokenized, show_progress=False)
@@ -77,7 +91,7 @@ class BM25LexicalRetriever:
             "backend": "bm25s",
             "backend_version": getattr(bm25s, "__version__", "unknown"),
             "tokenizer_version": TOKENIZER_VERSION,
-            "stemming": False,
+            "stemming": stemming or False,
             "stopwords": False,
             "record_count": len(records),
             "domain": records[0].domain_code,
@@ -105,7 +119,12 @@ class BM25LexicalRetriever:
         expected_hash = hashlib.sha256((index_dir / _RECORDS_FILE).read_bytes()).hexdigest()
         if expected_hash != manifest["corpus_hash"]:
             raise ValueError("BM25 corpus hash does not match its manifest")
-        tokenizer = Tokenizer(lower=False, stemmer=None, stopwords=[], splitter=_splitter)
+        tokenizer = Tokenizer(
+            lower=False,
+            stemmer=None,
+            stopwords=[],
+            splitter=_splitter_for(manifest.get("stemming") or None),
+        )
         tokenizer.load_vocab(index_dir)
         tokenizer.load_stopwords(index_dir)
         retriever = bm25s.BM25.load(index_dir, mmap=mmap, load_corpus=False)
