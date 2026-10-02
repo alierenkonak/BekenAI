@@ -325,11 +325,11 @@ pasajların özetine bak ve eksik kalanları belirle.
 
         The most cited first; an article is in hand when a found law passage covers it.
         """
+        # A passage covers the articles of its own law, not of the laws it refers to.
         covered = {
-            (law, article)
+            (source.hit.record.primary_legislation_number, article)
             for source in found.law.values()
-            if not source.is_decision
-            for law in source.hit.record.legislation_numbers
+            if not source.is_decision and source.hit.record.primary_legislation_number
             for article in source.hit.record.article_labels
         }
         counts: Counter[tuple[str, str]] = Counter()
@@ -374,7 +374,7 @@ pasajların özetine bak ve eksik kalanları belirle.
                 (
                     (law, article)
                     for law, article in wanted
-                    if law in record.legislation_numbers and article in record.article_labels
+                    if law == record.primary_legislation_number and article in record.article_labels
                 ),
                 None,
             )

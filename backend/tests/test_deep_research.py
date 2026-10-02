@@ -49,6 +49,7 @@ def law_hit(text: str, article: str, *, decision: bool = False) -> SearchHit:
         case_number="2022/1" if decision else None,
         decision_number="2022/2" if decision else None,
         document_date=date(2022, 5, 1) if decision else date(2003, 6, 10),
+        primary_legislation_number=None if decision else "4857",
         legislation_numbers=() if decision else ("4857",),
         article_labels=() if decision else (article,),
     )

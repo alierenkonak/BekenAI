@@ -183,6 +183,33 @@ def test_new_scope_identity_cannot_retain_a_stale_dense_index(tmp_path: Path) ->
     assert "dense" not in payload
 
 
+def test_a_bm25_rebuild_keeps_the_dense_index_of_a_manifest_without_a_channel(
+    tmp_path: Path,
+) -> None:
+    """Regression: a manifest written before the channel field lost its dense settings."""
+    root = tmp_path / "indexes"
+    path = root / "labour_law" / "active.json"
+    path.parent.mkdir(parents=True)
+    common = {"domain": "labour_law", "corpus_version": "v1", "scope_path": "/scope.json",
+              "scope_hash": "a" * 64}
+    path.write_text(
+        json.dumps({**common, "bm25_path": "/old-bm25", "dense": {"collection": "active"},
+                    "reranker_model_key": "bge-reranker-v2-m3"}),
+        encoding="utf-8",
+    )
+
+    write_active_manifest(
+        root,
+        domain="labour_law",
+        updates={**common, "channel": "primary", "bm25_path": "/new-bm25"},
+    )
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["bm25_path"] == "/new-bm25"
+    assert payload["dense"] == {"collection": "active"}
+    assert payload["reranker_model_key"] == "bge-reranker-v2-m3"
+
+
 def test_dense_collection_name_changes_with_index_version() -> None:
     first = collection_name(
         domain="labour_law",

@@ -136,6 +136,9 @@ def write_active_manifest(
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    # Manifests written before the channel field are of the primary channel, as the
+    # registry reads them; without this, any update dropped their dense settings.
+    current = {"channel": "primary", **payload} if payload else {}
     identity_fields = (
         "domain",
         "channel",
@@ -144,7 +147,7 @@ def write_active_manifest(
         "scope_hash",
     )
     if payload and any(
-        key in updates and payload.get(key) != updates[key] for key in identity_fields
+        key in updates and current.get(key) != updates[key] for key in identity_fields
     ):
         payload = {}
     payload.update(updates)
