@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 
 const SWITCH_TONES = {
-  doc: { on: 'border-doc-line bg-doc-bg font-medium text-doc', track: 'bg-doc' },
   web: { on: 'border-web-line bg-web-bg font-medium text-web', track: 'bg-web' },
+  accent: { on: 'border-accent-line bg-accent-bg font-medium text-accent', track: 'bg-accent' },
 } as const;
 
 function Switch({
@@ -44,30 +44,7 @@ function Switch({
   );
 }
 
-export function DoctrineSwitch({
-  label = 'Doktrin kaynakları',
-  ...props
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label?: string;
-  compact?: boolean;
-  disabled?: boolean;
-}) {
-  return <Switch {...props} label={label} tone="doc" />;
-}
-
-/**
- * The web search switch with a hint shown on hover or keyboard focus. The hint is
- * positioned against the nearest positioned ancestor (the composer), so it never
- * spills off a narrow screen.
- */
-export function WebSearchSwitch({
-  hintId,
-  hint,
-  label = 'Web araması',
-  ...props
-}: {
+type HintedSwitchProps = {
   checked: boolean;
   onChange: (value: boolean) => void;
   hintId: string;
@@ -75,10 +52,16 @@ export function WebSearchSwitch({
   label?: string;
   compact?: boolean;
   disabled?: boolean;
-}) {
+};
+
+/**
+ * A switch with a hint shown on hover or keyboard focus. The hint is positioned against
+ * the nearest positioned ancestor (the composer), so it never spills off a narrow screen.
+ */
+function HintedSwitch({ hintId, hint, label, tone, ...props }: HintedSwitchProps & { label: string; tone: keyof typeof SWITCH_TONES }) {
   return (
     <span className="group flex">
-      <Switch {...props} label={label} tone="web" describedBy={hintId} />
+      <Switch {...props} label={label} tone={tone} describedBy={hintId} />
       <span
         role="tooltip"
         id={hintId}
@@ -88,6 +71,15 @@ export function WebSearchSwitch({
       </span>
     </span>
   );
+}
+
+export function WebSearchSwitch({ label = 'Web araması', ...props }: HintedSwitchProps) {
+  return <HintedSwitch {...props} label={label} tone="web" />;
+}
+
+/** Deep research for the next question only; it turns itself off once the question is sent. */
+export function DeepResearchSwitch({ label = 'Derin araştırma', ...props }: HintedSwitchProps) {
+  return <HintedSwitch {...props} label={label} tone="accent" />;
 }
 
 export type ChipTone =

@@ -271,11 +271,9 @@ async def test_chat_uploads_follow_the_chat_or_its_case() -> None:
         case = await repository.create_case(user_id, "Dava", None)
         loose = await repository.create_conversation(
             user_id, title="Serbest", domain_code="labour_law", case_id=None,
-            doctrine_enabled=False,
         )
         in_case = await repository.create_conversation(
             user_id, title="Davada", domain_code="labour_law", case_id=case["id"],
-            doctrine_enabled=False,
         )
 
         chat_file = await _intent(repository, user_id, conversation_id=loose["id"])
@@ -317,7 +315,7 @@ async def test_other_users_cannot_attach_files_to_a_chat_they_do_not_own() -> No
         await repository.bootstrap(owner, "owner@example.test")
         await repository.bootstrap(intruder, "intruder@example.test")
         conversation = await repository.create_conversation(
-            owner, title="Özel", domain_code="labour_law", case_id=None, doctrine_enabled=False
+            owner, title="Özel", domain_code="labour_law", case_id=None
         )
         from app.core.repository import NotFoundError
 
@@ -464,11 +462,9 @@ async def test_a_chat_reads_only_ready_files_of_its_own_case_or_chat() -> None:
         other_case = await repository.create_case(user_id, "Başka dava", None)
         in_case = await repository.create_conversation(
             user_id, title="Davada", domain_code="labour_law", case_id=case["id"],
-            doctrine_enabled=False,
         )
         loose = await repository.create_conversation(
             user_id, title="Serbest", domain_code="labour_law", case_id=None,
-            doctrine_enabled=False,
         )
         case_file = await _ready_file(repository, user_id, ["Fesih metni."], case_id=case["id"])
         indexing = await _intent(repository, user_id, case_id=case["id"])
@@ -549,7 +545,6 @@ async def test_a_chat_waits_while_its_files_are_processing() -> None:
                 case_id=case_id,
                 message="İşveren fesih gerekçesi olarak ne göstermiş?",
                 domain_code="labour_law",
-                include_doctrine=False,
                 retrieval_query="işveren fesih gerekçesi",
                 requested_model="fixture-model",
             )
@@ -585,7 +580,6 @@ async def test_file_citations_must_quote_a_ready_file_and_are_redacted_on_deleti
             case_id=case["id"],
             message="İşveren fesih gerekçesi olarak ne göstermiş?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="işveren fesih gerekçesi",
             requested_model="fixture-model",
         )
@@ -671,7 +665,6 @@ async def test_web_citations_keep_their_page_and_the_generation_records_the_sear
             case_id=None,
             message="Uzaktan çalışana yemek ücreti ödenir mi?",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="uzaktan çalışma yemek ücreti",
             requested_model="fixture-model",
             search_mode="web",
@@ -759,7 +752,6 @@ async def test_an_analysis_needs_a_case_with_ready_files_and_reads_them_in_order
             idempotency_key=f"analysis-{uuid4()}",
             message="Dava dosyalarını analiz et",
             domain_code="labour_law",
-            include_doctrine=False,
             retrieval_query="dava dosyalarını analiz et",
             requested_model="fixture-model",
             search_mode="analysis",
@@ -786,10 +778,16 @@ async def test_an_analysis_needs_a_case_with_ready_files_and_reads_them_in_order
         assert conversation["title"] == "Dosya analizi: İşe İade"
         with psycopg.connect(database_url(), row_factory=psycopg.rows.dict_row) as conn:
             generation = conn.execute(
-                "select search_mode,prompt_version from public.chat_generations where id=%s",
+                """select search_mode,prompt_version,include_doctrine
+                   from public.chat_generations where id=%s""",
                 (queued["generation_id"],),
             ).fetchone()
-        assert generation == {"search_mode": "analysis", "prompt_version": "case-analysis-v1"}
+        # An analysis reads the case files and the law; it does not search doctrine.
+        assert generation == {
+            "search_mode": "analysis",
+            "prompt_version": "case-analysis-v1",
+            "include_doctrine": False,
+        }
 
         rows = await repository.scope_file_chunks(
             PrivateScope(

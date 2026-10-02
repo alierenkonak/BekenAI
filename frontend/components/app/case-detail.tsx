@@ -151,7 +151,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
     setError(null);
     try {
       const queued = await api.sendChat(
-        { case_id: caseId, message: ANALYSIS_MESSAGE, include_doctrine: false, search_mode: 'analysis' },
+        { case_id: caseId, message: ANALYSIS_MESSAGE, search_mode: 'analysis' },
         crypto.randomUUID(),
       );
       router.push(`/sohbet/${queued.conversation_id}`);
@@ -282,12 +282,6 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                 className="flex items-center gap-2 border-b border-line px-5 py-4 text-fg no-underline last:border-b-0 hover:bg-hover"
               >
                 <span className="min-w-0 grow truncate text-sm font-medium">{conversation.title}</span>
-                {conversation.doctrine_enabled && (
-                  <Badge tone="doc">
-                    <span className="size-1.5 rounded-[2px] bg-doc" />
-                    Doktrin
-                  </Badge>
-                )}
                 <span className="shrink-0 text-[12.5px] text-fg3">{now ? formatRelativeDay(conversation.updated_at, now) : ''}</span>
               </Link>
             ))}

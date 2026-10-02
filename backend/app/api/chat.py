@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.api.common import map_repository_error
 from app.chat.query import derive_retrieval_query
@@ -21,11 +21,13 @@ class ChatRequest(BaseModel):
     # Room for a pasted fact pattern; whole documents belong in an uploaded file.
     message: str = Field(min_length=3, max_length=4000)
     domain: Literal["labour_law"] = "labour_law"
-    include_doctrine: bool = False
     # "web": the usual answer plus a labelled web section after it (the composer switch or
     # the offer under a sourceless answer). Accepted only when a search key is configured.
     # "analysis": a report over every ready file of the chat's case (the case page button).
     search_mode: Literal["corpus", "web", "analysis"] = "corpus"
+    # A deep research report instead of a chat answer: several searches, one longer report.
+    # Combines with "web"; an analysis is already a report.
+    deep_research: bool = False
 
     @field_validator("message")
     @classmethod
@@ -34,6 +36,12 @@ class ChatRequest(BaseModel):
         if len(value) < 3:
             raise ValueError("message must contain at least 3 non-whitespace characters")
         return value
+
+    @model_validator(mode="after")
+    def research_is_not_an_analysis(self) -> ChatRequest:
+        if self.deep_research and self.search_mode == "analysis":
+            raise ValueError("deep_research cannot be combined with an analysis")
+        return self
 
 
 @router.post("/chat", status_code=status.HTTP_202_ACCEPTED)
@@ -60,11 +68,11 @@ async def enqueue_chat(
             case_id=payload.case_id,
             message=payload.message,
             domain_code=payload.domain,
-            include_doctrine=payload.include_doctrine,
             retrieval_query=derive_retrieval_query(payload.message),
             requested_model=settings.gemini_primary_model,
             max_active_jobs=settings.chat_max_active_jobs,
             search_mode=payload.search_mode,
+            deep_research=payload.deep_research,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None

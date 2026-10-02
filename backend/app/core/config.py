@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Case analysis: finds a case's legal issues and writes the report. A separate model
     # also keeps its free-tier quota apart from the chat's primary model.
     gemini_analysis_model: str = "gemini-3.6-flash"
+    # Deep research: plans the parts of a question, finds what is missing after the first
+    # search round and writes the report. Its own model keeps its quota apart as well.
+    gemini_research_model: str = "gemini-3.7-flash"
     # Evidence budget per answer. Retrieval rarely fills it; it is a ceiling, not a target
     # to reach. Gemini Flash accepts far more, the free tier allows 250K input tokens/min.
     gemini_target_input_tokens: int = Field(default=96_000, ge=8_000, le=192_000)

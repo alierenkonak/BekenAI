@@ -32,7 +32,6 @@ export interface Conversation {
   case_id: string | null;
   title: string;
   domain_code: string;
-  doctrine_enabled: boolean;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -186,6 +185,17 @@ export interface ConversationalAnswer {
   temporal_checks?: TemporalCheck[];
   /** A cited decision explains a provision repealed since; shown above the answer. */
   repeal_notice?: string | null;
+  /** Deep research only: the parts researched and how much was read. */
+  research?: ResearchSummary;
+}
+
+export interface ResearchSummary {
+  parts: { question: string; sources: number }[];
+  searches: number;
+  follow_ups: number;
+  /** Articles looked up because the found decisions rest on them, e.g. "4857 m.20". */
+  followed_articles: string[];
+  passages: number;
 }
 
 export type StructuredAnswer = LegacyAnswer | ConversationalAnswer;
@@ -198,8 +208,9 @@ export interface GenerationSummary {
   stage: GenerationStage | null;
   answer_status: AnswerStatus | null;
   safe_error_code: string | null;
-  include_doctrine: boolean;
   search_mode: SearchMode;
+  /** A deep research report rather than a chat answer; absent on older generations. */
+  deep_research?: boolean;
   latency_ms: number | null;
   corpus_versions: Record<string, string>;
   index_versions: Record<string, string>;

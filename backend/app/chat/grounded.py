@@ -11,7 +11,7 @@ from time import monotonic
 from typing import Any, Literal, Protocol
 
 from beken_retrieval.coordinator import DomainSearchCoordinator, SearchMode
-from beken_retrieval.models import SearchFilters
+from beken_retrieval.models import SearchFilters, SearchHit
 from pydantic import BaseModel
 
 from app.chat.context import (
@@ -49,8 +49,9 @@ GenerationStage = Literal["retrieving", "generating", "verifying"]
 StageCallback = Callable[[GenerationStage], Awaitable[None]]
 # corpus: the legal corpus and the user's files. web: the same, plus a web search the
 # user turned on; what the web says is added after the answer, labelled. analysis: a
-# report over every file of a case (app.chat.analysis).
-ChatSearchMode = Literal["corpus", "web", "analysis"]
+# report over every file of a case (app.chat.analysis). research: a deep research report
+# (app.chat.research), with or without the web.
+ChatSearchMode = Literal["corpus", "web", "analysis", "research"]
 Source = EvidenceSource | FileEvidenceSource | WebEvidenceSource
 Verification = Literal["verified", "partial", "unverified", "plain"]
 
@@ -91,7 +92,7 @@ _WEB_NOTES = {
     ),
 }
 _WEB_FAILED_NOTE = "Web araması şu an yapılamadı; cevap yalnız BekenAI kaynaklarına dayanıyor."
-_WEB_RULES = """
+WEB_RULES = """
 Web araması (kullanıcı açtı):
 - Ana cevabı (blocks) yalnız yukarıdaki kaynaklara dayandır. SOURCE_WEB_* kaynaklarını ana
   cevapta kullanma ve web'deki bilgiyi oraya taşıma.
@@ -184,7 +185,6 @@ class CompletedAnswer:
 class PreparedTurn:
     message: str
     history: list[dict]
-    include_doctrine: bool
     plan: QueryPlan
     sources: list[Source]
     started: float
@@ -220,7 +220,6 @@ class GroundedChatService:
         message: str,
         retrieval_query: str,
         domain: str,
-        include_doctrine: bool,
         history: list[dict],
         on_stage: StageCallback | None = None,
         private_scope: PrivateScope | None = None,
@@ -231,7 +230,6 @@ class GroundedChatService:
             message=message,
             retrieval_query=retrieval_query,
             domain=domain,
-            include_doctrine=include_doctrine,
             history=history,
             on_stage=on_stage,
             private_scope=private_scope,
@@ -246,7 +244,6 @@ class GroundedChatService:
         message: str,
         retrieval_query: str,
         domain: str,
-        include_doctrine: bool,
         history: list[dict],
         on_stage: StageCallback | None = None,
         private_scope: PrivateScope | None = None,
@@ -281,7 +278,6 @@ class GroundedChatService:
             corpus = self._retrieve(
                 plan.search_query or retrieval_query,
                 domain=domain,
-                include_doctrine=include_doctrine,
                 private_scope=private_scope,
                 base_tokens=base_tokens,
             )
@@ -290,7 +286,7 @@ class GroundedChatService:
                 queries = [plan.web_query or retrieval_query]
                 queries += [amendment_query(check) for check in amended]
                 sources, (web_sources, web_status) = await asyncio.gather(
-                    corpus, self._search_web(list(dict.fromkeys(queries)))
+                    corpus, self.search_web(list(dict.fromkeys(queries)))
                 )
                 sources += select_sources(
                     [],
@@ -306,7 +302,6 @@ class GroundedChatService:
         return PreparedTurn(
             message=message,
             history=selected_history,
-            include_doctrine=include_doctrine,
             plan=plan,
             sources=sources,
             started=started,
@@ -323,7 +318,6 @@ class GroundedChatService:
             message=turn.message,
             history=turn.history,
             sources=turn.sources,
-            include_doctrine=turn.include_doctrine,
             plan=turn.plan,
             search_mode=turn.search_mode,
             amended=turn.amended,
@@ -365,7 +359,9 @@ class GroundedChatService:
             await self._report(on_stage, "verifying")
             support = await self._verify_support(pairs, source_map)
         citations = self._apply_support([*blocks, *web_blocks], support, source_map)
-        if turn.search_mode == "web" and plan.intent == "legal" and not web_blocks:
+        # A web search ran (web mode, or a deep research with web on): never leave its
+        # section silently empty.
+        if turn.web_status is not None and plan.intent == "legal" and not web_blocks:
             web_blocks = [self._web_note(turn.web_status, [*blocks, *web_blocks])]
         if source_dates is None:
             source_dates = self._answer_dates(answer, turn)
@@ -568,7 +564,6 @@ class GroundedChatService:
         query: str,
         *,
         domain: str,
-        include_doctrine: bool,
         private_scope: PrivateScope | None,
         base_tokens: int,
     ) -> list[Source]:
@@ -581,17 +576,8 @@ class GroundedChatService:
             filters=filters,
             limit=25,
         )
-        doctrine_hits = []
-        if include_doctrine:
-            doctrine_hits = await asyncio.to_thread(
-                self.coordinator.search,
-                query,
-                domains=(domain,),
-                mode=SearchMode.HYBRID_RERANK.value,
-                filters=filters,
-                limit=25,
-                channel="doctrine",
-            )
+        # Doctrine is always searched; it fills what is left of the budget after the law.
+        doctrine_hits = await self.search_doctrine(query, domain=domain, limit=25)
         # No "file mode": whenever the chat can see ready files, they are searched too.
         return select_sources(
             await self.with_provision_changes(self._evidence(primary_hits, domain, "primary")),
@@ -602,7 +588,26 @@ class GroundedChatService:
             files=await self._file_sources(query, private_scope),
         )
 
-    async def _search_web(self, queries: list[str]) -> tuple[list[WebEvidenceSource], str]:
+    async def search_doctrine(self, query: str, *, domain: str, limit: int) -> list[SearchHit]:
+        """Doctrine supplements the law: without a doctrine index, or when its search fails,
+        the answer is written without it rather than failing."""
+        if self.coordinator.registry.get(domain, "doctrine") is None:
+            return []
+        try:
+            return await asyncio.to_thread(
+                self.coordinator.search,
+                query,
+                domains=(domain,),
+                mode=SearchMode.HYBRID_RERANK.value,
+                filters=SearchFilters(domain_roles=("core", "supplemental")),
+                limit=limit,
+                channel="doctrine",
+            )
+        except Exception as exc:
+            logger.warning("Doctrine search skipped (%s)", type(exc).__name__)
+            return []
+
+    async def search_web(self, queries: list[str]) -> tuple[list[WebEvidenceSource], str]:
         """Search the web for the supplement; a failure only leaves it out, with a note.
 
         The first query is the planner's general web query for the question; any others look
@@ -884,7 +889,6 @@ class GroundedChatService:
         message: str,
         history: list[dict],
         sources: list[Source],
-        include_doctrine: bool,
         plan: QueryPlan,
         search_mode: ChatSearchMode = "corpus",
         amended: Sequence[str] = (),
@@ -909,7 +913,7 @@ class GroundedChatService:
             )
         else:
             task = "Soruyu aşağıdaki kaynaklara dayanarak cevapla."
-        web_rules = _WEB_RULES if web else "- web_blocks alanını boş bırak."
+        web_rules = WEB_RULES if web else "- web_blocks alanını boş bırak."
         if web and amended:
             web_rules += _AMENDED_WEB_RULES.format(
                 amended="\n".join(f"  - {text}" for text in amended)
@@ -925,7 +929,10 @@ class GroundedChatService:
             "SOURCE_DOCTRINE_* kaynakları doktrindir (öğreti görüşü): kanun ve Yargıtay "
             "kaynaklarını tamamlamak için kullan, onların yerine değil; kanun veya karar gibi "
             "sunma, \"öğretide ... kabul edilir\" gibi aktar."
-            if include_doctrine
+            if any(
+                isinstance(source, EvidenceSource) and source.channel == "doctrine"
+                for source in sources
+            )
             else "Doktrin kaynağı kullanılmıyor."
         )
         evidence = "\n\n".join(

@@ -12,6 +12,7 @@ from uuid import UUID
 from beken_retrieval.config import get_settings as get_retrieval_settings
 from beken_retrieval.coordinator import (
     DomainSearchCoordinator,
+    IndexNotReadyError,
     SearchMode,
 )
 from beken_retrieval.models import SearchFilters, SearchHit
@@ -96,7 +97,6 @@ class SearchRequest(BaseModel):
     domains: list[str] = Field(default_factory=lambda: ["labour_law"], min_length=1, max_length=8)
     mode: SearchMode = SearchMode.HYBRID_RERANK
     limit: int = Field(default=10, ge=1, le=20)
-    include_doctrine: bool = False
     filters: SearchFilterRequest = Field(default_factory=SearchFilterRequest)
 
     @field_validator("query")
@@ -212,8 +212,8 @@ async def search(
             filters=payload.filters.to_domain_filters(),
             limit=payload.limit,
         )
-        doctrine_hits: list[SearchHit] = []
-        if payload.include_doctrine:
+        # Doctrine is always searched beside the law; a domain without it shows none.
+        try:
             doctrine_hits = await run_in_threadpool(
                 coordinator.search,
                 payload.query,
@@ -223,6 +223,8 @@ async def search(
                 limit=payload.limit,
                 channel="doctrine",
             )
+        except IndexNotReadyError:
+            doctrine_hits = []
         return _build_response(payload, coordinator, hits, doctrine_hits)
     except Exception as exc:
         raise _unavailable(exc) from None

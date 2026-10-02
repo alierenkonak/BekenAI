@@ -28,6 +28,14 @@ const WEB_STEPS = [
   { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ya da sayfa alıntısıyla karşılaştırılıyor' },
 ];
 
+// A deep research plans, searches twice and follows citations before it writes.
+const RESEARCH_STEPS = [
+  CORPUS_STEPS[0],
+  { title: 'Araştırılıyor', detail: 'Soru alt sorulara bölünüyor, her biri iki turda aranıyor ve kararların dayandığı maddeler getiriliyor' },
+  { title: 'Rapor yazılıyor', detail: 'Her alt soru için kanun, içtihat ve varsa dosya birleştiriliyor' },
+  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
+];
+
 function currentStep(generation: GenerationSummary): number {
   if (generation.status === 'queued') return 0;
   if (generation.stage === 'generating') return 2;
@@ -45,7 +53,13 @@ export function GenerationProgress({
   cancelling: boolean;
 }) {
   const now = useNow(1000);
-  const steps = generation.search_mode === 'analysis' ? ANALYSIS_STEPS : generation.search_mode === 'web' ? WEB_STEPS : CORPUS_STEPS;
+  const steps = generation.deep_research
+    ? RESEARCH_STEPS
+    : generation.search_mode === 'analysis'
+      ? ANALYSIS_STEPS
+      : generation.search_mode === 'web'
+        ? WEB_STEPS
+        : CORPUS_STEPS;
   const active = currentStep(generation);
   const elapsed = now ? formatElapsed(now - new Date(generation.created_at).getTime()) : null;
 
@@ -93,7 +107,12 @@ export function GenerationProgress({
         </ol>
         <div className="flex flex-wrap items-center gap-4 border-t border-line px-5 py-3">
           <span className="min-w-[220px] grow text-[12.5px] leading-normal text-fg3">
-            {generation.search_mode === 'analysis' ? 'Genellikle 2–4 dakika sürer.' : 'Genellikle 1–2 dakika sürer.'} Sayfadan
+            {generation.deep_research
+              ? 'Genellikle 3–5 dakika sürer.'
+              : generation.search_mode === 'analysis'
+                ? 'Genellikle 2–4 dakika sürer.'
+                : 'Genellikle 1–2 dakika sürer.'}{' '}
+            Sayfadan
             ayrılabilirsiniz; cevap hazır olduğunda bu sohbette görünür.
           </span>
           <button

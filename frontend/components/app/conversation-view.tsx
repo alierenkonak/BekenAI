@@ -66,7 +66,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [reloadKey, setReloadKey] = useState(0);
   // A question typed on "new chat" before attaching a file continues here.
   const [draft, setDraft] = useState(() => readDraftHandoff(conversationId));
-  const [doctrineOverride, setDoctrineOverride] = useState<boolean | null>(null);
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -74,6 +73,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [activePrompt, setActivePrompt] = useState(0);
   const webSearchAvailable = useWebSearchAvailable();
   const [webSearchOn, setWebSearchOn] = useState(() => readWebSearch(conversationId));
+  const [deepResearchOn, setDeepResearchOn] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const chatFiles = useChatFiles(conversationId);
@@ -117,7 +117,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const turns = useMemo(() => (messages ? buildTurns(messages) : []), [messages]);
   const activeGeneration = useMemo(() => [...turns].reverse().find((turn) => isActive(turn.generation))?.generation ?? null, [turns]);
   const activeId = activeGeneration?.id ?? null;
-  const includeDoctrine = doctrineOverride ?? conversation?.doctrine_enabled ?? false;
 
   // Poll the running generation; on a terminal state reload messages with citations.
   useEffect(() => {
@@ -184,14 +183,23 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
   // Only a question typed in the composer clears it; resending an earlier question
   // (retry, "Web'de ara") must not wipe what the user is typing now.
-  const send = async (text: string, searchMode: SearchMode = 'corpus', { fromComposer = false } = {}) => {
+  const send = async (
+    text: string,
+    searchMode: SearchMode = 'corpus',
+    { fromComposer = false, deepResearch = false } = {},
+  ) => {
     const message = text.trim();
     if (message.length < 3 || sending) return;
     setSending(true);
     setActionError(null);
     try {
       const queued = await api.sendChat(
-        { conversation_id: conversationId, message, include_doctrine: includeDoctrine, search_mode: searchMode },
+        {
+          conversation_id: conversationId,
+          message,
+          search_mode: searchMode,
+          deep_research: deepResearch,
+        },
         crypto.randomUUID(),
       );
       const createdAt = new Date().toISOString();
@@ -213,8 +221,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
             stage: null,
             answer_status: null,
             safe_error_code: null,
-            include_doctrine: includeDoctrine,
             search_mode: searchMode,
+            deep_research: deepResearch,
             latency_ms: null,
             corpus_versions: {},
             index_versions: {},
@@ -225,6 +233,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
         },
       ]);
       if (fromComposer) setDraft('');
+      // A research is for one question; follow-ups go back to a normal answer.
+      if (deepResearch) setDeepResearchOn(false);
       stickToBottom.current = true;
       refreshSidebar();
     } catch (error) {
@@ -251,11 +261,6 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const changeWebSearch = (value: boolean) => {
     setWebSearchOn(value);
     rememberWebSearch(conversationId, value);
-  };
-
-  const changeDoctrine = (value: boolean) => {
-    setDoctrineOverride(value);
-    void api.updateConversation(conversationId, { include_doctrine: value }).catch(() => {});
   };
 
   const loadOlder = async () => {
@@ -357,6 +362,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
                   (generation?.answer_status === 'insufficient_evidence' || structured?.answer_status === 'insufficient_evidence');
                 const webTurn = generation?.search_mode === 'web';
                 const analysisTurn = generation?.search_mode === 'analysis';
+                const researchTurn = Boolean(generation?.deep_research);
                 return (
                   <section key={turn.user.id} data-turn={index} aria-label={`${index + 1}. soru`} className="flex flex-col gap-5">
                     <div className="flex max-w-[500px] flex-col items-end gap-1.5 self-end">
@@ -364,6 +370,12 @@ export function ConversationView({ conversationId }: { conversationId: string })
                         <span className="flex items-center gap-1 text-xs font-medium text-web">
                           <Icon name="globe" size={13} />
                           Web araması açık
+                        </span>
+                      )}
+                      {researchTurn && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-accent">
+                          <Icon name="search" size={13} />
+                          Derin araştırma
                         </span>
                       )}
                       {analysisTurn && (
@@ -399,10 +411,15 @@ export function ConversationView({ conversationId }: { conversationId: string })
                       <p className="m-0 whitespace-pre-wrap text-[15px] leading-relaxed">{turn.assistant.content}</p>
                     )}
                     {generation?.status === 'failed' && (
-                      <FailedCard code={generation.safe_error_code} onRetry={() => void send(turn.user.content, generation.search_mode)} />
+                      <FailedCard
+                        code={generation.safe_error_code}
+                        onRetry={() => void send(turn.user.content, generation.search_mode, { deepResearch: Boolean(generation.deep_research) })}
+                      />
                     )}
                     {generation?.status === 'cancelled' && (
-                      <CancelledCard onResend={() => void send(turn.user.content, generation.search_mode)} />
+                      <CancelledCard
+                        onResend={() => void send(turn.user.content, generation.search_mode, { deepResearch: Boolean(generation.deep_research) })}
+                      />
                     )}
                   </section>
                 );
@@ -430,10 +447,14 @@ export function ConversationView({ conversationId }: { conversationId: string })
               variant="compact"
               value={draft}
               onChange={setDraft}
-              onSubmit={() => void send(draft, webSearchAvailable && webSearchOn ? 'web' : 'corpus', { fromComposer: true })}
-              includeDoctrine={includeDoctrine}
-              onDoctrineChange={changeDoctrine}
+              onSubmit={() =>
+                void send(draft, webSearchAvailable && webSearchOn ? 'web' : 'corpus', {
+                  fromComposer: true,
+                  deepResearch: deepResearchOn,
+                })
+              }
               webSearch={webSearchAvailable ? { checked: webSearchOn, onChange: changeWebSearch } : undefined}
+              deepResearch={{ checked: deepResearchOn, onChange: setDeepResearchOn }}
               busy={sending}
               locked={lockNote}
               placeholder={turns.length ? 'Takip sorusu sorun…' : 'Dosya ya da hukuki konu hakkında sorun…'}

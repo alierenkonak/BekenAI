@@ -25,9 +25,9 @@ export function NewChat() {
   const searchParams = useSearchParams();
   const { refresh } = useConversations();
   const [draft, setDraft] = useState(() => searchParams.get('q') ?? '');
-  const [includeDoctrine, setIncludeDoctrine] = useState(false);
   const webSearchAvailable = useWebSearchAvailable();
   const [webSearch, setWebSearch] = useState(false);
+  const [deepResearch, setDeepResearch] = useState(false);
   const withWeb = webSearchAvailable && webSearch;
   const [caseId, setCaseId] = useState(() => searchParams.get('dava') ?? '');
   const [cases, setCases] = useState<LegalCase[]>([]);
@@ -62,8 +62,13 @@ export function NewChat() {
     try {
       const queued = await api.sendChat(
         target
-          ? { conversation_id: target, message, include_doctrine: includeDoctrine, search_mode: searchMode }
-          : { message, include_doctrine: includeDoctrine, case_id: caseId || null, search_mode: searchMode },
+          ? { conversation_id: target, message, search_mode: searchMode, deep_research: deepResearch }
+          : {
+              message,
+              case_id: caseId || null,
+              search_mode: searchMode,
+              deep_research: deepResearch,
+            },
         crypto.randomUUID(),
       );
       // The switch stays on for the rest of this chat.
@@ -99,7 +104,7 @@ export function NewChat() {
       let conversationId = attachedConversationId;
       if (!conversationId) {
         const title = draft.trim().replace(/\s+/g, ' ').slice(0, 80) || files[0].name.slice(0, 160);
-        const created = await api.createConversation({ title, case_id: caseId || null, include_doctrine: includeDoctrine });
+        const created = await api.createConversation({ title, case_id: caseId || null });
         conversationId = created.id;
         setAttachedConversationId(conversationId);
       }
@@ -153,7 +158,7 @@ export function NewChat() {
               Hangi konuyu araştırıyorsunuz?
             </h1>
             <p className="m-0 max-w-[560px] text-[15px] leading-relaxed text-fg2">
-              Mevzuat ve Yargıtay kararlarına dayanan cevaplar alın. Her iddia, kaynak pasajıyla karşılaştırılarak doğrulanır.
+              Mevzuat, Yargıtay kararları ve doktrine dayanan cevaplar alın. Her iddia, kaynak pasajıyla karşılaştırılarak doğrulanır.
             </p>
           </div>
 
@@ -162,9 +167,8 @@ export function NewChat() {
             value={draft}
             onChange={setDraft}
             onSubmit={() => void send(draft)}
-            includeDoctrine={includeDoctrine}
-            onDoctrineChange={setIncludeDoctrine}
             webSearch={webSearchAvailable ? { checked: webSearch, onChange: setWebSearch } : undefined}
+            deepResearch={{ checked: deepResearch, onChange: setDeepResearch }}
             busy={sending || attaching}
             autoFocus
             placeholder="Örneğin: İşveren ihbar süresine uymadan sözleşmemi feshetti. Hangi alacaklarımı talep edebilirim?"

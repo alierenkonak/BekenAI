@@ -17,7 +17,6 @@ class ConversationCreate(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     case_id: UUID | None = None
     domain: Literal["labour_law"] = "labour_law"
-    include_doctrine: bool = False
 
     @field_validator("title")
     @classmethod
@@ -31,7 +30,6 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=160)
     case_id: UUID | None = None
-    include_doctrine: bool | None = None
 
     @field_validator("title")
     @classmethod
@@ -54,7 +52,6 @@ async def create_conversation(
             title=payload.title,
             domain_code=payload.domain,
             case_id=payload.case_id,
-            doctrine_enabled=payload.include_doctrine,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None
@@ -104,7 +101,6 @@ async def update_conversation(
             title=payload.title,
             case_id=payload.case_id,
             case_id_set="case_id" in payload.model_fields_set,
-            doctrine_enabled=payload.include_doctrine,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None

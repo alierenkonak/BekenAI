@@ -102,6 +102,22 @@ class BM25LexicalRetriever:
         retriever = bm25s.BM25.load(index_dir, mmap=mmap, load_corpus=False)
         return cls(retriever, tokenizer, records, manifest)
 
+    def article_records(
+        self, legislation_number: str, article_label: str, *, filters: SearchFilters, limit: int
+    ) -> list[ChunkRecord]:
+        """The chunks of one article of one law, in reading order: a lookup, not a search."""
+        found: list[ChunkRecord] = []
+        for record in self.records:
+            if (
+                legislation_number in record.legislation_numbers
+                and article_label in record.article_labels
+                and matches_filters(record, filters)
+            ):
+                found.append(record)
+                if len(found) == limit:
+                    break
+        return found
+
     def search(self, query: str, *, filters: SearchFilters, limit: int) -> list[SearchHit]:
         if not query.strip() or limit <= 0:
             return []

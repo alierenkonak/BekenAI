@@ -78,7 +78,6 @@ class CaseAnalysisService:
         turn = PreparedTurn(
             message=ANALYSIS_MESSAGE,
             history=[],
-            include_doctrine=False,
             plan=QueryPlan(
                 intent="legal",
                 search_query=derive_retrieval_query("; ".join(issue.title for issue in issues)),

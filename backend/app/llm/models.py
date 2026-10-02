@@ -34,6 +34,34 @@ class CaseIssues(BaseModel):
     issues: list[CaseIssue] = Field(min_length=1, max_length=12)
 
 
+class ResearchQuestion(BaseModel):
+    # One part of the question, a short heading for the report, e.g. "Savunma alınması".
+    question: str = Field(min_length=3, max_length=300)
+    # How to find the law on it: general legal terms, no names. Clipped in code.
+    search_query: str = Field(min_length=3, max_length=2000)
+
+
+class ResearchPlan(BaseModel):
+    """The parts of a legal question to research separately, most decisive first."""
+
+    sub_questions: list[ResearchQuestion] = Field(min_length=1, max_length=10)
+    # Only when web search is on: the question for a public search engine, without names,
+    # companies, dates or case details. Clipped like search_query.
+    web_query: str = Field(default="", max_length=4000)
+
+
+class ResearchGap(BaseModel):
+    # The number (from 1) of the part this search serves.
+    serves: int = Field(default=1, ge=1, le=10)
+    search_query: str = Field(min_length=3, max_length=2000)
+
+
+class ResearchGaps(BaseModel):
+    """Searches for what the first round left uncovered; empty when nothing is missing."""
+
+    follow_ups: list[ResearchGap] = Field(default_factory=list, max_length=10)
+
+
 class AnswerSentence(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     # Sources the sentence rests on; empty for explanation, transitions and guidance.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from enum import StrEnum
@@ -63,6 +64,26 @@ class HybridDomainIndex:
             raise IndexNotReadyError(f"Reranker is not ready for {self.domain_code}")
         return self.reranker.rerank(query, fused, limit=limit)
 
+    def article_hits(
+        self,
+        references: Sequence[tuple[str, str]],
+        *,
+        filters: SearchFilters,
+        per_article: int = 2,
+    ) -> list[SearchHit]:
+        """The opening chunks of named articles ("4857", "19"), for citations to follow."""
+        lookup = getattr(self.lexical, "article_records", None)
+        if lookup is None:
+            raise IndexNotReadyError(f"Article lookup is not ready for {self.domain_code}")
+        hits: list[SearchHit] = []
+        for law, article in references:
+            for record in lookup(law, article, filters=filters, limit=per_article):
+                hits.append(
+                    SearchHit(record=record, score=1.0, rank=len(hits) + 1,
+                              score_breakdown={"cited_article": 1.0})
+                )
+        return hits
+
 
 class InMemoryIndexRegistry:
     def __init__(self, indexes: tuple[HybridDomainIndex, ...] = ()) -> None:
@@ -80,6 +101,20 @@ class InMemoryIndexRegistry:
 class DomainSearchCoordinator:
     def __init__(self, registry: IndexRegistry) -> None:
         self.registry = registry
+
+    def article_hits(
+        self,
+        references: Sequence[tuple[str, str]],
+        *,
+        domain: str,
+        filters: SearchFilters,
+        per_article: int = 2,
+        channel: str = "primary",
+    ) -> list[SearchHit]:
+        index = self.registry.get(domain, channel)
+        if index is None:
+            raise IndexNotReadyError(f"Index is not ready for domain {domain!r}")
+        return index.article_hits(references, filters=filters, per_article=per_article)
 
     def search(
         self,

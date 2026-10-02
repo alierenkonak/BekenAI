@@ -2,17 +2,17 @@
 
 import type { ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
-import { DoctrineSwitch, WebSearchSwitch } from '@/components/ui';
+import { DeepResearchSwitch, WebSearchSwitch } from '@/components/ui';
 import { CHAT_MESSAGE_MAX } from '@/lib/config';
+import { DEEP_RESEARCH_HINT } from '@/lib/research';
 import { WEB_SEARCH_HINT } from '@/lib/web-search';
 
 export function Composer({
   value,
   onChange,
   onSubmit,
-  includeDoctrine,
-  onDoctrineChange,
   webSearch,
+  deepResearch,
   busy = false,
   variant,
   placeholder,
@@ -23,10 +23,9 @@ export function Composer({
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  includeDoctrine: boolean;
-  onDoctrineChange: (value: boolean) => void;
   /** Present only when the server can search the web. */
   webSearch?: { checked: boolean; onChange: (value: boolean) => void };
+  deepResearch?: { checked: boolean; onChange: (value: boolean) => void };
   busy?: boolean;
   variant: 'hero' | 'compact';
   placeholder: string;
@@ -85,7 +84,6 @@ export function Composer({
             İş Hukuku
           </span>
         )}
-        <DoctrineSwitch checked={includeDoctrine} onChange={onDoctrineChange} compact={variant === 'compact'} label={variant === 'hero' ? 'Doktrin kaynakları' : 'Doktrin'} />
         {webSearch && (
           <WebSearchSwitch
             checked={webSearch.checked}
@@ -96,19 +94,31 @@ export function Composer({
             hint={WEB_SEARCH_HINT}
           />
         )}
+        {deepResearch && (
+          <DeepResearchSwitch
+            checked={deepResearch.checked}
+            onChange={deepResearch.onChange}
+            compact={variant === 'compact'}
+            label={variant === 'hero' ? 'Derin araştırma' : 'Derin'}
+            hintId={`deep-research-hint-${variant}`}
+            hint={DEEP_RESEARCH_HINT}
+          />
+        )}
         {extra}
-        <span className="grow" />
-        <span className={`font-mono text-[11.5px] ${nearLimit ? 'text-err' : 'text-fg3'}`} aria-live="polite">
-          {value.length} / {CHAT_MESSAGE_MAX}
+        {/* Counter and send button stay together on the right, also when the row wraps. */}
+        <span className="ml-auto flex items-center gap-2">
+          <span className={`font-mono text-[11.5px] ${nearLimit ? 'text-err' : 'text-fg3'}`} aria-live="polite">
+            {value.length} / {CHAT_MESSAGE_MAX}
+          </span>
+          <button
+            type="submit"
+            disabled={!canSend}
+            aria-label="Soruyu gönder"
+            className="flex size-[34px] items-center justify-center rounded-[10px] bg-inv text-inv-fg transition-opacity disabled:opacity-35"
+          >
+            {busy ? <Spinner /> : <Icon name="arrowUp" size={17} strokeWidth={2} />}
+          </button>
         </span>
-        <button
-          type="submit"
-          disabled={!canSend}
-          aria-label="Soruyu gönder"
-          className="flex size-[34px] items-center justify-center rounded-[10px] bg-inv text-inv-fg transition-opacity disabled:opacity-35"
-        >
-          {busy ? <Spinner /> : <Icon name="arrowUp" size={17} strokeWidth={2} />}
-        </button>
       </div>
     </form>
   );

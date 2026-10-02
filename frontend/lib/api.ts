@@ -86,9 +86,9 @@ export const api = {
       `/conversations${query({ case_id: params.caseId, cursor: params.cursor, limit: params.limit ?? 50 })}`,
     ),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),
-  createConversation: (payload: { title: string; case_id: string | null; include_doctrine: boolean }) =>
+  createConversation: (payload: { title: string; case_id: string | null }) =>
     request<Conversation>('/conversations', { method: 'POST', body: payload }),
-  updateConversation: (id: string, patch: { title?: string; case_id?: string | null; include_doctrine?: boolean }) =>
+  updateConversation: (id: string, patch: { title?: string; case_id?: string | null }) =>
     request<Conversation>(`/conversations/${id}`, { method: 'PATCH', body: patch }),
   deleteConversation: (id: string) => request<void>(`/conversations/${id}`, { method: 'DELETE' }),
   listMessages: (id: string, cursor?: string | null) =>
@@ -99,8 +99,8 @@ export const api = {
       conversation_id?: string;
       case_id?: string | null;
       message: string;
-      include_doctrine: boolean;
       search_mode?: SearchMode;
+      deep_research?: boolean;
     },
     idempotencyKey: string,
   ) =>
@@ -138,10 +138,11 @@ export const api = {
   uploadConversationFile: (conversationId: string, file: File, mediaType: FileMediaType) =>
     uploadVia(`/conversations/${conversationId}/files/upload-intent`, file, mediaType),
 
-  search: (payload: { query: string; include_doctrine: boolean; limit?: number }, signal?: AbortSignal) =>
+  /** Doctrine is always searched too and comes back in its own list. */
+  search: (payload: { query: string; limit?: number }, signal?: AbortSignal) =>
     request<SearchResponse>('/search', {
       method: 'POST',
-      body: { query: payload.query, include_doctrine: payload.include_doctrine, limit: payload.limit ?? 10 },
+      body: { query: payload.query, limit: payload.limit ?? 10 },
       signal,
     }),
 };

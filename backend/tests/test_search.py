@@ -150,7 +150,7 @@ async def test_search_returns_traceable_exact_passage() -> None:
 
 
 @pytest.mark.asyncio
-async def test_doctrine_is_opt_in_and_returned_in_a_separate_channel() -> None:
+async def test_doctrine_is_always_returned_in_a_separate_channel() -> None:
     primary_hit = fixture_hit()
     doctrine_hit = SearchHit(
         record=replace(
@@ -195,29 +195,47 @@ async def test_doctrine_is_opt_in_and_returned_in_a_separate_channel() -> None:
     )
     try:
         async with api_client() as client:
-            without_doctrine = await client.post(
+            response = await client.post(
                 "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
-            )
-            with_doctrine = await client.post(
-                "/search",
-                json={
-                    "query": "fesih bildirimi",
-                    "mode": "bm25",
-                    "include_doctrine": True,
-                },
             )
     finally:
         app.dependency_overrides.pop(get_search_coordinator, None)
 
-    assert without_doctrine.status_code == 200
-    assert without_doctrine.json()["doctrine_results"] == []
-    assert with_doctrine.status_code == 200
-    payload = with_doctrine.json()
+    assert response.status_code == 200
+    payload = response.json()
     assert payload["results"][0]["source_channel"] == "primary"
     assert payload["doctrine_results"][0]["source_channel"] == "doctrine"
     assert payload["doctrine_results"][0]["source_kind"] == "doctrine"
     assert payload["doctrine_results"][0]["author"] == "Örnek Yazar"
     assert payload["doctrine_results"][0]["index_version"] == "doctrine-index"
+
+
+@pytest.mark.asyncio
+async def test_a_domain_without_doctrine_still_returns_its_law() -> None:
+    registry = InMemoryIndexRegistry(
+        (
+            HybridDomainIndex(
+                "labour_law",
+                "labour-law-pilot-v4",
+                "primary-index",
+                lexical=StaticRetriever([fixture_hit()]),
+            ),
+        )
+    )
+    app.dependency_overrides[get_search_coordinator] = lambda: DomainSearchCoordinator(
+        registry
+    )
+    try:
+        async with api_client() as client:
+            response = await client.post(
+                "/search", json={"query": "fesih bildirimi", "mode": "bm25"}
+            )
+    finally:
+        app.dependency_overrides.pop(get_search_coordinator, None)
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["source_channel"] == "primary"
+    assert response.json()["doctrine_results"] == []
 
 
 @pytest.mark.asyncio
