@@ -22,6 +22,9 @@ class RetrievalProfile:
     selection_status: str
     quality_gate_status: str
     channel_scopes: dict[str, str] = field(default_factory=dict)
+    # How new BM25 indexes stem words (see tokenization.prefix_stem); an index records its
+    # own method, so changing this affects only indexes built afterwards.
+    lexical_stemming: str | None = None
 
     def scope_for_channel(self, channel: str) -> str:
         if channel == "primary":

@@ -5,11 +5,13 @@ from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
+
 from beken_retrieval.bm25 import BM25LexicalRetriever
 from beken_retrieval.context import build_embedding_context
 from beken_retrieval.models import ChunkRecord, SearchFilters
 from beken_retrieval.scope import load_scope
-from beken_retrieval.tokenization import tokenize_legal_text
+from beken_retrieval.tokenization import lexical_tokens, prefix_stem, tokenize_legal_text
 
 
 def record(
@@ -224,3 +226,45 @@ def test_a_supplemental_allowlist_of_numbers_leaves_out_annex_articles(tmp_path:
 
     assert scope.allows(supplemental("3"))
     assert not scope.allows(supplemental("Geçici3"))
+
+
+def test_prefix_stemming_keeps_numbers_and_case_numbers_whole() -> None:
+    assert prefix_stem("savunmasını", 5) == "savun"
+    assert prefix_stem("kanun'un", 5) == "kanun"
+    assert prefix_stem("iş", 5) == "iş"
+    assert lexical_tokens("Savunmam alınmadan, E.2022/123 ve 18/A", "prefix5") == [
+        "savun", "alınm", "e.2022/123", "ve", "18/a",
+    ]
+    assert lexical_tokens("Savunmam", None) == ["savunmam"]
+
+
+def test_a_stemmed_index_matches_other_word_forms_and_loads_as_built(tmp_path: Path) -> None:
+    """Regression: "savunmam alınmadan" did not match the Labour Act's "savunmasını almadan"."""
+    statute = record(
+        "Hakkındaki iddialara karşı savunmasını almadan bir işçinin sözleşmesi feshedilemez.",
+        article_labels=("19",),
+    )
+    other = record("Yıllık ücretli izin süreleri kıdeme göre belirlenir.", article_labels=("53",))
+    query = "Savunmam alınmadan işten çıkarılabilir miyim?"
+    filters = SearchFilters()
+
+    plain = BM25LexicalRetriever.build([statute, other], tmp_path / "plain", scope_hash="a" * 64)
+    stemmed = BM25LexicalRetriever.build(
+        [statute, other], tmp_path / "stemmed", scope_hash="a" * 64, stemming="prefix5"
+    )
+
+    assert plain.search(query, filters=filters, limit=5) == []
+    assert [hit.record.chunk_id for hit in stemmed.search(query, filters=filters, limit=5)] == [
+        statute.chunk_id
+    ]
+    assert stemmed.manifest["stemming"] == "prefix5" and plain.manifest["stemming"] is False
+    reloaded = BM25LexicalRetriever.load(tmp_path / "stemmed")
+    assert [hit.record.chunk_id for hit in reloaded.search(query, filters=filters, limit=5)] == [
+        statute.chunk_id
+    ]
+
+
+def test_an_unknown_stemming_method_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="Unknown lexical stemming"):
+        BM25LexicalRetriever.build([record("metin")], tmp_path / "index", scope_hash="a" * 64,
+                                   stemming="snowball")

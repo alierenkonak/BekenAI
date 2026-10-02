@@ -37,5 +37,31 @@ def tokenize_legal_text(value: str) -> list[str]:
     return tokens
 
 
+_PREFIX_STEMMING = re.compile(r"prefix([1-9])")
+
+
+def prefix_stem(token: str, letters: int) -> str:
+    """A word cut to its first letters: "savunmasını" and "savunmam" are both "savun".
+
+    Turkish stacks suffixes on a stem that rarely changes, so a fixed prefix is a simple
+    stemmer for it. A suffix after an apostrophe goes ("kanun'un" → "kanun"); numbers and
+    case numbers such as "e.2022/123" or "18/a" stay whole.
+    """
+    word = re.split(r"['’]", token, maxsplit=1)[0]
+    return word[:letters] if word.isalpha() else token
+
+
+def lexical_tokens(value: str, stemming: str | None = None) -> list[str]:
+    """BM25 tokens of a text; `stemming` is None or "prefixN" (see `prefix_stem`)."""
+    tokens = tokenize_legal_text(value)
+    if not stemming:
+        return tokens
+    match = _PREFIX_STEMMING.fullmatch(stemming)
+    if match is None:
+        raise ValueError(f"Unknown lexical stemming: {stemming!r}")
+    letters = int(match.group(1))
+    return [prefix_stem(token, letters) for token in tokens]
+
+
 def canonical_token_string(value: str) -> str:
     return " ".join(tokenize_legal_text(value))
