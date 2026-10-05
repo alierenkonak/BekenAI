@@ -110,7 +110,7 @@ def build_bm25(args: argparse.Namespace, settings: RetrievalSettings) -> int:
             models=ModelCatalog.load(settings.retrieval_model_catalog),
         )
         .get(scope.domain)
-        .lexical_stemming
+        .lexical_stemming.get(scope.channel)
     )
     # The records' content, not only their number: a metadata fix such as the article
     # labels gives a new index next to the active one instead of failing on it.

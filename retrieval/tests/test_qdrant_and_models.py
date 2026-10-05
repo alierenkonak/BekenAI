@@ -236,3 +236,14 @@ def test_active_manifest_paths_can_move_with_the_release(tmp_path: Path) -> None
     assert _resolve_active_path(active, "../../retrieval-scopes/labour-law-v1/manifest.json") == (
         tmp_path / "retrieval-scopes/labour-law-v1/manifest.json"
     ).resolve()
+
+
+def test_only_the_law_channel_is_stemmed() -> None:
+    """Measured: prefix stemming helps the law search and not doctrine (ADR 0010)."""
+    models = ModelCatalog.load(Path("retrieval/config/models.json"))
+    profile = RetrievalProfileCatalog.load(
+        Path("retrieval/config/domain_profiles.json"), models=models
+    ).get("labour_law")
+
+    assert profile.lexical_stemming == {"primary": "prefix5"}
+    assert profile.lexical_stemming.get("doctrine") is None
