@@ -37,6 +37,7 @@ class DomainIndex(Protocol):
         mode: str,
         filters: SearchFilters,
         limit: int,
+        articles: Sequence[tuple[str, str]] = (),
     ) -> list[SearchHit]: ...
 
     def article_hits(

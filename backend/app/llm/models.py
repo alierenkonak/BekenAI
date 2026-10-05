@@ -5,6 +5,14 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 
+class ArticleHint(BaseModel):
+    # A law by its number, e.g. "4857", and one of its articles as the law numbers it:
+    # "18", "Ek 3", "Geçici 20". Loose on purpose: an odd hint must not fail the whole plan;
+    # code keeps only a law number and an article it can read (query.article_label).
+    law: str = Field(max_length=200)
+    article: str = Field(max_length=200)
+
+
 class QueryPlan(BaseModel):
     """How to search for the latest message, given the conversation so far."""
 
@@ -15,6 +23,10 @@ class QueryPlan(BaseModel):
     # Only when the user turned web search on: the same question for a public search
     # engine, without names, companies, dates or case details. Clipped like search_query.
     web_query: str = Field(default="", max_length=4000)
+    # The statute articles that govern the question, when the planner knows them. They are
+    # looked up by number and given to the reranker beside the searched passages, so an
+    # article the searches miss can still be read; a wrong one is ranked down.
+    articles: list[ArticleHint] = Field(default_factory=list, max_length=6)
 
 
 class CaseDeadline(BaseModel):

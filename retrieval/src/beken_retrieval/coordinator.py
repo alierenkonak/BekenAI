@@ -17,6 +17,9 @@ class SearchMode(StrEnum):
     HYBRID_RERANK = "hybrid_rerank"
 
 
+# Chunks of each hinted article that join the rerank pool; long articles span several.
+HINTED_CHUNKS_PER_ARTICLE = 3
+
 class IndexNotReadyError(RuntimeError):
     pass
 
@@ -40,7 +43,10 @@ class HybridDomainIndex:
         mode: str,
         filters: SearchFilters,
         limit: int,
+        articles: Sequence[tuple[str, str]] = (),
     ) -> list[SearchHit]:
+        """`articles` (law number, article label) are looked up and reranked beside the
+        searched candidates, so an article both searches miss can still rank (ADR 0011)."""
         selected = SearchMode(mode)
         candidate_limit = max(limit, self.hybrid_candidate_limit)
         if selected is SearchMode.BM25:
@@ -62,7 +68,17 @@ class HybridDomainIndex:
             return [hit.with_rank(rank) for rank, hit in enumerate(fused[:limit], start=1)]
         if not self.reranker:
             raise IndexNotReadyError(f"Reranker is not ready for {self.domain_code}")
-        return self.reranker.rerank(query, fused, limit=limit)
+        seen = {hit.record.chunk_id for hit in fused}
+        hinted = []
+        # A hint only adds candidates; without an article lookup the search runs as before.
+        if articles and getattr(self.lexical, "article_records", None) is not None:
+            for hit in self.article_hits(
+                articles, filters=filters, per_article=HINTED_CHUNKS_PER_ARTICLE
+            ):
+                if hit.record.chunk_id not in seen:
+                    seen.add(hit.record.chunk_id)
+                    hinted.append(hit)
+        return self.reranker.rerank(query, [*fused, *hinted], limit=limit)
 
     def article_hits(
         self,
@@ -125,6 +141,7 @@ class DomainSearchCoordinator:
         filters: SearchFilters,
         limit: int,
         channel: str = "primary",
+        articles: Sequence[tuple[str, str]] = (),
     ) -> list[SearchHit]:
         requested = (
             self.registry.supported_domains(channel) if domains == ("all",) else domains
@@ -138,7 +155,9 @@ class DomainSearchCoordinator:
                 raise IndexNotReadyError(f"Index is not ready for domain {domain!r}")
             indexes.append(index)
         if len(indexes) == 1:
-            return indexes[0].search(query, mode=mode, filters=filters, limit=limit)
+            return indexes[0].search(
+                query, mode=mode, filters=filters, limit=limit, articles=articles
+            )
         with ThreadPoolExecutor(max_workers=min(8, len(indexes))) as executor:
             futures = [
                 executor.submit(
@@ -147,6 +166,7 @@ class DomainSearchCoordinator:
                     mode=mode,
                     filters=filters,
                     limit=max(index.hybrid_candidate_limit, limit),
+                    articles=articles,
                 )
                 for index in indexes
             ]

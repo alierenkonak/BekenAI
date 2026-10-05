@@ -286,3 +286,37 @@ def test_cited_articles_are_looked_up_not_searched() -> None:
     )
     # The first two chunks of each article, in reading order; the filter still applies.
     assert [hit.record.chunk_id for hit in hits] == ["b", "c", "e"]
+
+
+def test_a_hinted_article_joins_the_rerank_pool_when_both_searches_miss_it() -> None:
+    """Regression: 1475 art. 14 was in neither search's top 25 for an istifa question."""
+    found = [record("labour_law", f"found-{n}") for n in range(3)]
+    statute = replace(
+        record("labour_law", "wanted"), primary_legislation_number="1475", article_labels=("14",)
+    )
+
+    class Lexical(StaticRetriever):
+        def article_records(self, law, article, *, filters, limit):
+            return [statute] if (law, article) == ("1475", "14") else []
+
+    class PreferWanted:
+        def rerank(self, query, hits, *, limit):
+            ordered = sorted(hits, key=lambda hit: hit.record.title != "wanted")
+            return [hit.with_rank(rank) for rank, hit in enumerate(ordered[:limit], start=1)]
+
+    index = HybridDomainIndex(
+        domain_code="labour_law", corpus_version="v1", index_version="i",
+        lexical=Lexical([SearchHit(item, 1.0) for item in found]),
+        dense=StaticRetriever([SearchHit(item, 1.0) for item in found]),
+        reranker=PreferWanted(), hybrid_candidate_limit=3,
+    )
+
+    def search(articles=()):
+        hits = index.search("q", mode="hybrid_rerank", filters=SearchFilters(), limit=3,
+                            articles=articles)
+        return [hit.record.title for hit in hits]
+
+    assert "wanted" not in search()
+    assert search([("1475", "14")])[0] == "wanted"
+    # A hint for an article the corpus does not hold changes nothing.
+    assert search([("4857", "999")]) == search()
