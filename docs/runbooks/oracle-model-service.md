@@ -77,11 +77,12 @@ Before restarting Qdrant after a unit update, preload the exact multi-architectu
 by the service:
 
 ```bash
-sudo docker pull qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+sudo docker pull qdrant/qdrant:v1.19.2@sha256:b7b0444c4c351c970b98e90a6f89c2ee4287c65b44e52b4cb503fa5b2aa927ad
 ```
 
 Qdrant reads storage written by the previous minor version only, so upgrade one minor at a time
-and let each start once (1.15 → 1.16 → 1.17 → 1.18 → 1.19 on 2026-09-30; 1.17 dropped RocksDB).
+and let each start once (1.15 → 1.16 → 1.17 → 1.18 → 1.19 on 2026-09-30; 1.17 dropped RocksDB;
+1.19.1 → 1.19.2 on 2026-10-06 for GHSA-3gph-6c29-p29v).
 Copy `/var/lib/bekenai-qdrant` while the service is stopped first; it is the rollback. After each
 step compare every collection's `points/count` with the value before. The Python client
 (`qdrant-client`) is pinned to the server's minor version in both `pyproject.toml` files.

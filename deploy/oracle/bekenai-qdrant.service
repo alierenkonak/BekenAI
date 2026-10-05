@@ -12,7 +12,7 @@ RestartSec=10
 TimeoutStartSec=120
 TimeoutStopSec=60
 ExecStartPre=-/usr/bin/docker rm -f bekenai-qdrant
-ExecStart=/usr/bin/docker run --name bekenai-qdrant --pull=never --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=256 --memory=1g --cpus=0.5 -p 127.0.0.1:6333:6333 -p 127.0.0.1:6334:6334 -v /var/lib/bekenai-qdrant:/qdrant/storage qdrant/qdrant:v1.19.1@sha256:12364fe851b9f17356fc88189fc06d1b521262e04659ec7345975b00c9246a10
+ExecStart=/usr/bin/docker run --name bekenai-qdrant --pull=never --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=256 --memory=1g --cpus=0.5 -p 127.0.0.1:6333:6333 -p 127.0.0.1:6334:6334 -v /var/lib/bekenai-qdrant:/qdrant/storage qdrant/qdrant:v1.19.2@sha256:b7b0444c4c351c970b98e90a6f89c2ee4287c65b44e52b4cb503fa5b2aa927ad
 ExecStop=/usr/bin/docker stop -t 30 bekenai-qdrant
 
 [Install]
