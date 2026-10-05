@@ -689,6 +689,8 @@ async def test_a_decisions_text_and_the_changes_of_the_articles_it_cites(tmp_pat
                 "MADDE 1 - (1) Birinci madde işverenin bildirim yükümlülüğünü düzenler.\n"
                 "MADDE 2 - (1) (Değişik: 6/5/2016-6715/1 md.) İkinci madde başvuru süresini "
                 "ayrıntılı biçimde düzenler.\n(2) İkinci fıkra süreyi işçi lehine uzatır.\n"
+                "GEÇİCİ MADDE 2 - (Değişik: 1/2/2018-7099/1 md.) Geçici ikinci madde geçiş "
+                "süresini düzenler.\n"
             ).encode(),
             metadata={
                 "source_kind": "legislation",
@@ -730,11 +732,17 @@ async def test_a_decisions_text_and_the_changes_of_the_articles_it_cites(tmp_pat
         texts = await repository.decision_texts([str(parse_id)])
         assert "Deneme Kanunu'nun 2. maddesine" in texts[str(parse_id)]
 
-        rows = await repository.article_changes([("9991", "1"), ("9991", "2")])
+        rows = await repository.article_changes(
+            [("9991", "1"), ("9991", "2"), ("9991", "Geçici2")]
+        )
+        # Article 2 and provisional article 2 are different articles with their own notes.
         assert [
             (row["law_title"], row["article"], row["event_type"], row["event_date"].isoformat())
             for row in rows
-        ] == [("9991 sayılı Deneme Kanunu", "2", "amended", "2016-05-06")]
+        ] == [
+            ("9991 sayılı Deneme Kanunu", "2", "amended", "2016-05-06"),
+            ("9991 sayılı Deneme Kanunu", "Geçici2", "amended", "2018-02-01"),
+        ]
     finally:
         with psycopg.connect(database_url()) as connection:
             connection.execute(
