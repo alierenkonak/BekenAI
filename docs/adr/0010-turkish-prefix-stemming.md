@@ -44,9 +44,9 @@ ilk 25'i %86'dan %92'ye çıkarıyor.
   (`tokenization.prefix_stem`). "savunmasını" ve "savunmam" ikisi de "savun" olur. Kesme
   işaretinden sonraki ek atılır ("kanun'un" → "kanun"). Sayılar ve karar numaraları
   ("e.2022/123", "18/a") olduğu gibi kalır.
-- Yöntem profilde tutulur (`lexical_stemming: "prefix5"`). Her indeks hangi yöntemle
-  kurulduğunu kendi manifestine yazar ve sorguyu aynı yöntemle işler. Bu yüzden eski bir
-  indeks, değişmeden çalışmaya devam eder.
+- Yöntem profilde kanal bazında tutulur (`lexical_stemming: {"primary": "prefix5"}`).
+  Her indeks hangi yöntemle kurulduğunu kendi manifestine yazar ve sorguyu aynı yöntemle
+  işler. Bu yüzden eski bir indeks, değişmeden çalışmaya devam eder.
 - Reranker'a giden aday sayısı 25'te kalır. 35 aday, kök bulmayla 72 sorudan yalnız 1'ini
   daha ilk 25'e sokuyor. Buna karşılık ölçülen reranker süresi aday başına yaklaşık 0,58
   sn; 10 aday her aramaya yaklaşık 6 sn ekler. Bu, sohbette cevap başına iki, dosya
@@ -67,5 +67,31 @@ ilk 25'i %86'dan %92'ye çıkarıyor.
   - muvazaalı alt işverenlik (4857 m.2);
   - fazla çalışma alacağında zamanaşımı;
   - hizmet tespiti davasında hak düşürücü süre (5510 m.86).
-- Doktrin indeksi yeniden kurulmadı. Ölçülecek etiketli bir kümesi yok; bir sonraki
-  kurulumda profildeki yöntemi alır.
+- Doktrin indeksinde kök bulma kullanılmıyor (aşağıdaki doktrin ölçümüne bakın).
+
+## Doktrin ölçümü (2026-10-06)
+
+Doktrinin etiketli sorusu olmadığı için bilinen pasajı bulma yöntemiyle ölçüldü:
+
+- Doktrinden rastgele 40 pasaj seçildi (en az 500 karakter).
+- Her biri için Gemini Flash Lite, bir kullanıcının soracağı gibi bir soru yazdı. Pasajın
+  ifadelerini kopyalamaması, madde numarası yazmaması istendi.
+- Soru sohbetteki gibi planlayıcıdan geçti.
+- Aramanın, sorunun üretildiği pasajı kaçıncı sırada bulduğuna bakıldı.
+
+| | İlk 1 | İlk 3 | İlk 8 | İlk 25 |
+|---|---|---|---|---|
+| Arama yolunun tamamı, kök bulma yok | %72 | %90 | %98 | %100 |
+| Arama yolunun tamamı, ilk 5 harf | %72 | %90 | %98 | %100 |
+| Yalnız kelime araması, kök bulma yok | %57 | %78 | %90 | %100 |
+| Yalnız kelime araması, ilk 5 harf | %45 | %85 | %88 | %98 |
+
+- Kök bulma arama yolunun tamamında hiçbir soruyu iyileştirmedi; 2 soruda sıra biraz
+  geriledi (4. → 5. ve 11. → 13.).
+- Anlam araması doktrinde tek başına ilk 8'de %95'e ulaşıyor. Doktrin, kanun maddelerinden
+  farklı olarak açıklayıcı düzyazı; kelime eşleşmesine daha az dayanıyor.
+- Kök bulma bu yüzden kanal bazında ayarlanır (`lexical_stemming: {"primary": "prefix5"}`):
+  kanun kanalı kök bulur, doktrin bulmaz. Doktrin indeksi ileride yeniden kurulursa da
+  kök bulmasız kurulur.
+- Sentetik sorular pasajdan üretildiği için kelime aramasının lehine olabilir. Yine de kök
+  bulma kelime aramasının en üst sırasını bile kötüleştirdi.
