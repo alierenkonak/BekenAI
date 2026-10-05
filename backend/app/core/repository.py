@@ -12,6 +12,7 @@ from fastapi import Depends
 from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
+from app.chat.decision_refs import article_unit
 from app.core.database import AppDatabase, get_database
 
 if TYPE_CHECKING:
@@ -1443,10 +1444,11 @@ class AppRepository:
         return {str(row["parse_id"]): row["body"] for row in rows}
 
     async def article_changes(self, articles: Sequence[tuple[str, str]]) -> list[dict[str, Any]]:
-        """Dated amendment notes of whole articles, by law number and article number.
+        """Dated amendment notes of whole articles, by law number and article label.
 
         A law is found by the number that starts its title ("4857 sayılı İş Kanunu"); a note
-        counts for an article when it is tied to the article or anything inside it.
+        counts for an article when it is tied to the article or anything inside it. A label
+        such as "Geçici20" is provisional article 20 (`temporary_article:20`), not article 20.
         """
         if not articles:
             return []
@@ -1457,14 +1459,19 @@ class AppRepository:
                               e.id as event_id,e.event_type,e.target_type,e.event_date,
                               e.effective_from,e.source_law_number,e.raw_annotation,
                               u.unit_path,u.unit_type
-                       from unnest(%s::text[],%s::text[]) as r(law_number,article)
+                       from unnest(%s::text[],%s::text[],%s::text[])
+                         as r(law_number,article,unit)
                        join legal.documents d on d.title ~ ('^' || r.law_number || ' sayılı ')
                        join legal.provision_events e on e.parse_id=d.current_parse_id
                        join legal.legal_units u on u.id=e.legal_unit_id and u.parse_id=e.parse_id
                        where e.event_date is not null
-                         and ('article:' || r.article)=any(u.unit_path)
+                         and r.unit=any(u.unit_path)
                        order by r.law_number,r.article,e.event_date desc,e.event_index""",
-                    ([law for law, _ in articles], [article for _, article in articles]),
+                    (
+                        [law for law, _ in articles],
+                        [article for _, article in articles],
+                        [article_unit(article) for _, article in articles],
+                    ),
                 )
             ).fetchall()
 

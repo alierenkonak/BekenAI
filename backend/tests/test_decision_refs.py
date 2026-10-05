@@ -8,6 +8,7 @@ from app.chat.decision_refs import (
     ArticleRef,
     annotation_paragraph,
     article_references,
+    article_unit,
     mentioned_articles,
 )
 
@@ -103,3 +104,41 @@ def test_a_passage_names_the_articles_it_discusses_whatever_the_law() -> None:
     assert mentioned_articles("HMK'nın 107. maddesinde ve 109 uncu maddesinde") == {"107", "109"}
     assert mentioned_articles("Kanun'un 17., 18. ve 19. maddeleri") == {"17", "18", "19"}
     assert mentioned_articles("bildirim süresi iki haftadır") == set()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "4857 sayılı İş Kanunu'nun geçici 1 inci maddesi uyarınca",
+            [("4857", "Geçici1", None)],
+        ),
+        ("4857 sayılı Kanun'un ek 3. maddesi gereğince", [("4857", "Ek3", None)]),
+        ("5510 sayılı Kanunun geçici madde 20 hükmü", [("5510", "Geçici20", None)]),
+        (
+            "5510 sayılı Kanunun ek madde 9 ve 86. maddesi",
+            [("5510", "86", None), ("5510", "Ek9", None)],
+        ),
+        ("4857 sayılı Kanun'un ek geçici 1. maddesi", [("4857", "EkGeçici1", None)]),
+        # A plain article stays plain beside them.
+        ("4857 sayılı Kanun'un 20. maddesi", [("4857", "20", None)]),
+    ],
+)
+def test_annex_and_provisional_articles_keep_their_kind(text, expected) -> None:
+    """Regression: "geçici 20. madde" was read as article 20."""
+    assert refs(text) == expected
+
+
+def test_a_passage_names_annex_articles_by_their_kind() -> None:
+    assert mentioned_articles("geçici 20 nci madde ile ek madde 3 ve 107. madde") == {
+        "Geçici20", "Ek3", "107",
+    }
+
+
+def test_a_label_maps_to_its_legal_unit() -> None:
+    assert [article_unit(label) for label in ("20", "Ek3", "Geçici20", "EkGeçici1")] == [
+        "article:20",
+        "additional_article:3",
+        "temporary_article:20",
+        "additional_temporary_article:1",
+    ]

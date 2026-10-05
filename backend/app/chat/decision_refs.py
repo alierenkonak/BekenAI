@@ -37,13 +37,24 @@ _PARENTHESISED = re.compile(r"(?:kanunu|yasası)\s*\((\d{4})\)")
 # "Kanun'un", "aynı Kanunun", "anılan Yasanın": the law named last.
 _ANAPHORA = re.compile(r"(?:kanun|yasa)(?:'?un|'?nın|nun|nın)\b")
 _ORDINAL = r"(?:'?\s*(?:inci|ıncı|uncu|üncü|nci|ncı|ncu|ncü|ünci|unci)|\.)?"
+# "geçici 20. madde", "ek madde 3": an annex or provisional article, which the corpus labels
+# "Geçici20" and "Ek3" so that it is not taken for the plain article of the same number.
+ARTICLE_KINDS = {
+    "ek geçici": ("EkGeçici", "additional_temporary_article"),
+    "ek": ("Ek", "additional_article"),
+    "geçici": ("Geçici", "temporary_article"),
+    "mükerrer": ("Mükerrer", "repeated_article"),
+}
+_KIND = r"(?:\b(ek\s+geçici|ek|geçici|mükerrer)\s+)?"
 _ARTICLE_AFTER = re.compile(
-    r"(?<![\d/.])(\d{1,3})(?:\s*/\s*(\d{1,2}))?" + _ORDINAL + r"\s*madde"
+    _KIND + r"(?<![\d/.])(\d{1,3})(?:\s*/\s*(\d{1,2}))?" + _ORDINAL + r"\s*madde"
 )
-_ARTICLE_BEFORE = re.compile(r"\b(?:madde|md\.|m\.)\s*(\d{1,3})(?:\s*/\s*(\d{1,2}))?\b")
+_ARTICLE_BEFORE = re.compile(
+    _KIND + r"(?:\bmadde|\bmd\.|\bm\.)\s*(\d{1,3})(?:\s*/\s*(\d{1,2}))?\b"
+)
 # "17., 18. ve 19. maddeleri", "369/1 ve 371. maddeleri": an item may name its paragraph.
 _LIST = re.compile(
-    r"(?<![\d/.])((?:\d{1,3}(?:/\d{1,2})?" + _ORDINAL + r"\s*(?:,|ve|ile)\s*)+"
+    _KIND + r"(?<![\d/.])((?:\d{1,3}(?:/\d{1,2})?" + _ORDINAL + r"\s*(?:,|ve|ile)\s*)+"
     r"\d{1,3}(?:/\d{1,2})?)" + _ORDINAL + r"\s*maddeler"
 )
 # The article numbers of a list, not the paragraph numbers after a slash.
@@ -73,9 +84,30 @@ _LAW_REACH = 160
 _ANAPHORA_REACH = 900
 
 
+def article_label(kind: str | None, number: str) -> str:
+    """The corpus label of an article: "20", or "Geçici20" for provisional article 20."""
+    if not kind:
+        return number
+    return ARTICLE_KINDS[" ".join(kind.split())][0] + number
+
+
+def article_unit(label: str) -> str:
+    """The legal unit path element of a label: "Geçici20" is "temporary_article:20"."""
+    for prefix, unit in sorted(ARTICLE_KINDS.values(), key=lambda kind: -len(kind[0])):
+        if label.startswith(prefix):
+            return f"{unit}:{label[len(prefix):]}"
+    return f"article:{label}"
+
+
+def _article_order(label: str) -> tuple[str, int]:
+    match = re.fullmatch(r"(\D*)(\d+)", label)
+    return (match.group(1), int(match.group(2))) if match else (label, 0)
+
+
 @dataclass(frozen=True)
 class ArticleRef:
     law_number: str
+    # As the corpus labels it: "20", "Ek3", "Geçici20".
     article: str
     # A specific paragraph when the decision names one ("beşinci fıkrası", "20/1").
     paragraph: int | None = None
@@ -135,26 +167,33 @@ def article_references(text: str, *, decided: date | None = None) -> list[Articl
 
     for match in _LIST.finditer(folded):
         if (law := owner(match.start())) is not None:
-            for number in _LIST_ITEM.findall(match.group(1)):
-                refs.add(ArticleRef(law, number))
+            for number in _LIST_ITEM.findall(match.group(2)):
+                refs.add(ArticleRef(law, article_label(match.group(1), number)))
     for match in _ARTICLE_AFTER.finditer(folded):
         if (law := owner(match.start())) is not None:
-            paragraph = _paragraph(folded, match.end() - len("madde"), match.group(2))
-            refs.add(ArticleRef(law, match.group(1), paragraph))
+            paragraph = _paragraph(folded, match.end() - len("madde"), match.group(3))
+            refs.add(ArticleRef(law, article_label(match.group(1), match.group(2)), paragraph))
     for match in _ARTICLE_BEFORE.finditer(folded):
         if (law := owner(match.start())) is not None:
-            paragraph = int(match.group(2)) if match.group(2) else None
-            refs.add(ArticleRef(law, match.group(1), paragraph))
-    return sorted(refs, key=lambda ref: (ref.law_number, int(ref.article), ref.paragraph or 0))
+            paragraph = int(match.group(3)) if match.group(3) else None
+            refs.add(ArticleRef(law, article_label(match.group(1), match.group(2)), paragraph))
+    return sorted(
+        refs,
+        key=lambda ref: (ref.law_number, _article_order(ref.article), ref.paragraph or 0),
+    )
 
 
 def mentioned_articles(text: str) -> set[str]:
-    """Article numbers a passage cites as articles, of whatever law ("107. maddesi")."""
+    """Articles a passage cites, of whatever law ("107. maddesi" is "107", "geçici 1 inci
+    madde" is "Geçici1")."""
     folded = fold(" ".join(text.split()))
-    found = {match.group(1) for match in _ARTICLE_AFTER.finditer(folded)}
-    found |= {match.group(1) for match in _ARTICLE_BEFORE.finditer(folded)}
+    found = {
+        article_label(match.group(1), match.group(2))
+        for pattern in (_ARTICLE_AFTER, _ARTICLE_BEFORE)
+        for match in pattern.finditer(folded)
+    }
     for match in _LIST.finditer(folded):
-        found.update(_LIST_ITEM.findall(match.group(1)))
+        found.update(article_label(match.group(1), n) for n in _LIST_ITEM.findall(match.group(2)))
     return found
 
 
