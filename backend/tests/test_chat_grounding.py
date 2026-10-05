@@ -13,12 +13,13 @@ from pydantic import ValidationError
 from app.api.chat import ChatRequest
 from app.chat.context import EvidenceSource, FileEvidenceSource, select_history, select_sources
 from app.chat.grounded import ANSWER_FORMAT, GroundedChatService
-from app.chat.query import derive_retrieval_query, fallback_plan, plan_query
+from app.chat.query import article_label, derive_retrieval_query, fallback_plan, plan_query
 from app.core.config import Settings
 from app.files.retrieval import PrivateHit, PrivateScope
 from app.llm.models import (
     AnswerBlock,
     AnswerSentence,
+    ArticleHint,
     ChatAnswer,
     QueryPlan,
     SupportAssessment,
@@ -82,10 +83,12 @@ class FakeCoordinator:
         self.doctrine = doctrine or []
         self.registry = FakeRegistry()
         self.searches: list[tuple[str, str]] = []
+        self.articles: dict[str, list[tuple[str, str]]] = {}
 
     def search(self, query: str, **kwargs):
         channel = kwargs.get("channel", "primary")
         self.searches.append((query, channel))
+        self.articles[channel] = list(kwargs.get("articles", ()))
         return self.doctrine if channel == "doctrine" else self.primary
 
 
@@ -319,6 +322,41 @@ async def test_planner_failure_falls_back_to_the_previous_question() -> None:
 
     query = chat.coordinator.searches[0][0]
     assert query.startswith("İşveren fesih gerekçesi") and "itiraz" in query
+
+
+@pytest.mark.asyncio
+async def test_the_planners_article_hints_reach_the_law_search_only() -> None:
+    hints = [("5510", "Madde 86"), ("4857", "ek madde 3"), ("4857", "Ek 3"), ("Yönetmelik", "5"),
+             ("4857", "18"), ("4857", "19")]
+    plan = QueryPlan(
+        intent="legal",
+        search_query=REWRITTEN,
+        articles=[ArticleHint(law=law, article=article) for law, article in hints],
+    )
+    provider = FakeProvider(MIXED, plan=plan)
+    chat = service(provider, doctrine=[hit(channel="doctrine")])
+
+    await ask(chat)
+
+    # Normalized to corpus labels, repeats and non-laws dropped, three at most.
+    assert chat.coordinator.articles == {
+        "primary": [("5510", "86"), ("4857", "Ek3"), ("4857", "18")],
+        "doctrine": [],
+    }
+    assert "articles: soruyu doğrudan düzenleyen kanun maddelerini" in provider.prompts["QueryPlan"]
+
+
+@pytest.mark.parametrize(
+    ("raw", "label"),
+    [
+        ("18", "18"), ("Madde 86", "86"), ("86. maddesi", "86"), ("m. 18/a", "18/A"),
+        ("Ek 3", "Ek3"), ("EK-3", "Ek3"), ("geçici 20. madde", "Geçici20"),
+        ("GEÇİCİ MADDE 1", "Geçici1"), ("Ek Geçici 1", "EkGeçici1"), ("mükerrer 7", "Mükerrer7"),
+        ("Yönetmelik 5", None), ("3-5", None),
+    ],
+)
+def test_article_hints_are_read_as_corpus_labels(raw: str, label: str | None) -> None:
+    assert article_label(raw) == label
 
 
 def test_fallback_plan_without_history_uses_the_message() -> None:

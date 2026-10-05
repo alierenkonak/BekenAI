@@ -280,6 +280,7 @@ class GroundedChatService:
                 domain=domain,
                 private_scope=private_scope,
                 base_tokens=base_tokens,
+                articles=[(hint.law, hint.article) for hint in plan.articles],
             )
             if web:
                 # The web is searched while the corpus is reranked; neither waits on the other.
@@ -570,8 +571,10 @@ class GroundedChatService:
         domain: str,
         private_scope: PrivateScope | None,
         base_tokens: int,
+        articles: Sequence[tuple[str, str]] = (),
     ) -> list[Source]:
         filters = SearchFilters(domain_roles=("core", "supplemental"))
+        # The planner's article hints join the law search's rerank pool (ADR 0011).
         primary_hits = await asyncio.to_thread(
             self.coordinator.search,
             query,
@@ -579,6 +582,7 @@ class GroundedChatService:
             mode=SearchMode.HYBRID_RERANK.value,
             filters=filters,
             limit=25,
+            articles=articles,
         )
         # Doctrine is always searched; it fills what is left of the budget after the law.
         doctrine_hits = await self.search_doctrine(query, domain=domain, limit=25)
