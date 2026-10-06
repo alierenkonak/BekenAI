@@ -36,6 +36,9 @@ export function Composer({
 }) {
   const length = value.trim().length;
   const canSend = !busy && !locked && length >= 3 && value.length <= CHAT_MESSAGE_MAX;
+  // The counter appears only as the text nears the limit; a counter that widens with every
+  // digit typed would otherwise push the options onto a second row.
+  const showCounter = value.length > CHAT_MESSAGE_MAX * 0.8;
   const nearLimit = value.length > CHAT_MESSAGE_MAX * 0.9;
 
   const submit = () => {
@@ -112,9 +115,11 @@ export function Composer({
           {extra}
         </div>
         <span className="flex shrink-0 items-center gap-2">
-          <span className={`font-mono text-[11.5px] ${nearLimit ? 'text-err' : 'text-fg3'}`} aria-live="polite">
-            {value.length} / {CHAT_MESSAGE_MAX}
-          </span>
+          {showCounter && (
+            <span className={`font-mono text-[11.5px] ${nearLimit ? 'text-err' : 'text-fg3'}`} aria-live="polite">
+              {value.length} / {CHAT_MESSAGE_MAX}
+            </span>
+          )}
           <button
             type="submit"
             disabled={!canSend}
