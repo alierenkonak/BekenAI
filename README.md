@@ -103,7 +103,8 @@ files, analyse a whole case, and run a multi-step research over the same sources
     <td width="50%" valign="top">
       <h3>Private case files</h3>
       PDF, Word or TXT files are parsed and indexed in a workspace-scoped collection that never
-      joins the shared corpus. Answers cite them by page, apart from the law.
+      joins the shared corpus. Answers cite them by page, apart from the law, and the case page
+      shows how much of the account's storage they use.
     </td>
   </tr>
   <tr>
@@ -116,7 +117,7 @@ files, analyse a whole case, and run a multi-step research over the same sources
     <td>
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/case-dark.png">
-        <img alt="A case page with its chats, an uploaded file and the case analysis button" src="docs/assets/readme/case-light.png">
+        <img alt="A case page with its chats, an uploaded file, storage used against the quota and the case analysis button" src="docs/assets/readme/case-light.png">
       </picture>
     </td>
   </tr>
@@ -131,6 +132,9 @@ Also:
   its own list.
 - **Web search, on request.** When the corpus has no source, or a provision has changed, the
   user can add a clearly labelled web section (Tavily). It never replaces the grounded answer.
+- **A workspace that stays out of the way.** Chats can be pinned, renamed and deleted from the
+  sidebar. The sidebar and the source panel can be resized by dragging, while the answer column
+  keeps a readable width. Light and dark themes.
 
 ## How an answer is built
 
