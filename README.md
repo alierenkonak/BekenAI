@@ -1,53 +1,136 @@
-# BekenAI
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/banner-dark.png">
+    <img alt="BekenAI: every answer has a source" src="docs/assets/readme/banner-light.png" width="100%">
+  </picture>
+</p>
 
-[![CI](https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml/badge.svg)](https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml)
-[![Security audit](https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml/badge.svg)](https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml)
+<p align="center">
+  <a href="https://bekenai.vercel.app"><b>Live demo</b></a>
+  &nbsp;·&nbsp;
+  <a href="#features">Features</a>
+  &nbsp;·&nbsp;
+  <a href="#how-an-answer-is-built">How it works</a>
+  &nbsp;·&nbsp;
+  <a href="#measured-results">Results</a>
+  &nbsp;·&nbsp;
+  <a href="#architecture">Architecture</a>
+  &nbsp;·&nbsp;
+  <a href="#engineering-decisions">Decisions</a>
+</p>
 
-A research assistant for Turkish labour law. It answers from statutes, Yargıtay decisions and
-doctrine, cites a source for every sentence, and has a second model check each citation
-before the answer is shown.
+<p align="center">
+  <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml"><img alt="Security audit" src="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml/badge.svg"></a>
+  <a href="https://bekenai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-bekenai.vercel.app-2B59C3"></a>
+</p>
 
-**Live demo:** [bekenai.vercel.app](https://bekenai.vercel.app) (Google sign-in; the site offers a
-fictional sample case file to try the file features). The interface and the answers are in
-Turkish.
+<p align="center">
+  <img alt="Next.js" src="https://img.shields.io/badge/Next.js_16-000000?logo=nextdotjs&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React_19-20232A?logo=react&logoColor=61DAFB">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind_CSS_4-0F172A?logo=tailwindcss&logoColor=38BDF8">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL_17-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Supabase" src="https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white">
+  <img alt="Qdrant" src="https://img.shields.io/badge/Qdrant-DC244C?logo=qdrant&logoColor=white">
+  <img alt="ONNX Runtime" src="https://img.shields.io/badge/ONNX_Runtime-005CED?logo=onnx&logoColor=white">
+  <img alt="Gemini" src="https://img.shields.io/badge/Gemini-8E75B2?logo=googlegemini&logoColor=white">
+  <img alt="Oracle Cloud" src="https://img.shields.io/badge/Oracle_Cloud-F80000?logo=oracle&logoColor=white">
+  <img alt="Vercel" src="https://img.shields.io/badge/Vercel-000000?logo=vercel&logoColor=white">
+</p>
 
-BekenAI is a portfolio project. It runs on free tiers and is not legal advice.
+<br>
 
-## What it does
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/demo-dark.gif">
+    <img alt="Asking BekenAI a question: the answer goes through search, writing and verification, then a citation opens its source passage with the article's amendment history" src="docs/assets/readme/demo-light.gif" width="100%">
+  </picture>
+  <br>
+  <sub>The real interface replaying an answer the live pipeline wrote. The wait is shortened here; a real answer takes one to two minutes.</sub>
+</p>
 
-- **Cited answers.** Each sentence of an answer carries the passages it relies on. A verifier
-  model labels every sentence–passage pair as supported, partial or unsupported. Unsupported
-  citations are dropped, and a sentence left without support is marked as unverified instead
-  of being passed off as grounded. If no primary source supports the question, the answer
-  says so.
-- **Source search.** Hybrid search over the corpus, with law and case law listed apart from
-  doctrine.
-- **Case files.** PDF, Word or TXT files uploaded to a case or a chat are indexed in a private
-  workspace. Answers cite the file by page, kept apart from the law. A case analysis reports
-  each legal issue with the law, case law and doctrine on it, and works out the critical
-  deadlines in code.
-- **Deep research.** A bounded multi-step search over the same sources: up to 5 sub-questions,
-  a gap analysis, following the articles that found decisions rely on, then a structured
-  report.
-- **Provision currency.** Statute passages carry their official amendment notes. The code warns
-  when a provision changed after the date of the events, and when the articles a cited
-  Yargıtay decision relies on changed after the decision.
+BekenAI answers questions on Turkish labour law from statutes, Yargıtay decisions and doctrine.
+Every sentence of an answer carries the passages it relies on, and a second model checks each
+sentence against those passages before the answer is shown. It can also read a user's own case
+files, analyse a whole case, and run a multi-step research over the same sources.
+
+> [!NOTE]
+> BekenAI is a portfolio project. It runs on free tiers and is not legal advice. The interface
+> and the answers are in Turkish; you can sign in with Google and try it with the fictional
+> sample case file on the site.
+
+## Features
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Cited, checked answers</h3>
+      Each sentence lists its sources. A verifier labels every sentence–source pair as
+      supported, partial or unsupported; unsupported citations are dropped, and a sentence
+      left without support is marked as unverified. A citation opens the exact passage,
+      with the article's official amendment history.
+    </td>
+    <td width="50%" valign="top">
+      <h3>Case analysis</h3>
+      Every ready file of a case is read, its legal issues are listed, and each issue is
+      compared with the law, case law and doctrine. Critical deadlines are worked out in code
+      from the dates in the file, and outdated provisions or decisions are flagged.
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/chat-dark.png">
+        <img alt="An answer with numbered citations and the source panel showing İş Kanunu article 20 and its amendment history" src="docs/assets/readme/chat-light.png">
+      </picture>
+    </td>
+    <td>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/analysis-dark.png">
+        <img alt="A case analysis report with the critical deadlines and a currency check box" src="docs/assets/readme/analysis-light.png">
+      </picture>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <h3>Deep research</h3>
+      A bounded multi-step search: up to 5 sub-questions, a gap analysis, and a lookup of the
+      articles the found decisions rely on, ending in a structured report that goes through
+      the same verification.
+    </td>
+    <td width="50%" valign="top">
+      <h3>Private case files</h3>
+      PDF, Word or TXT files are parsed and indexed in a workspace-scoped collection that never
+      joins the shared corpus. Answers cite them by page, apart from the law.
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/research-dark.png">
+        <img alt="A deep research report with its research summary: sub-questions, searches and articles followed from decisions" src="docs/assets/readme/research-light.png">
+      </picture>
+    </td>
+    <td>
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/case-dark.png">
+        <img alt="A case page with its chats, an uploaded file and the case analysis button" src="docs/assets/readme/case-light.png">
+      </picture>
+    </td>
+  </tr>
+</table>
+
+Also:
+
+- **Provision currency checks.** Statute passages carry their official amendment notes. The
+  code warns when a provision changed after the date of the events, and when the articles a
+  cited Yargıtay decision relies on changed after the decision.
+- **Source search.** Hybrid search over the corpus without starting a chat, with doctrine in
+  its own list.
 - **Web search, on request.** When the corpus has no source, or a provision has changed, the
   user can add a clearly labelled web section (Tavily). It never replaces the grounded answer.
-
-## Corpus
-
-| Source | Documents | Origin |
-|---|---|---|
-| Laws (İş Kanunu, TBK, HMK, İş Mahkemeleri Kanunu, 5510 and others) | 25 | mevzuat.gov.tr |
-| Regulations | 21 | mevzuat.gov.tr |
-| Yargıtay decisions | 49 | karararama.yargitay.gov.tr |
-| Doctrine: a labour-law course note, used with permission | 1 | |
-
-Documents are split along their legal structure (article, paragraph, item), giving about 2,800
-searchable passages of law and case law and 475 doctrine passages. Every passage keeps its
-citation, article path and page. Each import is stored as a separate corpus version, so an old
-answer can still be traced to the exact sources it used.
 
 ## How an answer is built
 
@@ -86,8 +169,50 @@ flowchart LR
    answer is stored with its citations and the corpus and index versions it used.
 
 Questions run as jobs: the API answers `202 Accepted`, a worker claims the job from Postgres,
-and the browser shows each stage live. A chat answer usually takes one to two minutes:
-reranking runs on CPU, and every cited sentence is verified.
+and the browser shows each stage live. Reranking runs on CPU and every cited sentence is
+verified, so a chat answer takes one to two minutes.
+
+## Corpus
+
+| Source | Documents | Origin |
+|---|---:|---|
+| Laws (İş Kanunu, TBK, HMK, İş Mahkemeleri Kanunu, 5510 and others) | 25 | mevzuat.gov.tr |
+| Regulations | 21 | mevzuat.gov.tr |
+| Yargıtay decisions | 49 | karararama.yargitay.gov.tr |
+| Doctrine: a labour-law course note, used with permission | 1 | |
+
+Documents are split along their legal structure (article, paragraph, item), giving about 2,800
+searchable passages of law and case law and 475 doctrine passages. Every passage keeps its
+citation, article path and page. Each import is stored as a separate corpus version, so an old
+answer can still be traced to the exact sources it used.
+
+## Measured results
+
+The evaluation set has 120 questions in 12 topics. 72 of them (6 per topic) name the statute
+article that answers them. Each change to retrieval was measured on those 72 through the full
+search path; the table shows how often the expected article appears in the results.
+
+| Retrieval setup | Top 8 | Top 25 |
+|---|---:|---:|
+| Raw question, hybrid search and reranker | 81% | 86% |
+| + query planner | 83% | 92% |
+| + Turkish prefix stemming ([ADR 0010](docs/adr/0010-turkish-prefix-stemming.md)) | 85% | 94% |
+| + planner article hints ([ADR 0011](docs/adr/0011-planner-article-hints.md)) | 86% | 97% |
+| **Current system**, measured with the repo command, one eval label corrected | **89%** | **99%** |
+
+Options that did not pay off are recorded as well: a wider rerank pool, windowed reranking of
+long passages, and stemming for doctrine.
+
+The reranker runs as an int8 ONNX export ([ADR 0005](docs/adr/0005-int8-onnx-reranker.md)). On
+40 questions it cut reranking 25 candidates from 50.6 s to 14.4 s on 4 cores compared with
+PyTorch, and found the expected article just as often.
+
+To reproduce the retrieval numbers on a deployment (runbook:
+[`docs/runbooks/oracle-api-runtime.md`](docs/runbooks/oracle-api-runtime.md)):
+
+```bash
+python -m app.chat.retrieval_eval --queries evals/labour_law/queries.v1.jsonl --out report/
+```
 
 ## Architecture
 
@@ -114,14 +239,19 @@ flowchart LR
     WK -. "optional" .-> TV["Tavily web search"]
 ```
 
-- **Modular monolith** (ADR 0001): one deployable backend, with retrieval and ingestion as
-  separate Python packages.
-- **Private data stays private** (ADR 0002): uploaded files live in their own storage bucket and
-  vector collection, scoped to the user's workspace, and never enter the shared corpus.
+- **Modular monolith** ([ADR 0001](docs/adr/0001-modular-monolith.md)): one deployable backend,
+  with retrieval and ingestion as separate Python packages.
+- **Private data stays private** ([ADR 0002](docs/adr/0002-global-private-data-boundary.md)):
+  uploaded files live in their own storage bucket and vector collection, scoped to the user's
+  workspace, and never enter the shared corpus.
 - **Model service:** embeddings and reranking run in one loopback-only service. Qdrant is
   loopback-only as well.
-- **Provider boundary** (ADR 0003): model calls go through one interface, so the retrieval and
-  citation core does not depend on Gemini.
+- **Provider boundary** ([ADR 0003](docs/adr/0003-model-provider-abstraction.md)): model calls
+  go through one interface, so the retrieval and citation core does not depend on Gemini.
+
+<details>
+<summary><b>Repository layout</b></summary>
+<br>
 
 | Path | Contents |
 |---|---|
@@ -132,37 +262,13 @@ flowchart LR
 | `supabase/migrations/` | Database schema, including the versioned `legal` schema |
 | `deploy/oracle/` | systemd units and hash-locked server requirements |
 | `evals/` | The labour-law evaluation set (120 questions) |
-| `docs/` | Architecture decision records and runbooks |
+| `docs/` | Architecture decision records, runbooks and the README images |
 
-## Measured results
-
-The evaluation set has 120 questions in 12 topics. 72 of them (6 per topic) name the statute
-article that answers them. Each change to retrieval was measured on those 72 through the full
-search path; the table shows how often the expected article appears in the results.
-
-| Retrieval setup | Top 8 | Top 25 |
-|---|---|---|
-| Raw question, hybrid search and reranker | 81% | 86% |
-| + query planner | 83% | 92% |
-| + Turkish prefix stemming (ADR 0010) | 85% | 94% |
-| + planner article hints (ADR 0011) | 86% | 97% |
-| Current system, measured with the repo command, one eval label corrected | 89% | 99% |
-
-Options that did not pay off are recorded as well: a wider rerank pool, windowed reranking of
-long passages, and stemming for doctrine.
-
-The reranker runs as an int8 ONNX export (ADR 0005). On 40 questions it cut reranking 25
-candidates from 50.6 s to 14.4 s on 4 cores compared with PyTorch, and found the expected
-article just as often.
-
-To reproduce the retrieval numbers on a deployment (runbook: `docs/runbooks/oracle-api-runtime.md`):
-
-```bash
-python -m app.chat.retrieval_eval --queries evals/labour_law/queries.v1.jsonl --out report/
-```
+</details>
 
 ## Engineering decisions
 
+Each decision is recorded with its context, the measurements behind it and its consequences.
 The ADRs in [`docs/adr`](docs/adr) are written in Turkish.
 
 | ADR | Decision |
@@ -185,13 +291,11 @@ Requirements: Node.js 22, Python 3.12 or 3.13, Docker.
 
 ```bash
 cp .env.example .env
-make setup
-make infra-up
+make setup       # frontend packages and a virtual environment from hash-locked requirements
+make infra-up    # Postgres 17 and Qdrant
 ```
 
-`make setup` installs the frontend and a virtual environment from hash-locked requirements, and
-`make infra-up` starts Postgres 17 and Qdrant. Then run `make backend-dev`, `make worker-dev` and
-`make frontend-dev` in separate terminals.
+Then run `make backend-dev`, `make worker-dev` and `make frontend-dev` in separate terminals.
 
 Answering questions also needs a Supabase project (auth, database, storage), a Gemini API key,
 the model service, and the corpus and indexes, which are not in the repository. They are built
@@ -223,3 +327,9 @@ make build     # frontend production build
   analysis three to five.
 - Scanned PDFs without a text layer cannot be read.
 - Answers are for research. They are not legal advice.
+
+<br>
+
+<p align="center">
+  <sub>Built by <a href="https://github.com/alierenkonak">Ali Eren Konak</a> · <a href="https://www.linkedin.com/in/alierenkonak/">LinkedIn</a></sub>
+</p>
