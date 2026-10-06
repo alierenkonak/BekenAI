@@ -7,7 +7,10 @@ import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { AuthGate } from './auth';
 import { ConversationsProvider } from './conversations';
+import { ResizeHandle, useStoredWidth } from './resize-handle';
 import { Sidebar } from './sidebar';
+
+const SIDEBAR = { initial: 264, min: 220, max: 420 };
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -22,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 function Frame({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const sidebar = useStoredWidth('bekenai-sidebar-width', SIDEBAR);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -37,8 +41,17 @@ function Frame({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
-      <div className="hidden lg:flex">
+      <div className="relative hidden shrink-0 lg:flex" style={{ width: sidebar.width }}>
         <Sidebar />
+        <ResizeHandle
+          edge="right"
+          width={sidebar.width}
+          min={SIDEBAR.min}
+          max={SIDEBAR.max}
+          onChange={sidebar.change}
+          onReset={sidebar.reset}
+          label="Kenar çubuğunun genişliği"
+        />
       </div>
 
       {drawerOpen && (

@@ -30,6 +30,8 @@ class ConversationCreate(BaseModel):
 class ConversationUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=160)
     case_id: UUID | None = None
+    # Pinned chats stay at the top of the sidebar; pinning does not count as an edit.
+    pinned: bool | None = None
 
     @field_validator("title")
     @classmethod
@@ -64,6 +66,7 @@ async def list_conversations(
     limit: int = Query(default=20, ge=1, le=50),
     cursor: str | None = Query(default=None, max_length=500),
     case_id: UUID | None = None,
+    pinned: bool | None = None,
 ) -> dict:
     try:
         page = await repository.list_conversations(
@@ -71,6 +74,7 @@ async def list_conversations(
             limit=limit,
             cursor=parsed_cursor(cursor),
             case_id=case_id,
+            pinned=pinned,
         )
         return page_payload(page)
     except Exception as exc:
@@ -101,6 +105,7 @@ async def update_conversation(
             title=payload.title,
             case_id=payload.case_id,
             case_id_set="case_id" in payload.model_fields_set,
+            pinned=payload.pinned,
         )
     except Exception as exc:
         raise map_repository_error(exc) from None

@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
 import { SAMPLE_FILE_URL, SAMPLE_QUESTIONS, mediaTypeOf, uploadProblem } from '@/lib/files';
@@ -11,6 +12,7 @@ import { rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AttachButton, saveDraftHandoff } from './chat-files';
 import { Composer } from './composer';
 import { useConversations } from './conversations';
+import { Popover, moveFocus } from './popover';
 
 // Drawn from the labour-law evaluation set so suggestions exercise real coverage.
 const SUGGESTIONS = [
@@ -122,33 +124,12 @@ export function NewChat() {
     }
   };
 
-  const caseSelect = (
-    <label className="flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-line-strong pl-2.5 pr-1 text-[13px] text-fg2">
-      <Icon name="cases" size={15} />
-      <span className="sr-only">Davaya bağla</span>
-      <select
-        value={caseId}
-        onChange={(event) => setCaseId(event.target.value)}
-        className="max-w-[180px] cursor-pointer truncate border-0 bg-transparent py-1 text-[13px] text-fg2 outline-none"
-      >
-        <option value="">Davaya bağla</option>
-        {cases.map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  const caseSelect = <CaseSelect cases={cases} value={caseId} onChange={setCaseId} />;
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <header className="hidden h-14 shrink-0 items-center justify-between px-6 lg:flex">
+      <header className="hidden h-14 shrink-0 items-center px-6 lg:flex">
         <span className="text-sm text-fg2">Yeni sohbet</span>
-        <span className="flex items-center gap-1.5 text-[12.5px] text-fg3">
-          <span className="size-[7px] rounded-full bg-ok" />
-          İş hukuku kaynak dizini
-        </span>
       </header>
 
       <div className="flex grow flex-col items-center px-4 pb-6 pt-12 sm:px-6 lg:pt-[104px]">
@@ -246,5 +227,84 @@ export function NewChat() {
         BekenAI hukuki danışmanlık yerine geçmez. Cevaplar yalnızca doğrulanabilen kaynaklara dayanır.
       </p>
     </div>
+  );
+}
+
+/** Picks the case a new chat belongs to; the case's files are then searched in the chat too. */
+function CaseSelect({ cases, value, onChange }: { cases: LegalCase[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const selected = cases.find((item) => item.id === value) ?? null;
+
+  useEffect(() => {
+    if (!open) return;
+    window.requestAnimationFrame(() =>
+      (listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]') ?? listRef.current?.querySelector<HTMLElement>('[role="option"]'))?.focus(),
+    );
+  }, [open]);
+
+  const choose = (id: string) => {
+    onChange(id);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const option = (id: string, label: string, detail: string | null) => {
+    const active = id === value;
+    return (
+      <button
+        key={id || 'none'}
+        type="button"
+        role="option"
+        aria-selected={active}
+        onClick={() => choose(id)}
+        className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-hover focus-visible:bg-hover"
+      >
+        <span className="flex min-w-0 grow flex-col gap-0.5">
+          <span className={`truncate text-[13px] ${active ? 'font-semibold text-fg' : 'font-medium text-fg'}`}>{label}</span>
+          {detail && <span className="truncate text-xs text-fg3">{detail}</span>}
+        </span>
+        <Icon name="check" size={14} strokeWidth={2.2} className={`mt-0.5 shrink-0 text-accent ${active ? '' : 'invisible'}`} />
+      </button>
+    );
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={selected ? `Bağlı dava: ${selected.name}` : 'Davaya bağla'}
+        onClick={() => setOpen((current) => !current)}
+        className={`flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border px-2.5 text-[13px] transition-colors ${
+          selected ? 'border-file-line bg-file-bg font-medium text-file' : 'border-dashed border-line-strong text-fg2 hover:bg-hover hover:text-fg'
+        }`}
+      >
+        <Icon name="cases" size={15} className="shrink-0" />
+        <span className="truncate">{selected ? selected.name : 'Davaya bağla'}</span>
+        <Icon name="chevDown" size={13} className={`shrink-0 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <Popover open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} placement="bottom-start" className="w-[300px]">
+        <div ref={listRef} role="listbox" aria-label="Dava" onKeyDown={(event) => moveFocus(event, '[role="option"]')} className="flex flex-col">
+          <p className="m-0 px-2.5 pb-1.5 pt-1 text-xs leading-snug text-fg3">Bağlanan davanın dosyaları bu sohbette de aranır.</p>
+          {option('', 'Davaya bağlama', 'Sohbet hiçbir davaya ait olmaz')}
+          {cases.length > 0 && <div className="mx-2.5 my-1 h-px bg-line" />}
+          <div className="flex max-h-[240px] flex-col overflow-y-auto">
+            {cases.map((item) => option(item.id, item.name, item.description))}
+          </div>
+          <div className="mx-2.5 my-1 h-px bg-line" />
+          <Link
+            href="/davalar"
+            className="flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13px] text-fg2 no-underline hover:bg-hover hover:text-fg"
+          >
+            <Icon name="plus" size={14} />
+            Yeni dava oluştur
+          </Link>
+        </div>
+      </Popover>
+    </>
   );
 }
