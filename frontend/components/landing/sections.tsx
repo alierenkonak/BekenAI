@@ -62,7 +62,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
       <div className={`${container} flex h-[72px] items-center gap-3 md:gap-9`}>
-        <Logo size={28} />
+        <Logo size={34} />
         <nav aria-label="Sayfa bölümleri" className="hidden gap-7 text-sm md:flex">
           <a href="#nasil" className="text-fg2 no-underline hover:text-fg">Nasıl çalışır</a>
           <a href="#mimari" className="text-fg2 no-underline hover:text-fg">Mimari</a>
@@ -598,7 +598,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-line">
       <div className={`${container} flex flex-wrap items-center gap-x-7 gap-y-3 pb-10 pt-8 text-[13px] text-fg3`}>
-        <Logo size={22} />
+        <Logo size={28} />
         <span>© 2026 · Demo proje</span>
         <span className="grow">Hukuki danışmanlık yerine geçmez.</span>
         <a href="#mimari" className="text-fg2 no-underline hover:text-fg">Mimari</a>

@@ -65,7 +65,7 @@ function Frame({ children }: { children: ReactNode }) {
           >
             <Icon name="menu" size={20} />
           </button>
-          <Logo href="/sohbet" size={22} className="grow" />
+          <Logo href="/sohbet" size={28} className="grow" />
           <Link
             href="/sohbet"
             aria-label="Yeni sohbet"
