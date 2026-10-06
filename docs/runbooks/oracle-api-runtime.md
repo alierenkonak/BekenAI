@@ -110,3 +110,22 @@ When it fails: npm and CI-only Python fixes are an ordinary pull request. A fix 
 `oracle-model-service.md`), and a Qdrant fix through the stepwise upgrade described there.
 GitHub's own Dependabot alerts cover npm and the direct Python dependencies, not the locked
 transitive ones.
+
+## Retrieval evaluation
+
+`app.chat.retrieval_eval` measures the law search as a chat turn runs it, planner first
+(ADR 0011). It needs the API's environment and the live indexes, so run it on the server as
+the service user, with a report directory the user can write:
+
+```bash
+sudo install -d -o bekenai -g bekenai -m 700 /opt/bekenai/eval
+sudo systemd-run --pipe --wait --uid=bekenai \
+  -p EnvironmentFile=/etc/bekenai/api.env -p WorkingDirectory=/opt/bekenai/current \
+  -E PYTHONPATH=/opt/bekenai/current/backend:/opt/bekenai/current/retrieval/src \
+  /opt/bekenai/venv/bin/python -m app.chat.retrieval_eval \
+  --queries evals/labour_law/queries.v1.jsonl --out /opt/bekenai/eval
+```
+
+The first run plans 72 questions with the query model (about 6 minutes at the free-tier
+rate); the plans are kept in `plans.jsonl`, so later runs call no model. Each run reranks
+every question, about 18 minutes on the 4-core VM, while the API keeps serving.

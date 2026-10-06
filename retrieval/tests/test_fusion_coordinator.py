@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from beken_retrieval.cli import _draft_relevance, _pool_hits
+from beken_retrieval.cli import _pool_hits
 from beken_retrieval.coordinator import (
     DomainSearchCoordinator,
     HybridDomainIndex,
@@ -15,6 +15,7 @@ from beken_retrieval.coordinator import (
 from beken_retrieval.evaluation import (
     load_queries,
     quality_gate,
+    reference_relevance,
     reviewed_queries,
     select_embedding_model,
 )
@@ -211,7 +212,7 @@ def test_candidate_pool_deduplicates_and_records_source_ranks() -> None:
     assert [source["system"] for source in pooled[0]["sources"]] == ["bm25", "bge-m3"]
 
 
-def test_draft_relevance_only_marks_exact_legislation_article_as_high() -> None:
+def testreference_relevance_only_marks_exact_legislation_article_as_high() -> None:
     exact = replace(
         record("labour_law", "İş Kanunu Madde 18"),
         primary_legislation_number="4857",
@@ -224,9 +225,9 @@ def test_draft_relevance_only_marks_exact_legislation_article_as_high() -> None:
         legislation_numbers=("4857",),
     )
 
-    assert _draft_relevance(["4857:18-19"], exact) == 2
-    assert _draft_relevance(["4857:18-19"], cited_elsewhere) == 0
-    assert _draft_relevance(["Yargıtay"], cited_elsewhere) == 1
+    assert reference_relevance(["4857:18-19"], exact) == 2
+    assert reference_relevance(["4857:18-19"], cited_elsewhere) == 0
+    assert reference_relevance(["Yargıtay"], cited_elsewhere) == 1
 
 
 def test_cited_articles_are_looked_up_not_searched() -> None:

@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from beken_retrieval.coordinator import DomainSearchCoordinator
-from beken_retrieval.models import SearchFilters
+from beken_retrieval.models import ChunkRecord, SearchFilters
+from beken_retrieval.scope import article_in_allowlist
+from beken_retrieval.tokenization import normalize_for_lexical_search
 
 METRIC_VERSION = "retrieval-metrics-v2"
 RECALL_BASIS = "reviewed_positive_pool"
@@ -57,6 +59,46 @@ def load_queries(path: Path) -> list[EvaluationQuery]:
             )
         )
     return queries
+
+
+def reference_relevance(expected_refs: list[str], record: ChunkRecord) -> int:
+    """2 when the passage carries an expected article of the expected law; 1 for a weaker
+    match (the law without an article, a Yargıtay decision, a regulation).
+
+    A reference-match hint, not semantic review; generated labels remain pending.
+    """
+    best = 0
+    title = normalize_for_lexical_search(record.title)
+    for reference in expected_refs:
+        source, _, article_expression = reference.partition(":")
+        source = source.strip()
+        article_expression = article_expression.strip()
+        if not source:
+            continue
+        folded_source = normalize_for_lexical_search(source)
+        if folded_source == "yargıtay" and record.document_type == "court_decision":
+            best = max(best, 1)
+        elif folded_source == "yönetmelik" and record.document_type == "regulation":
+            best = max(best, 1)
+        elif source.isdigit():
+            # Numbers in titles or related_legislation may only be citations.
+            # Require the actual source identity before checking its provisions.
+            if source != record.primary_legislation_number:
+                continue
+            if not article_expression or not record.article_labels:
+                best = max(best, 1)
+                continue
+            expected_articles = tuple(
+                value.strip().upper() for value in article_expression.split(",") if value.strip()
+            )
+            if any(
+                article_in_allowlist(label, expected_articles) for label in record.article_labels
+            ):
+                return 2
+        elif folded_source in title:
+            # A matching document name alone cannot establish passage relevance.
+            best = max(best, 1)
+    return best
 
 
 def reviewed_queries(queries: list[EvaluationQuery]) -> list[EvaluationQuery]:

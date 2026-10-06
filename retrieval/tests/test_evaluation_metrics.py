@@ -3,8 +3,13 @@ from math import log2
 
 import pytest
 
-from beken_retrieval.cli import _draft_relevance
-from beken_retrieval.evaluation import EvaluationQuery, RelevanceLabel, evaluate, quality_gate
+from beken_retrieval.evaluation import (
+    EvaluationQuery,
+    RelevanceLabel,
+    evaluate,
+    quality_gate,
+    reference_relevance,
+)
 from beken_retrieval.models import ChunkRecord, SearchHit
 
 
@@ -157,14 +162,14 @@ def test_reports_identify_corrected_pooled_recall_definition():
     ],
 )
 def test_draft_labels_require_source_and_article_match(references, changes, expected):
-    assert _draft_relevance(references, record(**changes)) == expected
+    assert reference_relevance(references, record(**changes)) == expected
 
 
 def test_reference_order_cannot_hide_a_later_exact_match():
     item = record()
-    assert _draft_relevance(["4857:70", "4857:18"], item) == 2
-    assert _draft_relevance(["4857:18", "4857:70"], item) == 2
-    assert _draft_relevance(["4857", "4857:18"], item) == 2
+    assert reference_relevance(["4857:70", "4857:18"], item) == 2
+    assert reference_relevance(["4857:18", "4857:70"], item) == 2
+    assert reference_relevance(["4857", "4857:18"], item) == 2
 
 
 def reports():
