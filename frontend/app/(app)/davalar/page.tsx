@@ -120,7 +120,10 @@ export default function CasesPage() {
             className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5"
           >
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Dava adı
+              <span className="flex justify-between">
+                Dava adı
+                <span className="font-mono text-[11.5px] font-normal text-fg3">{name.length} / 160</span>
+              </span>
               <input
                 autoFocus
                 required
@@ -132,7 +135,12 @@ export default function CasesPage() {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Açıklama <span className="font-normal text-fg3">(isteğe bağlı)</span>
+              <span className="flex justify-between">
+                <span>
+                  Açıklama <span className="font-normal text-fg3">(isteğe bağlı)</span>
+                </span>
+                <span className="font-mono text-[11.5px] font-normal text-fg3">{description.length} / 2000</span>
+              </span>
               <textarea
                 maxLength={2000}
                 rows={2}
@@ -183,7 +191,9 @@ export default function CasesPage() {
           {visible.map((item) => (
             <div key={item.id} className="grid grid-cols-[minmax(0,1fr)_44px] items-center border-b border-line pl-5 pr-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_170px_44px]">
               <Link href={`/davalar/${item.id}`} className="flex min-w-0 flex-col gap-1 py-3.5 pr-4 text-fg no-underline">
-                <span className="text-sm font-medium">{item.name}</span>
+                <span className="line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]" title={item.name}>
+                  {item.name}
+                </span>
                 <span className="truncate text-[13px] text-fg3">{item.description || 'Açıklama eklenmedi'}</span>
               </Link>
               <span className="hidden text-[13.5px] text-fg2 sm:block">{now ? formatRelativeDay(item.updated_at, now) : ''}</span>

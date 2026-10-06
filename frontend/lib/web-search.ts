@@ -53,4 +53,4 @@ export function readWebSearch(conversationId: string): boolean {
 }
 
 export const WEB_SEARCH_HINT =
-  'Cevap önce her zamanki gibi BekenAI’nin mevzuat, içtihat ve dosya kaynaklarıyla hazırlanır. Ardından aynı soru web’de de aranır; bulunanlar (cevabı destekleyen ya da ondan farklı bilgiler) en alta ayrı ve etiketli bir bölüm olarak eklenir. Web sayfaları resmî kaynak değildir.';
+  'Cevap yine kaynaklarla yazılır; web’de bulunanlar en alta ayrı ve etiketli bir bölüm olarak eklenir. Web sayfaları resmî kaynak değildir.';

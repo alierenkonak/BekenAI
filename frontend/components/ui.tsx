@@ -9,6 +9,7 @@ function Switch({
   checked,
   onChange,
   label,
+  shortLabel,
   tone,
   compact = false,
   disabled = false,
@@ -17,6 +18,8 @@ function Switch({
   checked: boolean;
   onChange: (value: boolean) => void;
   label: string;
+  /** Shown instead of the label on narrow screens. */
+  shortLabel?: string;
   tone: keyof typeof SWITCH_TONES;
   compact?: boolean;
   disabled?: boolean;
@@ -39,7 +42,14 @@ function Switch({
       >
         <span className="size-3 rounded-full bg-surface" />
       </span>
-      {label}
+      {shortLabel ? (
+        <>
+          <span className="sm:hidden">{shortLabel}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -50,23 +60,25 @@ type HintedSwitchProps = {
   hintId: string;
   hint: ReactNode;
   label?: string;
+  shortLabel?: string;
   compact?: boolean;
   disabled?: boolean;
 };
 
 /**
- * A switch with a hint shown on hover or keyboard focus. The hint is positioned against
- * the nearest positioned ancestor (the composer), so it never spills off a narrow screen.
+ * A switch with a short hint shown beside it on hover or keyboard focus. Narrow screens, which
+ * have no room beside the switch, show it above instead.
  */
 function HintedSwitch({ hintId, hint, label, tone, ...props }: HintedSwitchProps & { label: string; tone: keyof typeof SWITCH_TONES }) {
   return (
-    <span className="group flex">
+    <span className="group relative flex">
       <Switch {...props} label={label} tone={tone} describedBy={hintId} />
       <span
         role="tooltip"
         id={hintId}
-        className="pointer-events-none invisible absolute bottom-full left-3 z-30 mb-2 w-[min(360px,calc(100%-24px))] rounded-[10px] bg-inv px-3.5 py-2.5 text-[12.5px] font-normal leading-normal text-inv-fg opacity-0 shadow-lg transition-opacity group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100"
+        className="pointer-events-none invisible absolute bottom-full left-0 z-30 mb-2 w-60 rounded-lg bg-inv px-3 py-2 text-xs font-normal leading-snug text-inv-fg opacity-0 shadow-lg transition-opacity delay-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 sm:bottom-auto sm:left-full sm:top-1/2 sm:mb-0 sm:ml-2 sm:-translate-y-1/2"
       >
+        <span aria-hidden="true" className="absolute right-full top-1/2 hidden -translate-y-1/2 border-[5px] border-transparent border-r-inv sm:block" />
         {hint}
       </span>
     </span>

@@ -3,25 +3,25 @@ import type { IconName } from '@/components/icons';
 export const HERO_FACTS = ['Hibrit arama', 'İddia bazlı doğrulama', 'Sürümlü kaynak kaydı'];
 
 export const TECH = [
-  ['Next.js', 'Arayüz'],
-  ['React', 'Bileşenler'],
+  ['Next.js', 'React arayüzü · Vercel'],
   ['Tailwind CSS', 'Stil sistemi'],
   ['FastAPI', 'API ve worker'],
   ['PostgreSQL', 'Sürümlü hukuk şeması'],
   ['Supabase', 'Kimlik, veri, depolama'],
   ['Qdrant', 'Vektör arama'],
-  ['BM25', 'Anahtar kelime arama'],
+  ['BM25', 'Türkçe kök bulmalı kelime arama'],
   ['BGE-M3', 'Çok dilli gömme modeli'],
-  ['BGE Reranker v2', 'Yeniden sıralama'],
-  ['Gemini', 'Yazım ve doğrulama'],
-  ['Oracle Cloud', 'Barındırma'],
+  ['BGE Reranker v2', 'int8 ONNX yeniden sıralama'],
+  ['Gemini', 'Planlama, yazım, doğrulama'],
+  ['Tavily', 'İsteğe bağlı web araması'],
+  ['Oracle Cloud', 'Arama ve model sunucusu'],
 ] as const;
 
 export const METRICS = [
   ['6', 'aşamalı cevap hattı: toplamadan doğrulamaya'],
   ['25', 'aday pasaj, her soru için yeniden sıralanır'],
-  ['1024', 'boyutlu anlam vektörleri (BGE-M3)'],
-  ['150+', 'otomatik test, CI’da her değişiklikte çalışır'],
+  ['%99', 'test sorusunda beklenen kanun maddesi ilk 25 sonuçta (72 soru)'],
+  ['450+', 'otomatik test, CI’da her değişiklikte çalışır'],
 ] as const;
 
 export const APPROACHES = [
@@ -42,16 +42,16 @@ export const APPROACHES = [
 ] as const;
 
 export const OUR_STEPS: { title: string; phase: 'arama' | 'seçim' | 'yazım' | 'doğrulama'; body: string }[] = [
-  { title: 'Sorgu hazırlama', phase: 'arama', body: 'Uzun mesajlarda soru cümleleri ve hukuki terimler öne alınarak en fazla 500 karakterlik bir arama sorgusu çıkarılır.' },
-  { title: 'Anahtar kelime araması', phase: 'arama', body: 'BM25; “ihbar”, “fesih” gibi terimleri birebir eşleştirir.' },
+  { title: 'Sorgu planlama', phase: 'arama', body: 'Soru, sohbetin önceki mesajlarıyla birlikte tek başına anlaşılır bir arama sorgusuna çevrilir; soruyu düzenleyen en fazla 3 kanun maddesi de belirlenir.' },
+  { title: 'Anahtar kelime araması', phase: 'arama', body: 'BM25 kelimeleri ilk 5 harfiyle eşleştirir; “savunmam” ile “savunmasını” aynı kökten bulunur.' },
   { title: 'Anlam araması', phase: 'arama', body: 'BGE-M3 vektörleri, farklı kelimelerle sorulan aynı soruyu da yakalar.' },
   { title: 'RRF birleştirme', phase: 'arama', body: 'İki sıralama, pasajların konumlarına göre tek listede birleştirilir.' },
-  { title: 'Yeniden sıralama', phase: 'seçim', body: 'En iyi 25 aday, soruyla birlikte okunarak yeniden puanlanır.' },
-  { title: 'Bağlam seçimi', phase: 'seçim', body: 'Pasajlar token bütçesine göre seçilir; hiç birincil kaynak sığmazsa cevap üretilmez.' },
-  { title: 'Yapılandırılmış yazım', phase: 'yazım', body: 'Model her iddiayı, dayandığı kaynak kimlikleriyle birlikte JSON şemasına göre yazar.' },
-  { title: 'Atıf bütünlüğü', phase: 'yazım', body: 'Var olmayan ya da yanlış kanaldan kaynak gösteren cevap reddedilir ve yedek modelle yeniden yazılır.' },
+  { title: 'Yeniden sıralama', phase: 'seçim', body: 'En iyi 25 aday ve planlamada belirlenen maddeler, soruyla birlikte okunarak yeniden puanlanır.' },
+  { title: 'Bağlam seçimi', phase: 'seçim', body: 'Pasajlar token bütçesine göre seçilir: önce dosyalarınız, sonra mevzuat ve içtihat, kalan yere doktrin. Kanun pasajlarına resmî değişiklik notları eklenir.' },
+  { title: 'Yapılandırılmış yazım', phase: 'yazım', body: 'Model her iddiayı, dayandığı kaynak kimlikleriyle birlikte JSON şemasına göre yazar; model hata verirse yedek model devralır.' },
+  { title: 'Atıf bütünlüğü', phase: 'yazım', body: 'Bir cümlenin gösteremeyeceği kaynak kimlikleri, yani var olmayan ya da yanlış kanaldan olanlar, silinir.' },
   { title: 'İddia doğrulama', phase: 'doğrulama', body: 'Her iddia–pasaj çifti ayrı bir modelle “destekliyor”, “kısmen” veya “desteklemiyor” olarak etiketlenir.' },
-  { title: 'Filtreleme ve kayıt', phase: 'doğrulama', body: 'Desteklenmeyen iddialar atılır; cevap atıflar ve kaynak sürümleriyle kaydedilir. Hiç iddia kalmazsa “yeterli kaynak yok” döner.' },
+  { title: 'İşaretleme ve kayıt', phase: 'doğrulama', body: 'Desteklenmeyen atıflar kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. Cevap atıflar ve kaynak sürümleriyle kaydedilir.' },
 ];
 
 export const PIPELINE = [
@@ -73,15 +73,15 @@ export const PIPELINE = [
     title: 'İlgili pasajları bulur',
     en: 'Hybrid retrieval',
     plain: 'Soru hem kelime kelime hem de anlamca aranır. “İşten çıkarıldım” diye soran biri, “fesih” geçen maddeyi de bulur.',
-    tech: 'BM25 anahtar kelime araması ile BGE-M3 yoğun vektör araması birlikte çalışır; sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
+    tech: 'BM25 anahtar kelime araması (Türkçe ekler için kelimelerin ilk 5 harfi) ile BGE-M3 yoğun vektör araması birlikte çalışır; sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
     tags: ['BM25', 'BGE-M3', 'Qdrant', 'RRF'],
   },
   {
     title: 'En alakalıları seçer',
     en: 'Reranking',
     plain: 'Bulunan 25 aday pasaj daha güçlü bir modelle tek tek puanlanır; soruya en iyi cevap veren pasajlar öne çıkar.',
-    tech: 'Cross-encoder ile yeniden sıralama. Gömme ve sıralama modelleri, yalnızca iç ağdan erişilen ayrı bir model servisinde çalışır.',
-    tags: ['bge-reranker-v2-m3', 'Model servisi'],
+    tech: 'Cross-encoder ile yeniden sıralama; model int8 ONNX’e çevrildi ve 3,3 kat hızlandı. Planlamada belirlenen kanun maddeleri de adaylara katılır. Gömme ve sıralama modelleri, yalnızca iç ağdan erişilen ayrı bir model servisinde çalışır.',
+    tags: ['bge-reranker-v2-m3', 'ONNX Runtime', 'Model servisi'],
   },
   {
     title: 'Kaynaklara dayanarak yazar',
@@ -93,9 +93,9 @@ export const PIPELINE = [
   {
     title: 'Her iddiayı doğrular',
     en: 'Verification',
-    plain: 'Ayrı bir model, her iddianın gerçekten kaynağında yazıp yazmadığını kontrol eder. Desteklenmeyen iddia silinir; hiç iddia kalmazsa sistem “yeterli kaynak yok” der.',
-    tech: 'Her iddia–pasaj çifti supported, partial veya unsupported olarak sınıflandırılır. Atıf bütünlüğü kontrolü geçersiz kaynak kimliklerini reddeder.',
-    tags: ['Claim verification', 'insufficient_evidence'],
+    plain: 'Ayrı bir model, her iddianın gerçekten kaynağında yazıp yazmadığını kontrol eder. Desteklenmeyen atıf kaldırılır; dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir, böylece hangi cümleye güvenebileceğinizi görürsünüz.',
+    tech: 'Her iddia–pasaj çifti supported, partial veya unsupported olarak sınıflandırılır. Atıf bütünlüğü kontrolü, bir cümlenin gösteremeyeceği kaynak kimliklerini ayıklar.',
+    tags: ['Claim verification', 'unverified'],
   },
 ];
 
@@ -110,7 +110,10 @@ export const JOURNEY = [
 export const ADRS = [
   { id: 'ADR 0001', title: 'Modüler monolit', body: 'Tek geliştirici için mikroservis yükü gereksizdi. Uygulama tek parça dağıtılır, ama arama, içe aktarma ve API ayrı paketlerdir; gerektiğinde ayrılabilir.' },
   { id: 'ADR 0002', title: 'Ortak ve özel veri sınırı', body: 'Kullanıcı dosyaları ile ortak hukuk kaynakları ayrı depolama ve vektör sınırlarında tutulur. Bir müvekkil belgesinin başkasının cevabına karışması mimari olarak engellenir.' },
-  { id: 'ADR 0003', title: 'Model sağlayıcıdan bağımsızlık', body: 'Dil modeli çağrıları bir arayüzün arkasındadır. Model ya da sağlayıcı değişse bile arama ve atıf çekirdeği aynı kalır.' },
+  { id: 'ADR 0005', title: 'int8 ONNX yeniden sıralama', body: 'Yeniden sıralama modeli int8 ONNX’e çevrildi. 40 soruluk ölçümde yeniden sıralama 3,3 kat hızlandı; beklenen maddeyi bulma oranı değişmedi.' },
+  { id: 'ADR 0006', title: 'Yürürlük kontrolü', body: 'Kanun pasajları resmî değişiklik notlarını taşır. Olaydan sonra değişen hüküm ve dayandığı madde sonradan değişen Yargıtay kararı cevapta uyarıyla işaretlenir.' },
+  { id: 'ADR 0009', title: 'Süreler kodla hesaplanır', body: 'Dosya analizindeki kritik süreleri model değil kod hesaplar; tarihler dosyadan okunur ve HMK’nın süre kuralları uygulanır.' },
+  { id: 'ADR 0010 · 0011', title: 'Ölçerek iyileştirme', body: 'Türkçe kök bulma ve planlayıcının madde ipuçları, 72 soruda beklenen maddeyi ilk 25’te bulmayı %92’den %97’ye çıkardı. İşe yaramayan seçenekler de kayda geçti.' },
 ];
 
 export const GLOSSARY = [
@@ -122,9 +125,9 @@ export const GLOSSARY = [
 ] as const;
 
 export const COVERAGE = [
-  { title: 'Mevzuat', tone: 'bg-accent', items: ['İş Kanunu', 'Kıdem tazminatı düzenlemesi', 'İş Mahkemeleri Kanunu', 'Türk Borçlar Kanunu', 'Hukuk Muhakemeleri Kanunu', 'Arabuluculuk Kanunu'] },
-  { title: 'İçtihat', tone: 'bg-fg2', items: ['Yargıtay kararları', 'İş hukuku uyuşmazlıkları'] },
-  { title: 'Doktrin', tone: 'bg-doc', items: ['İzinli iş hukuku ders notu', 'Birincil kaynaklardan ayrı kanalda'] },
+  { title: 'Mevzuat', tone: 'bg-accent', items: ['25 kanun ve 21 yönetmelik', 'İş Kanunu ve kıdem tazminatı düzenlemesi', 'İş Mahkemeleri Kanunu', 'Türk Borçlar Kanunu', 'Hukuk Muhakemeleri Kanunu', 'Sosyal Sigortalar Kanunu'] },
+  { title: 'İçtihat', tone: 'bg-fg2', items: ['49 Yargıtay kararı', 'İş hukuku uyuşmazlıkları', 'Dayandığı maddelerin güncelliği kontrol edilir'] },
+  { title: 'Doktrin', tone: 'bg-doc', items: ['İzinli iş hukuku ders notu', 'Birincil kaynaklardan ayrı kanalda', 'Her soruda aranır'] },
 ];
 
 export const SECURITY: { icon: IconName; title: string; body: string }[] = [
@@ -132,7 +135,7 @@ export const SECURITY: { icon: IconName; title: string; body: string }[] = [
   { icon: 'box', title: 'Çalışma alanı izolasyonu', body: 'Her özel kayıt bir çalışma alanına bağlıdır; sorgular bu sınırın dışına çıkamaz.' },
   { icon: 'shield', title: 'Ortak havuza karışmaz', body: 'Davalara yüklenen dosyalar ortak kaynak dizinine hiçbir zaman yazılmaz.' },
   { icon: 'lock', title: 'Doğrulanmış bağlantılar', body: 'Veritabanı bağlantıları TLS ve tam sertifika doğrulamasıyla kurulur.' },
-  { icon: 'pin', title: 'Sabitlenmiş bağımlılıklar', body: 'Paketler hash ile kilitlidir; CI her değişiklikte güvenlik taraması çalıştırır.' },
+  { icon: 'pin', title: 'Sabitlenmiş bağımlılıklar', body: 'Paketler hash ile kilitlidir; güvenlik taraması her değişiklikte ve ayrıca her hafta çalışır.' },
   { icon: 'eyeOff', title: 'Sızıntısız kayıtlar', body: 'Özel dosya yolları ve istek adresleri uygulama kayıtlarına yazılmaz.' },
 ];
 
@@ -151,6 +154,10 @@ export const FAQ = [
     q: 'Kendi dosyamı yükleyebilir miyim?',
     a: 'Evet. Bir sohbete ya da davaya PDF, Word (DOCX) veya TXT ekleyebilirsiniz. Dosya işlendikten sonra sorular dosyadaki pasaja sayfa atfıyla cevaplanır; dosyada yazanlar mevzuat ve içtihattan ayrı bir bölümde gösterilir. Dosyalar yalnızca sizin çalışma alanınızda tutulur. Elinizde dosya yoksa demo bölümündeki kurgusal örnek dava dosyasını kullanabilirsiniz.',
   },
-  { q: 'Cevap bulamazsa ne olur?', a: 'Soruyu destekleyen yeterli birincil kaynak yoksa BekenAI cevap üretmez ve bunu açıkça belirtir.' },
+  {
+    q: 'Derin araştırma ve dosya analizi nedir?',
+    a: 'Derin araştırma, soruyu en fazla 5 alt soruya böler, her birini ayrı arar, eksik kalanları ikinci turda tamamlar ve bulunan kararların dayandığı maddeleri de getirir; sonuç başlıklı bir rapordur. Dosya analizi bir davanın bütün dosyalarını okur, hukuki konuları çıkarır, her konuyu mevzuat, içtihat ve doktrinle karşılaştırır ve kritik süreleri hesaplar.',
+  },
+  { q: 'Cevap bulamazsa ne olur?', a: 'İlgili kaynak bulunamazsa BekenAI tahmin yürütmez; bunu açıkça söyler ve isterseniz soruyu web’de, cevaptan ayrı ve etiketli bir bölümde arar. Kaynakla doğrulanamayan cümleler de cevapta işaretlenir.' },
   { q: 'Cevap neden birkaç dakika sürebiliyor?', a: 'Her iddia ayrı bir doğrulama adımından geçer. Bekleme sırasında işin hangi adımda olduğunu görürsünüz.' },
 ];

@@ -6,6 +6,7 @@ import type {
   ChatCapabilities,
   ChatEnqueued,
   Conversation,
+  FileStorage,
   FileMediaType,
   GenerationDetail,
   LegalCase,
@@ -80,15 +81,21 @@ function query(params: Record<string, string | number | null | undefined>): stri
 
 export const api = {
   bootstrap: () => request<unknown>('/me/bootstrap', { method: 'POST' }),
+  storage: () => request<FileStorage>('/me/storage'),
 
-  listConversations: (params: { caseId?: string; cursor?: string | null; limit?: number } = {}) =>
+  listConversations: (params: { caseId?: string; cursor?: string | null; limit?: number; pinned?: boolean } = {}) =>
     request<Page<Conversation>>(
-      `/conversations${query({ case_id: params.caseId, cursor: params.cursor, limit: params.limit ?? 50 })}`,
+      `/conversations${query({
+        case_id: params.caseId,
+        cursor: params.cursor,
+        limit: params.limit ?? 50,
+        pinned: params.pinned === undefined ? undefined : String(params.pinned),
+      })}`,
     ),
   getConversation: (id: string) => request<Conversation>(`/conversations/${id}`),
   createConversation: (payload: { title: string; case_id: string | null }) =>
     request<Conversation>('/conversations', { method: 'POST', body: payload }),
-  updateConversation: (id: string, patch: { title?: string; case_id?: string | null }) =>
+  updateConversation: (id: string, patch: { title?: string; case_id?: string | null; pinned?: boolean }) =>
     request<Conversation>(`/conversations/${id}`, { method: 'PATCH', body: patch }),
   deleteConversation: (id: string) => request<void>(`/conversations/${id}`, { method: 'DELETE' }),
   listMessages: (id: string, cursor?: string | null) =>

@@ -369,15 +369,66 @@ async def test_quota_charges_verified_files_their_real_size() -> None:
         await repository.bootstrap(user_id, "quota4@example.test")
         case = await repository.create_case(user_id, "Kota", None)
         file = await _intent(repository, user_id, case_id=case["id"])
+        assert await repository.file_storage_bytes(user_id) == MAX_FILE
         await _verified(repository, user_id, file)
+        assert await repository.file_storage_bytes(user_id) == 2_048
         # Two more 50 MB reservations fit only because the verified file counts 2 KB.
         await _intent(repository, user_id, case_id=case["id"])
+        assert await repository.file_storage_bytes(user_id) == 2_048 + MAX_FILE
         with pytest.raises(ConflictError, match="user_file_quota_exceeded"):
             await repository.create_file_intent(
                 user_id, case_id=case["id"], original_name="b.pdf", safe_name="b.pdf",
                 media_type="application/pdf", size_bytes=MAX_FILE, reservation_bytes=MAX_FILE,
                 bucket="case-files", quota_bytes=QUOTA,
             )
+    finally:
+        _cleanup(user_id)
+
+
+@pytest.mark.asyncio
+async def test_pinning_keeps_a_chat_in_place_and_splits_the_lists() -> None:
+    user_id = uuid4()
+    repository = _repository()
+
+    async def ids(pinned):
+        page = await repository.list_conversations(
+            user_id, limit=10, cursor=None, case_id=None, pinned=pinned
+        )
+        return [item["id"] for item in page.items]
+
+    async def update(conversation_id, **changes):
+        return await repository.update_conversation(
+            user_id,
+            conversation_id,
+            title=changes.get("title"),
+            case_id=None,
+            case_id_set=False,
+            pinned=changes.get("pinned"),
+        )
+
+    try:
+        await repository.bootstrap(user_id, "pins@example.test")
+        first = await repository.create_conversation(
+            user_id, title="Birinci", domain_code="labour_law", case_id=None
+        )
+        second = await repository.create_conversation(
+            user_id, title="İkinci", domain_code="labour_law", case_id=None
+        )
+
+        pinned = await update(first["id"], pinned=True)
+        assert pinned["pinned_at"] is not None
+        # Pinning is not an edit: the chat keeps its place in the history.
+        assert pinned["updated_at"] == first["updated_at"]
+        assert (await update(first["id"], pinned=True))["pinned_at"] == pinned["pinned_at"]
+        assert await ids(True) == [first["id"]]
+        assert await ids(False) == [second["id"]]
+        assert set(await ids(None)) == {first["id"], second["id"]}
+
+        renamed = await update(first["id"], title="Yeni ad")
+        assert renamed["pinned_at"] == pinned["pinned_at"]
+        assert renamed["updated_at"] > first["updated_at"]
+        assert (await update(first["id"], pinned=False))["pinned_at"] is None
+        assert await ids(True) == []
     finally:
         _cleanup(user_id)
 

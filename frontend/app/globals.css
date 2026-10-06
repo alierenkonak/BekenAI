@@ -19,6 +19,13 @@
   --inv-fg: #ffffff;
   --dot: #7c9bff;
   --accent: #2b59c3;
+  /* Logo (brand.tsx): an answer bubble with a cited line. */
+  --logo-tile: #121212;
+  --logo-tile-line: transparent;
+  --logo-line: #f5f1e8;
+  --logo-spark: #6c8cf5;
+  --logo-word: #121212;
+  --logo-ai: #2b59c3;
   --accent-bg: #eef2fc;
   --accent-line: #c5d3f4;
   --doc: #a7520a;
@@ -58,6 +65,10 @@
   --inv-fg: #0e0e10;
   --dot: #2b59c3;
   --accent: #8ea8ff;
+  --logo-tile: #1d2130;
+  --logo-tile-line: #2e3550;
+  --logo-word: #f5f1e8;
+  --logo-ai: #6c8cf5;
   --accent-bg: #1a2140;
   --accent-line: #34437a;
   --doc: #f0b060;
@@ -136,13 +147,41 @@ body {
   color: var(--fg);
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+/* In the base layer, so a field that draws its own focus state (outline-none on a text
+   field inside a framed box) is not given a second ring by this rule. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Tailwind 4 leaves buttons with the default cursor; anything clickable shows a hand. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='menuitem'],
+  [role='option'],
+  summary,
+  select:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 summary::-webkit-details-marker {
   display: none;
+}
+
+/* Row actions (the chat "…" menu) appear on hover, for the open row and on focus. Screens
+   that cannot hover always show them. */
+@media (hover: hover) {
+  .hover-reveal {
+    opacity: 0;
+  }
+  .group:hover .hover-reveal,
+  .group:focus-within .hover-reveal,
+  .group[data-active='true'] .hover-reveal,
+  .hover-reveal[aria-expanded='true'] {
+    opacity: 1;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
