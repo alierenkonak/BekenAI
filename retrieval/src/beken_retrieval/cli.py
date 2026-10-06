@@ -19,10 +19,11 @@ from beken_retrieval.evaluation import (
     load_queries,
     load_report,
     quality_gate,
+    reference_relevance,
     write_report,
 )
 from beken_retrieval.model_catalog import ModelCatalog
-from beken_retrieval.models import ChunkRecord, SearchFilters
+from beken_retrieval.models import SearchFilters
 from beken_retrieval.onnx_export import export_reranker
 from beken_retrieval.postgres import PostgresCorpusRepository
 from beken_retrieval.profile import RetrievalProfileCatalog
@@ -34,8 +35,7 @@ from beken_retrieval.qdrant_store import (
 )
 from beken_retrieval.registry import FilesystemIndexRegistry, write_active_manifest
 from beken_retrieval.remote_inference import RemoteDenseEncoder, RemoteInferenceClient
-from beken_retrieval.scope import article_in_allowlist, load_scope
-from beken_retrieval.tokenization import normalize_for_lexical_search
+from beken_retrieval.scope import load_scope
 
 
 def _scope_path(settings: RetrievalSettings, value: Path) -> Path:
@@ -335,42 +335,6 @@ def activate_dense(args: argparse.Namespace, settings: RetrievalSettings) -> int
     return 0
 
 
-def _draft_relevance(expected_refs: list[str], record: ChunkRecord) -> int:
-    """Reference-match hint, not semantic review; generated labels remain pending."""
-    best = 0
-    title = normalize_for_lexical_search(record.title)
-    for reference in expected_refs:
-        source, _, article_expression = reference.partition(":")
-        source = source.strip()
-        article_expression = article_expression.strip()
-        if not source:
-            continue
-        folded_source = normalize_for_lexical_search(source)
-        if folded_source == "yargıtay" and record.document_type == "court_decision":
-            best = max(best, 1)
-        elif folded_source == "yönetmelik" and record.document_type == "regulation":
-            best = max(best, 1)
-        elif source.isdigit():
-            # Numbers in titles or related_legislation may only be citations.
-            # Require the actual source identity before checking its provisions.
-            if source != record.primary_legislation_number:
-                continue
-            if not article_expression or not record.article_labels:
-                best = max(best, 1)
-                continue
-            expected_articles = tuple(
-                value.strip().upper() for value in article_expression.split(",") if value.strip()
-            )
-            if any(
-                article_in_allowlist(label, expected_articles) for label in record.article_labels
-            ):
-                return 2
-        elif folded_source in title:
-            # A matching document name alone cannot establish passage relevance.
-            best = max(best, 1)
-    return best
-
-
 def _dense_collection(scope, spec, record_count: int) -> str:
     version_seed = f"{scope.manifest_hash}:{spec.revision}:{record_count}"
     index_version = hashlib.sha256(version_seed.encode()).hexdigest()[:16]
@@ -460,7 +424,7 @@ def draft_labels(args: argparse.Namespace, settings: RetrievalSettings) -> int:
             query["labels"] = [
                 {
                     "chunk_id": item["record"].chunk_id,
-                    "relevance": _draft_relevance(expected_refs, item["record"]),
+                    "relevance": reference_relevance(expected_refs, item["record"]),
                     "review_status": "pending",
                     "candidate_rank": rank,
                     "candidate_score": item["pool_score"],
