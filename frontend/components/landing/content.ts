@@ -18,7 +18,7 @@ export const TECH = [
 ] as const;
 
 export const METRICS = [
-  ['6', 'aşamalı cevap hattı: toplamadan doğrulamaya'],
+  ['7', 'adımlı hat: kaynakları toplamaktan iddiaları doğrulamaya'],
   ['25', 'aday pasaj, her soru için yeniden sıralanır'],
   ['%99', 'test sorusunda beklenen kanun maddesi ilk 25 sonuçta (72 soru)'],
   ['450+', 'otomatik test, CI’da her değişiklikte çalışır'],
@@ -54,8 +54,10 @@ export const OUR_STEPS: { title: string; phase: 'arama' | 'seçim' | 'yazım' | 
   { title: 'İşaretleme ve kayıt', phase: 'doğrulama', body: 'Desteklenmeyen atıflar kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. Cevap atıflar ve kaynak sürümleriyle kaydedilir.' },
 ];
 
-export const PIPELINE = [
+/** Steps 1–3 run once, when sources are added; steps 4–7 run for every question. */
+export const PIPELINE: { title: string; en: string; phase: 'hazırlık' | 'soru'; plain: string; tech: string; tags: string[] }[] = [
   {
+    phase: 'hazırlık',
     title: 'Kaynakları toplar',
     en: 'Ingestion',
     plain: 'Kanunlar, Yargıtay kararları ve doktrin sisteme yüklenir. Her güncelleme ayrı bir sürüm olarak saklanır; eski bir cevabın hangi kaynağa dayandığı kaybolmaz.',
@@ -63,6 +65,7 @@ export const PIPELINE = [
     tags: ['Python', 'Supabase Storage', 'PostgreSQL'],
   },
   {
+    phase: 'hazırlık',
     title: 'Metni parçalara ayırır',
     en: 'Chunking',
     plain: 'Belgeler madde, fıkra ve bent yapısı korunarak küçük parçalara bölünür. Böylece cevap belgenin tamamına değil, tam ilgili pasaja işaret eder.',
@@ -70,13 +73,23 @@ export const PIPELINE = [
     tags: ['Yapı farkında parser', 'Madde sürümleri'],
   },
   {
-    title: 'İlgili pasajları bulur',
-    en: 'Hybrid retrieval',
-    plain: 'Soru hem kelime kelime hem de anlamca aranır. “İşten çıkarıldım” diye soran biri, “fesih” geçen maddeyi de bulur.',
-    tech: 'BM25 anahtar kelime araması (Türkçe ekler için kelimelerin ilk 5 harfi) ile BGE-M3 yoğun vektör araması birlikte çalışır; sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
-    tags: ['BM25', 'BGE-M3', 'Qdrant', 'RRF'],
+    phase: 'hazırlık',
+    title: 'Dizine ekler',
+    en: 'Embedding & indexing',
+    plain: 'Her parça iki dizine yazılır: kelimeleriyle bulunabilsin diye bir kelime dizinine, anlamıyla bulunabilsin diye bir vektör dizinine. Vektör, parçanın anlamını sayılarla özetler; benzer anlamlı metinlerin vektörleri birbirine yakın düşer.',
+    tech: 'BGE-M3 her parçayı 1024 boyutlu bir vektöre çevirir (ONNX, ayrı model servisi); vektörler Qdrant’a yazılır. BM25 dizini kanunlarda Türkçe ekler için kelimelerin ilk 5 harfiyle kurulur. Her dizin hangi kaynak sürümüyle kurulduğunu kaydeder.',
+    tags: ['BGE-M3', 'Qdrant', 'BM25', 'Embedding'],
   },
   {
+    phase: 'soru',
+    title: 'İlgili pasajları bulur',
+    en: 'Hybrid retrieval',
+    plain: 'Soru önce sohbetin geçmişiyle birlikte tek başına anlaşılır bir arama sorgusuna çevrilir. Sonra hem kelime kelime hem de anlamca aranır: “işten çıkarıldım” diye soran biri, “fesih” geçen maddeyi de bulur.',
+    tech: 'Gemini sorguyu yazar ve soruyu düzenleyen en fazla 3 kanun maddesini önerir. Sorgu da BGE-M3 ile vektöre çevrilir; BM25 ve vektör araması birlikte çalışır, sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
+    tags: ['Sorgu planlama', 'BM25', 'BGE-M3', 'RRF'],
+  },
+  {
+    phase: 'soru',
     title: 'En alakalıları seçer',
     en: 'Reranking',
     plain: 'Bulunan 25 aday pasaj daha güçlü bir modelle tek tek puanlanır; soruya en iyi cevap veren pasajlar öne çıkar.',
@@ -84,6 +97,7 @@ export const PIPELINE = [
     tags: ['bge-reranker-v2-m3', 'ONNX Runtime', 'Model servisi'],
   },
   {
+    phase: 'soru',
     title: 'Kaynaklara dayanarak yazar',
     en: 'Generation',
     plain: 'Dil modeli yalnızca seçilen pasajları görür ve cevabı, her biri kaynağına bağlı kısa iddialar halinde yazar.',
@@ -91,6 +105,7 @@ export const PIPELINE = [
     tags: ['Gemini', 'Structured output', 'Pydantic'],
   },
   {
+    phase: 'soru',
     title: 'Her iddiayı doğrular',
     en: 'Verification',
     plain: 'Ayrı bir model, her iddianın gerçekten kaynağında yazıp yazmadığını kontrol eder. Desteklenmeyen atıf kaldırılır; dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir, böylece hangi cümleye güvenebileceğinizi görürsünüz.',

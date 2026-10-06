@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { useInView, useReducedMotion } from '@/lib/hooks';
 
 const STEP = 60; // 100 ms ticks → 6 s per step
+// The first three steps run once, as sources are added; the rest run for every question.
+const PREPARATION_STEPS = 3;
 const STEPS = [
   { title: 'Kaynakları toplar', en: 'Ingestion', caption: 'manifest → sha256 kontrolü → sürümlü depo' },
   { title: 'Metni parçalara ayırır', en: 'Chunking', caption: 'madde / fıkra / bent yapısı korunur' },
-  { title: 'İlgili pasajları bulur', en: 'Hybrid retrieval', caption: 'BM25 + BGE-M3 → RRF (k=60)' },
+  { title: 'Dizine ekler', en: 'Embedding & indexing', caption: 'BGE-M3 → 1024 boyutlu vektör → Qdrant · BM25' },
+  { title: 'İlgili pasajları bulur', en: 'Hybrid retrieval', caption: 'sorgu planlama → BM25 + BGE-M3 → RRF (k=60)' },
   { title: 'En alakalıları seçer', en: 'Reranking', caption: 'bge-reranker-v2-m3 · cross-encoder' },
   { title: 'Kaynaklara dayanarak yazar', en: 'Generation', caption: 'Gemini · JSON şemalı yapılandırılmış çıktı' },
   { title: 'Her iddiayı doğrular', en: 'Verification', caption: 'supported · partial · unsupported' },
@@ -54,45 +57,53 @@ export function PipelineAnimation() {
           const done = index < step;
           const on = index === step;
           return (
-            <li key={item.en} className="flex">
-              <button
-                type="button"
-                aria-current={on ? 'step' : undefined}
-                aria-label={
-                  on
-                    ? `${item.title}, ${paused ? 'duraklatıldı. Devam etmek için tıklayın.' : 'oynatılıyor. Duraklatmak için tıklayın.'}`
-                    : `${item.title} adımına geç`
-                }
-                onClick={() => selectStep(index)}
-                className={`relative flex min-h-[64px] grow items-center gap-3 overflow-hidden rounded-[14px] border px-3 text-left transition-colors xl:h-[76px] xl:px-4 ${
-                  on ? 'border-accent-line bg-surface' : 'border-line bg-transparent hover:bg-surface'
-                }`}
-              >
-                <span
-                  className={`flex size-[30px] shrink-0 items-center justify-center rounded-[9px] border font-mono text-[12.5px] font-medium transition-colors ${
-                    done ? 'border-ok bg-ok text-inv-fg' : on ? 'border-accent bg-accent-bg text-accent' : 'border-line-strong text-fg3'
+            <Fragment key={item.en}>
+              {(index === 0 || index === PREPARATION_STEPS) && (
+                <li aria-hidden="true" className="col-span-full flex items-center gap-2 pt-1 text-[11px] font-semibold tracking-[0.12em] text-fg3 first:pt-0">
+                  {index === 0 ? 'HAZIRLIK · KAYNAKLAR EKLENİRKEN BİR KEZ' : 'HER SORUDA'}
+                  <span className="h-px grow bg-line" />
+                </li>
+              )}
+              <li className="flex">
+                <button
+                  type="button"
+                  aria-current={on ? 'step' : undefined}
+                  aria-label={
+                    on
+                      ? `${item.title}, ${paused ? 'duraklatıldı. Devam etmek için tıklayın.' : 'oynatılıyor. Duraklatmak için tıklayın.'}`
+                      : `${item.title} adımına geç`
+                  }
+                  onClick={() => selectStep(index)}
+                  className={`relative flex min-h-[64px] grow items-center gap-3 overflow-hidden rounded-[14px] border px-3 text-left transition-colors xl:h-[76px] xl:px-4 ${
+                    on ? 'border-accent-line bg-surface' : 'border-line bg-transparent hover:bg-surface'
                   }`}
                 >
-                  {done ? '✓' : index + 1}
-                </span>
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className={`text-sm font-semibold xl:text-[15px] ${on || done ? 'text-fg' : 'text-fg2'}`}>{item.title}</span>
-                  <span className="font-mono text-[11.5px] text-fg3">{item.en}</span>
-                </span>
-                {on && paused && !reduced && (
-                  <span className="ml-auto hidden h-[22px] shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[11px] font-medium text-fg2 sm:flex">
-                    <svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
-                      <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
-                    </svg>
-                    Duraklatıldı
+                  <span
+                    className={`flex size-[30px] shrink-0 items-center justify-center rounded-[9px] border font-mono text-[12.5px] font-medium transition-colors ${
+                      done ? 'border-ok bg-ok text-inv-fg' : on ? 'border-accent bg-accent-bg text-accent' : 'border-line-strong text-fg3'
+                    }`}
+                  >
+                    {done ? '✓' : index + 1}
                   </span>
-                )}
-                <span
-                  className="absolute bottom-0 left-0 h-0.5 bg-accent transition-[width] duration-100 ease-linear"
-                  style={{ width: on && !paused ? `${Math.round(((L + 1) / STEP) * 100)}%` : 0 }}
-                />
-              </button>
-            </li>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className={`text-sm font-semibold xl:text-[15px] ${on || done ? 'text-fg' : 'text-fg2'}`}>{item.title}</span>
+                    <span className="font-mono text-[11.5px] text-fg3">{item.en}</span>
+                  </span>
+                  {on && paused && !reduced && (
+                    <span className="ml-auto hidden h-[22px] shrink-0 items-center gap-1 rounded-full bg-muted px-2 text-[11px] font-medium text-fg2 sm:flex">
+                      <svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+                        <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+                      </svg>
+                      Duraklatıldı
+                    </span>
+                  )}
+                  <span
+                    className="absolute bottom-0 left-0 h-0.5 bg-accent transition-[width] duration-100 ease-linear"
+                    style={{ width: on && !paused ? `${Math.round(((L + 1) / STEP) * 100)}%` : 0 }}
+                  />
+                </button>
+              </li>
+            </Fragment>
           );
         })}
       </ol>
@@ -103,16 +114,19 @@ export function PipelineAnimation() {
         className="flex min-h-[460px] flex-col gap-[18px] overflow-hidden rounded-[18px] border border-line bg-surface px-5 py-6 sm:px-7"
       >
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line pb-3.5">
-          <span className="font-mono text-xs text-accent">Adım {step + 1} / 6</span>
+          <span className="font-mono text-xs text-accent">
+            Adım {step + 1} / {STEPS.length} · {step < PREPARATION_STEPS ? 'hazırlık' : 'her soruda'}
+          </span>
           <span className="grow text-[17px] font-semibold">{STEPS[step].title}</span>
           <span className="font-mono text-[11.5px] text-fg3">{STEPS[step].caption}</span>
         </div>
         {step === 0 && <IngestScene L={L} />}
         {step === 1 && <ChunkScene L={L} />}
-        {step === 2 && <SearchScene L={L} />}
-        {step === 3 && <RerankScene L={L} />}
-        {step === 4 && <WriteScene L={L} />}
-        {step === 5 && <VerifyScene L={L} />}
+        {step === 2 && <IndexScene L={L} />}
+        {step === 3 && <SearchScene L={L} />}
+        {step === 4 && <RerankScene L={L} />}
+        {step === 5 && <WriteScene L={L} />}
+        {step === 6 && <VerifyScene L={L} />}
       </div>
     </div>
   );
@@ -199,6 +213,77 @@ function ChunkScene({ L }: { L: number }) {
       <span className="font-mono text-[11.5px] text-fg3 transition-opacity" style={{ opacity: L >= 22 ? 1 : 0 }}>
         4 parça · her biri künye, madde yolu ve sayfa bilgisini taşır
       </span>
+    </div>
+  );
+}
+
+const INDEXED = [
+  { label: 'md. 17/1', vector: ['0.021', '−0.137', '0.058'], bars: [5, 9, 3, 7, 11, 4, 8, 6, 10, 2, 7, 5] },
+  { label: 'md. 17/2-d', vector: ['−0.044', '0.102', '0.019'], bars: [8, 4, 10, 6, 3, 9, 5, 11, 4, 7, 2, 8] },
+  { label: 'md. 17/4', vector: ['0.073', '−0.015', '0.126'], bars: [3, 7, 5, 11, 8, 2, 10, 4, 6, 9, 5, 7] },
+];
+// "Bildirim şartına uymayan taraf, bildirim süresine ilişkin ücret tutarında tazminat ödemek
+// zorundadır." cut to the first five letters of each word, as the legislation index stores it.
+const TOKENS = ['bildi', 'şartı', 'uymay', 'taraf', 'süres', 'ilişk', 'ücret', 'tutar', 'tazmi', 'ödeme', 'zorun'];
+
+function IndexScene({ L }: { L: number }) {
+  return (
+    <div className="grid grow grid-cols-1 items-center gap-4 md:grid-cols-[236px_40px_minmax(0,1fr)] md:gap-0">
+      <div className="flex flex-col gap-2.5">
+        <span className="text-xs font-semibold text-fg2">Parçalar</span>
+        {INDEXED.map((chunk, index) => (
+          <div
+            key={chunk.label}
+            className="flex h-11 items-center gap-2.5 rounded-[10px] border border-line bg-bg px-3 text-[12.5px] transition-all duration-500"
+            style={fade(L >= 1 + index * 2)}
+          >
+            <span className="flex h-[22px] shrink-0 items-center whitespace-nowrap rounded-md bg-accent-bg px-2 font-mono text-[11px] text-accent">{chunk.label}</span>
+            <span className="truncate text-fg3">4857 · Madde 17</span>
+          </div>
+        ))}
+      </div>
+      <div aria-hidden="true" className="hidden justify-center text-fg3 md:flex">
+        <Icon name="arrowRight" size={20} strokeWidth={1.6} />
+      </div>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 rounded-[14px] border border-accent-line bg-bg p-4">
+          <span className="flex items-center gap-2 text-xs font-semibold text-fg2">
+            Vektör dizini · Qdrant
+            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">BGE-M3 · 1024 boyut</span>
+          </span>
+          {INDEXED.map((chunk, index) => (
+            <div key={chunk.label} className="flex items-center gap-3 transition-all duration-500" style={fade(L >= 8 + index * 3)}>
+              <span className="w-[74px] shrink-0 font-mono text-[11px] text-accent">{chunk.label}</span>
+              <span aria-hidden="true" className="flex h-4 items-end gap-[2px]">
+                {chunk.bars.map((height, bar) => (
+                  <span key={bar} className="w-[3px] rounded-sm bg-accent/70" style={{ height }} />
+                ))}
+              </span>
+              <span className="truncate font-mono text-[11px] text-fg2">[{chunk.vector.join(', ')}, …]</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-bg p-4">
+          <span className="flex items-center gap-2 text-xs font-semibold text-fg2">
+            Kelime dizini · BM25
+            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">md. 17/4 · ilk 5 harf</span>
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {TOKENS.map((token, index) => (
+              <span
+                key={token}
+                className="rounded-md border border-line px-1.5 py-0.5 font-mono text-[11px] text-fg2 transition-opacity duration-300"
+                style={{ opacity: L >= 18 + index ? 1 : 0 }}
+              >
+                {token}
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className="font-mono text-[11.5px] text-fg3 transition-opacity" style={{ opacity: L >= 32 ? 1 : 0 }}>
+          Soru geldiğinde aynı model soruyu da vektöre çevirir; arama bu iki dizinde yapılır.
+        </span>
+      </div>
     </div>
   );
 }
@@ -342,7 +427,7 @@ function WriteScene({ L }: { L: number }) {
             {label}
           </div>
         ))}
-        <span className="pt-1.5 text-[11.5px] text-fg3">Bağlam bütçesi · hedef 64k token</span>
+        <span className="pt-1.5 text-[11.5px] text-fg3">Bağlam bütçesi · hedef 96k token</span>
         <span className="h-1.5 overflow-hidden rounded-full bg-muted">
           <span className="block h-full rounded-full bg-accent transition-all duration-700" style={{ width: L >= 1 ? '22%' : 0 }} />
         </span>
