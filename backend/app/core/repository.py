@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Any
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -44,6 +44,13 @@ _SCOPE_FILES = """
   f.workspace_id = %(workspace_id)s
   and (f.conversation_id = %(conversation_id)s
        or (%(case_id)s::uuid is not null and f.case_id = %(case_id)s::uuid))
+"""
+# What a workspace's files count against the quota. Verified files are charged their real
+# size; anything else may still hold an object of up to the reserved size.
+FILE_USAGE_SQL = """
+select coalesce(sum(coalesce(verified_size_bytes, reserved_size_bytes)), 0) as bytes
+from public.user_files
+where workspace_id = %s and status <> 'deleted'
 """
 _QUEUE_FILE_DELETIONS = """
 with doomed as (
@@ -149,6 +156,13 @@ class AppRepository:
     async def get_workspace(self, user_id: UUID) -> dict[str, Any]:
         async with await self.database.connect() as conn:
             return await self._workspace(conn, user_id)
+
+    async def file_storage_bytes(self, user_id: UUID) -> int:
+        """What the user's files count against the quota, as an upload intent charges them."""
+        async with await self.database.connect() as conn:
+            workspace = await self._workspace(conn, user_id)
+            row = await (await conn.execute(FILE_USAGE_SQL, (workspace["id"],))).fetchone()
+        return int(row["bytes"])
 
     async def create_case(
         self, user_id: UUID, name: str, description: str | None
@@ -274,6 +288,7 @@ class AppRepository:
         limit: int,
         cursor: tuple[datetime, UUID] | None,
         case_id: UUID | None,
+        pinned: bool | None = None,
     ) -> Page:
         async with await self.database.connect() as conn:
             workspace = await self._workspace(conn, user_id)
@@ -283,6 +298,8 @@ class AppRepository:
                 await self._assert_case(conn, workspace["id"], case_id)
                 conditions.append("case_id=%s")
                 params.append(case_id)
+            if pinned is not None:
+                conditions.append("pinned_at is not null" if pinned else "pinned_at is null")
             if cursor:
                 conditions.append("(created_at,id)<(%s,%s)")
                 params.extend(cursor)
@@ -319,19 +336,28 @@ class AppRepository:
         title: str | None,
         case_id: UUID | None,
         case_id_set: bool,
+        pinned: bool | None = None,
     ) -> dict[str, Any]:
         current = await self.get_conversation(user_id, conversation_id)
         new_case = case_id if case_id_set else current["case_id"]
+        pinned_at = current["pinned_at"]
+        if pinned is not None:
+            pinned_at = (pinned_at or datetime.now(UTC)) if pinned else None
+        # Pinning is not an edit: the chat keeps its place in the history.
+        edited = title is not None or case_id_set
         async with await self.database.connect() as conn:
             await self._assert_case(conn, current["workspace_id"], new_case)
             return await (
                 await conn.execute(
                     """update public.conversations
-                    set title=%s,case_id=%s,updated_at=now()
+                    set title=%s,case_id=%s,pinned_at=%s,
+                        updated_at=case when %s then now() else updated_at end
                     where id=%s and workspace_id=%s returning *""",
                     (
                         title or current["title"],
                         new_case,
+                        pinned_at,
+                        edited,
                         conversation_id,
                         current["workspace_id"],
                     ),
@@ -678,16 +704,7 @@ class AppRepository:
                     case_id, conversation_id = conversation["case_id"], None
             await self._assert_case(conn, workspace["id"], case_id)
             await conn.execute("select pg_advisory_xact_lock(hashtext(%s))", (str(user_id),))
-            usage = await (
-                await conn.execute(
-                    # Verified files are charged their real size; anything else may
-                    # still hold an object of up to the reserved size.
-                    """select coalesce(sum(coalesce(verified_size_bytes,reserved_size_bytes)),0)
-                       as bytes from public.user_files
-                       where workspace_id=%s and status<>'deleted'""",
-                    (workspace["id"],),
-                )
-            ).fetchone()
+            usage = await (await conn.execute(FILE_USAGE_SQL, (workspace["id"],))).fetchone()
             if int(usage["bytes"]) + size_bytes > quota_bytes:
                 raise ConflictError("user_file_quota_exceeded")
             file_id = uuid4()
