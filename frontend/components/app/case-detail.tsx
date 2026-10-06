@@ -17,7 +17,8 @@ import {
 } from '@/lib/files';
 import { describeError, formatBytes, formatRelativeDay, isRetryableIngestFailure } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
-import type { Conversation, LegalCase, UserFile } from '@/lib/types';
+import type { Conversation, FileStorage, LegalCase, UserFile } from '@/lib/types';
+import { ConversationMenuButton, RenameField } from './conversation-item';
 
 type LocalUpload = { key: string; name: string; size: number; error: string | null };
 
@@ -47,7 +48,25 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [dragging, setDragging] = useState(false);
+  const [storage, setStorage] = useState<FileStorage | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // The quota covers every case and chat, so the usage shown is the account's, not this case's.
+  const reloadStorage = useCallback(() => {
+    api
+      .storage()
+      .then(setStorage)
+      .catch(() => {});
+  }, []);
+  useEffect(reloadStorage, [reloadStorage]);
+
+  const reloadConversations = useCallback(() => {
+    api
+      .listConversations({ caseId })
+      .then((page) => setConversations(page.items))
+      .catch(() => {});
+  }, [caseId]);
 
   useEffect(() => {
     let active = true;
@@ -69,7 +88,8 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const reloadFiles = useCallback(async () => {
     const page = await api.listFiles(caseId);
     setFiles(page.items);
-  }, [caseId]);
+    reloadStorage();
+  }, [caseId, reloadStorage]);
 
   const pending = files?.some((file) => TRANSIENT_STATUSES.has(file.status)) ?? false;
   useEffect(() => {
@@ -124,6 +144,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
     try {
       const updated = await api.deleteFile(file.id);
       setFiles((current) => current?.map((item) => (item.id === file.id ? updated : item)) ?? current);
+      reloadStorage();
     } catch (deleteError) {
       setError(describeError(deleteError));
     }
@@ -188,7 +209,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             Davalar
           </Link>
           <Icon name="chevRight" size={13} />
-          <span className="truncate">{legalCase.name}</span>
+          <span className="min-w-0 truncate">{legalCase.name}</span>
         </nav>
 
         {editing ? (
@@ -200,7 +221,10 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5"
           >
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Dava adı
+              <span className="flex justify-between">
+                Dava adı
+                <span className="font-mono text-[11.5px] font-normal text-fg3">{name.length} / 160</span>
+              </span>
               <input
                 autoFocus
                 required
@@ -211,7 +235,10 @@ export function CaseDetail({ caseId }: { caseId: string }) {
               />
             </label>
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
-              Açıklama
+              <span className="flex justify-between">
+                Açıklama
+                <span className="font-mono text-[11.5px] font-normal text-fg3">{description.length} / 2000</span>
+              </span>
               <textarea
                 maxLength={2000}
                 rows={3}
@@ -231,9 +258,11 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           </form>
         ) : (
           <div className="flex flex-wrap items-start gap-4">
-            <div className="flex min-w-0 grow flex-col gap-1.5">
-              <h1 className="m-0 text-[26px] font-semibold tracking-[-0.02em]">{legalCase.name}</h1>
-              {legalCase.description && <p className="m-0 max-w-[640px] text-sm leading-normal text-fg2">{legalCase.description}</p>}
+            <div className="flex min-w-0 grow basis-[320px] flex-col gap-1.5">
+              <h1 className="m-0 line-clamp-3 text-[26px] font-semibold leading-tight tracking-[-0.02em] [overflow-wrap:anywhere]" title={legalCase.name}>
+                {legalCase.name}
+              </h1>
+              {legalCase.description && <CaseDescription text={legalCase.description} />}
             </div>
             <button
               type="button"
@@ -275,16 +304,35 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             {conversations?.length === 0 && (
               <p className="m-0 px-5 py-6 text-[13.5px] text-fg3">Bu davaya bağlı sohbet yok. İlk soruyu sorun.</p>
             )}
-            {conversations?.map((conversation) => (
-              <Link
-                key={conversation.id}
-                href={`/sohbet/${conversation.id}`}
-                className="flex items-center gap-2 border-b border-line px-5 py-4 text-fg no-underline last:border-b-0 hover:bg-hover"
-              >
-                <span className="min-w-0 grow truncate text-sm font-medium">{conversation.title}</span>
-                <span className="shrink-0 text-[12.5px] text-fg3">{now ? formatRelativeDay(conversation.updated_at, now) : ''}</span>
-              </Link>
-            ))}
+            {conversations?.map((conversation) =>
+              renamingId === conversation.id ? (
+                <div key={conversation.id} className="border-b border-line px-3 py-2.5 last:border-b-0">
+                  <RenameField
+                    conversation={conversation}
+                    className="h-9 w-full text-sm"
+                    onDone={(updated) => {
+                      setRenamingId(null);
+                      if (updated) setConversations((current) => current?.map((item) => (item.id === updated.id ? updated : item)) ?? current);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div key={conversation.id} className="group flex items-center border-b border-line pr-3 last:border-b-0 hover:bg-hover">
+                  <Link href={`/sohbet/${conversation.id}`} className="flex min-w-0 grow items-center gap-2 py-4 pl-5 pr-2 text-fg no-underline">
+                    {conversation.pinned_at && <Icon name="pin" size={13} className="shrink-0 text-fg3" />}
+                    <span className="min-w-0 grow truncate text-sm font-medium" title={conversation.title}>
+                      {conversation.title}
+                    </span>
+                    <span className="shrink-0 text-[12.5px] text-fg3">{now ? formatRelativeDay(conversation.updated_at, now) : ''}</span>
+                  </Link>
+                  <ConversationMenuButton
+                    conversation={conversation}
+                    onRename={() => setRenamingId(conversation.id)}
+                    onChanged={reloadConversations}
+                  />
+                </div>
+              ),
+            )}
           </section>
 
           <section className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface px-5 pb-5 pt-[18px]">
@@ -292,7 +340,14 @@ export function CaseDetail({ caseId }: { caseId: string }) {
               <h2 className="m-0 text-[14.5px] font-semibold">Dosyalar</h2>
               <span className="text-[13px] text-fg3">{files?.length ?? ''}</span>
               <span className="grow" />
-              <span className="text-[12.5px] text-fg3">{formatBytes(usedBytes)} kullanılıyor</span>
+              <span
+                className="text-[12.5px] text-fg3"
+                title={storage ? 'Bütün davalarınızdaki ve sohbetlerinizdeki dosyalar, hesabınızın depolama alanına göre' : undefined}
+              >
+                {storage
+                  ? `${formatBytes(storage.used_bytes)} / ${formatBytes(storage.quota_bytes)} kullanılıyor`
+                  : `${formatBytes(usedBytes)} kullanılıyor`}
+              </span>
             </header>
 
             <div
@@ -464,5 +519,38 @@ export function CaseAnalysisCard({
         Dosyayı analiz et
       </button>
     </section>
+  );
+}
+
+/** A case description, cut to three lines with a toggle when it is longer. */
+function CaseDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setOverflows(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return (
+    <div className="flex max-w-[720px] flex-col items-start gap-1">
+      <p
+        ref={ref}
+        className={`m-0 whitespace-pre-line text-sm leading-normal text-fg2 [overflow-wrap:anywhere] ${expanded ? '' : 'line-clamp-3'}`}
+      >
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <button type="button" onClick={() => setExpanded((value) => !value)} className="text-[12.5px] font-medium text-fg2 underline hover:text-fg">
+          {expanded ? 'Daha az göster' : 'Devamını göster'}
+        </button>
+      )}
+    </div>
   );
 }

@@ -10,11 +10,12 @@ import { describeError } from '@/lib/format';
 import type { Conversation, GenerationSummary, Message, SearchMode } from '@/lib/types';
 import { readWebSearch, rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
-import { AttachButton, ChatFileTray, clearDraftHandoff, processingNote, readDraftHandoff, useChatFiles } from './chat-files';
+import { AttachButton, ChatFilesButton, clearDraftHandoff, processingNote, readDraftHandoff, useChatFiles } from './chat-files';
 import { Composer } from './composer';
 import { useConversations } from './conversations';
 import { GenerationProgress } from './generation-progress';
 import { PromptRail } from './prompt-rail';
+import { ResizeHandle, useStoredWidth } from './resize-handle';
 import { SourcePanel } from './source-panel';
 
 type Turn = {
@@ -25,6 +26,10 @@ type Turn = {
 };
 
 const timeFormatter = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+const SOURCE_PANEL = { initial: 440, min: 340, max: 720 };
+// The answer column never gets narrower than this; with less room the source panel opens over it.
+const MIN_ANSWER_WIDTH = 560;
 
 function buildTurns(messages: Message[]): Turn[] {
   const assistants = new Map(messages.filter((message) => message.role === 'assistant').map((message) => [message.id, message]));
@@ -75,11 +80,22 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const [webSearchOn, setWebSearchOn] = useState(() => readWebSearch(conversationId));
   const [deepResearchOn, setDeepResearchOn] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [rootWidth, setRootWidth] = useState(0);
+  const sourcePanel = useStoredWidth('bekenai-source-panel-width', SOURCE_PANEL);
   const stickToBottom = useRef(true);
   const chatFiles = useChatFiles(conversationId);
   const lockNote = processingNote(chatFiles);
 
   useEffect(() => clearDraftHandoff(conversationId), [conversationId]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new ResizeObserver(([entry]) => setRootWidth(entry.contentRect.width));
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -309,8 +325,15 @@ export function ConversationView({ conversationId }: { conversationId: string })
     );
   }
 
+  // Docked beside the answer while it keeps MIN_ANSWER_WIDTH; otherwise laid over it.
+  const panelRoom = rootWidth - MIN_ANSWER_WIDTH;
+  const panelDocked = panelRoom >= SOURCE_PANEL.min;
+  const panelMax = Math.max(SOURCE_PANEL.min, Math.min(SOURCE_PANEL.max, panelDocked ? panelRoom : rootWidth - 48));
+  const panelWidth = Math.min(sourcePanel.width, panelMax);
+  const uploadProblems = chatFiles.uploads.filter((item) => item.error);
+
   return (
-    <div className="flex h-full min-h-0">
+    <div ref={rootRef} className="relative flex h-full min-h-0">
       <div className="flex min-w-0 grow flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4 sm:px-6">
           <h1 className="m-0 min-w-0 truncate text-sm font-medium">{conversation?.title ?? 'Sohbet'}</h1>
@@ -324,7 +347,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
             </Link>
           )}
           <span className="grow" />
-          {turns.length > 0 && <span className="hidden text-[12.5px] text-fg3 sm:inline">{turns.length} soru</span>}
+          {turns.length > 0 && <span className="hidden whitespace-nowrap text-[12.5px] text-fg3 sm:inline">{turns.length} soru</span>}
+          <ChatFilesButton chatFiles={chatFiles} caseId={caseId} />
           <button
             type="button"
             onClick={() => void removeConversation()}
@@ -338,7 +362,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
         <div className="relative flex min-h-0 grow">
           <div ref={scrollerRef} onScroll={onScroll} className="relative min-h-0 grow overflow-y-auto">
-            <div className="mx-auto flex w-full max-w-[640px] flex-col gap-10 px-4 py-7 sm:px-6 lg:px-0">
+            <div className="mx-auto flex w-full max-w-[688px] flex-col gap-10 px-4 py-7 sm:px-6">
               {!messages && (
                 <div className="flex items-center gap-3 text-sm text-fg3" role="status">
                   <Spinner />
@@ -442,7 +466,21 @@ export function ConversationView({ conversationId }: { conversationId: string })
                 {actionError}
               </p>
             )}
-            <ChatFileTray chatFiles={chatFiles} />
+            {uploadProblems.map((item) => (
+              <p
+                key={item.key}
+                role="alert"
+                className="m-0 flex items-start gap-2 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err"
+              >
+                <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
+                <span className="min-w-0 grow">
+                  <span className="font-medium">{item.name}</span> yüklenemedi: {item.error}
+                </span>
+                <button type="button" onClick={() => chatFiles.dismissUpload(item.key)} aria-label="Kapat" className="shrink-0">
+                  <Icon name="x" size={14} />
+                </button>
+              </p>
+            ))}
             <Composer
               variant="compact"
               value={draft}
@@ -467,7 +505,22 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
       {selectedSource && selectedTurn?.rendered && (
         <>
-          <aside aria-label="Kaynak paneli" className="hidden w-[440px] shrink-0 border-l border-line bg-surface lg:flex lg:flex-col">
+          <aside
+            aria-label="Kaynak paneli"
+            style={{ width: panelWidth }}
+            className={`hidden shrink-0 border-l border-line bg-surface lg:flex lg:flex-col ${
+              panelDocked ? 'relative' : 'absolute inset-y-0 right-0 z-30 shadow-lg'
+            }`}
+          >
+            <ResizeHandle
+              edge="left"
+              width={panelWidth}
+              min={SOURCE_PANEL.min}
+              max={panelMax}
+              onChange={(width) => sourcePanel.change(Math.min(width, panelMax))}
+              onReset={sourcePanel.reset}
+              label="Kaynak panelinin genişliği"
+            />
             <SourcePanel
               selected={selectedSource}
               sources={selectedTurn.rendered.sources}

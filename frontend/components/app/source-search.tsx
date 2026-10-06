@@ -135,7 +135,7 @@ export function SourceSearch() {
             event.preventDefault();
             run();
           }}
-          className="flex h-[50px] items-center gap-2.5 rounded-xl border border-line-strong bg-surface pl-4 pr-1.5 shadow-soft"
+          className="flex h-[50px] items-center gap-2.5 rounded-xl border border-line-strong bg-surface pl-4 pr-1.5 shadow-soft transition-colors focus-within:border-fg3"
         >
           <Icon name="search" size={18} className="text-fg3" />
           <label htmlFor="kaynak-ara" className="sr-only">

@@ -33,8 +33,16 @@ export interface Conversation {
   title: string;
   domain_code: string;
   archived_at: string | null;
+  /** Set while the chat is pinned to the top of the sidebar. */
+  pinned_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** The user's files across all cases and chats, against their quota. */
+export interface FileStorage {
+  used_bytes: number;
+  quota_bytes: number;
 }
 
 /**

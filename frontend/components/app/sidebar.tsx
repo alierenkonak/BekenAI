@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { Logo } from '@/components/brand';
 import { Icon, type IconName } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { historyGroup, initials } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import type { Conversation } from '@/lib/types';
 import { useAuth } from './auth';
+import { ConversationMenuButton, RenameField } from './conversation-item';
 import { useConversations } from './conversations';
 
 const NAV: { href: string; label: string; icon: IconName; match: (path: string) => boolean }[] = [
@@ -21,7 +24,7 @@ const GROUP_ORDER = ['Bugün', 'Önceki 7 gün', 'Daha eski'] as const;
 export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
-  const { conversations } = useConversations();
+  const { pinned, conversations } = useConversations();
   const now = useNow(60_000);
   const name =
     (user.user_metadata?.full_name as string | undefined) ||
@@ -35,7 +38,7 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
   })).filter((group) => group.items.length > 0);
 
   return (
-    <nav aria-label="Ana gezinme" className="flex h-full w-[264px] flex-col gap-4 border-r border-line bg-side p-3">
+    <nav aria-label="Ana gezinme" className="flex h-full w-full flex-col gap-4 border-r border-line bg-side p-3">
       <div className="flex h-10 items-center justify-between pl-1.5 pr-1">
         <Logo href="/sohbet" size={30} />
         {onClose && (
@@ -57,7 +60,6 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
       >
         <Icon name="plus" strokeWidth={1.9} />
         <span className="grow">Yeni sohbet</span>
-        <kbd className="rounded-[5px] border border-line px-1.5 font-mono text-[11px] text-fg3">⌘ K</kbd>
       </Link>
 
       <div className="flex flex-col gap-0.5">
@@ -88,29 +90,23 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
             ))}
           </div>
         )}
-        {conversations?.length === 0 && (
+        {conversations?.length === 0 && !pinned?.length && (
           <p className="m-0 px-2.5 text-[12.5px] leading-normal text-fg3">Henüz sohbet yok. İlk sorunuzu sorun.</p>
         )}
-        {groups.map((group) => (
+        {[...(pinned?.length ? [{ label: 'Sabitlenenler', items: pinned }] : []), ...groups].map((group) => (
           <div key={group.label} className="flex flex-col gap-px">
-            <div className="px-2.5 pb-1 text-[11.5px] font-medium text-fg3">{group.label}</div>
-            {group.items.map((conversation) => {
-              const active = pathname === `/sohbet/${conversation.id}`;
-              return (
-                <Link
-                  key={conversation.id}
-                  href={`/sohbet/${conversation.id}`}
-                  onClick={onNavigate}
-                  aria-current={active ? 'page' : undefined}
-                  title={conversation.title}
-                  className={`flex h-8 items-center rounded-lg px-2.5 text-[13.5px] no-underline ${
-                    active ? 'bg-hover font-medium text-fg' : 'text-fg2 hover:bg-hover hover:text-fg'
-                  }`}
-                >
-                  <span className="truncate">{conversation.title}</span>
-                </Link>
-              );
-            })}
+            <div className="flex items-center gap-1.5 px-2.5 pb-1 text-[11.5px] font-medium text-fg3">
+              {group.label === 'Sabitlenenler' && <Icon name="pin" size={12} />}
+              {group.label}
+            </div>
+            {group.items.map((conversation) => (
+              <HistoryItem
+                key={conversation.id}
+                conversation={conversation}
+                active={pathname === `/sohbet/${conversation.id}`}
+                onNavigate={onNavigate}
+              />
+            ))}
           </div>
         ))}
       </div>
@@ -135,5 +131,39 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
         </button>
       </div>
     </nav>
+  );
+}
+
+function HistoryItem({
+  conversation,
+  active,
+  onNavigate,
+}: {
+  conversation: Conversation;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
+  const [renaming, setRenaming] = useState(false);
+  if (renaming) {
+    return <RenameField conversation={conversation} onDone={() => setRenaming(false)} className="h-8 text-[13.5px]" />;
+  }
+  return (
+    <div
+      data-active={active}
+      className={`group flex h-8 items-center rounded-lg pr-0.5 ${active ? 'bg-hover' : 'hover:bg-hover'}`}
+    >
+      <Link
+        href={`/sohbet/${conversation.id}`}
+        onClick={onNavigate}
+        aria-current={active ? 'page' : undefined}
+        title={conversation.title}
+        className={`flex h-full min-w-0 grow items-center pl-2.5 pr-1 text-[13.5px] no-underline ${
+          active ? 'font-medium text-fg' : 'text-fg2 hover:text-fg'
+        }`}
+      >
+        <span className="truncate">{conversation.title}</span>
+      </Link>
+      <ConversationMenuButton conversation={conversation} onRename={() => setRenaming(true)} />
+    </div>
   );
 }
