@@ -43,7 +43,8 @@ export function useStoredWidth(key: string, bounds: Bounds) {
 /**
  * The drag handle on a panel's edge. `edge` is the side it sits on: a left panel grows when its
  * right edge moves right, a right panel when its left edge moves left. Arrow keys resize by 16 px
- * and a double click restores the default width.
+ * and a double click restores the default width. Dragged below `collapseBelow`, the panel closes
+ * and keeps the width it had when the drag began, for when it opens again.
  */
 export function ResizeHandle({
   edge,
@@ -53,6 +54,8 @@ export function ResizeHandle({
   onChange,
   onReset,
   label,
+  collapseBelow,
+  onCollapse,
 }: {
   edge: 'left' | 'right';
   width: number;
@@ -61,6 +64,8 @@ export function ResizeHandle({
   onChange: (width: number) => void;
   onReset: () => void;
   label: string;
+  collapseBelow?: number;
+  onCollapse?: () => void;
 }) {
   const direction = edge === 'right' ? 1 : -1;
 
@@ -73,14 +78,23 @@ export function ResizeHandle({
     handle.setPointerCapture(event.pointerId);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    const move = (moveEvent: globalThis.PointerEvent) => onChange(startWidth + (moveEvent.clientX - startX) * direction);
-    const stop = () => {
+    const move = (moveEvent: globalThis.PointerEvent) => {
+      const next = startWidth + (moveEvent.clientX - startX) * direction;
+      if (onCollapse && collapseBelow !== undefined && next < collapseBelow) {
+        stop();
+        onChange(startWidth);
+        onCollapse();
+        return;
+      }
+      onChange(next);
+    };
+    function stop() {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', stop);
       handle.removeEventListener('pointercancel', stop);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-    };
+    }
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', stop);
     handle.addEventListener('pointercancel', stop);
@@ -110,4 +124,28 @@ export function ResizeHandle({
       <span className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full transition-colors group-hover:bg-accent group-focus-visible:bg-accent group-active:bg-accent" />
     </div>
   );
+}
+
+/** A yes/no panel setting (the sidebar being closed), remembered in this browser. */
+export function useStoredFlag(key: string) {
+  const [value, setValue] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(key) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const change = useCallback(
+    (next: boolean) => {
+      setValue(next);
+      try {
+        window.localStorage.setItem(key, next ? '1' : '0');
+      } catch {
+        // Not remembered; the panel still opens and closes.
+      }
+    },
+    [key],
+  );
+  return [value, change] as const;
 }

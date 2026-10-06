@@ -33,6 +33,13 @@ const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipT
 
 const CHIP_NAME = { primary: 'Kaynak', doctrine: 'Doktrin kaynağı', file: 'Dosya pasajı', web: 'Web kaynağı' } as const;
 
+/** The hover text of a citation chip: what its frame and dot mean. */
+function chipTitle(chip: { label: string; channel: keyof typeof CHIP_NAME; partial: boolean; changed?: boolean }): string {
+  const support = chip.partial ? 'kesikli çerçeve: kaynak ifadeyi kısmen destekliyor' : 'kaynak ifadeyi destekliyor';
+  const warning = chip.changed ? ' · kırmızı nokta: atıf yapılan hüküm sonradan değişmiş' : '';
+  return `${CHIP_NAME[chip.channel]} ${chip.label} · ${support}${warning}. Pasajı görmek için tıklayın.`;
+}
+
 function ClaimParagraph({
   claim,
   selectedSourceId,
@@ -55,6 +62,7 @@ function ClaimParagraph({
             tone={tone}
             onClick={() => onSelect(chip.sourceId)}
             ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
+            title={chipTitle(chip)}
           />
         );
       })}
@@ -158,6 +166,7 @@ function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedS
             flagged={chip.changed}
             onClick={() => onSelect(chip.sourceId)}
             ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}${chip.changed ? ', yürürlük uyarısı var' : ''}`}
+            title={chipTitle(chip)}
           />
         );
       })}

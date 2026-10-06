@@ -127,6 +127,7 @@ export function CitationChip({
   onClick,
   ariaLabel,
   flagged = false,
+  title,
 }: {
   label: string;
   tone: ChipTone;
@@ -134,12 +135,15 @@ export function CitationChip({
   ariaLabel: string;
   /** Marks a source with a Yürürlük kontrolü warning. */
   flagged?: boolean;
+  /** Shown on hover: what the chip's style means. */
+  title?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={ariaLabel}
+      title={title}
       className={`ml-1 inline-flex h-[19px] min-w-5 items-center justify-center gap-[3px] rounded-[5px] border px-[5px] align-[1px] font-mono text-[11px] font-medium transition-colors ${CHIP_TONES[tone]}`}
     >
       {label}

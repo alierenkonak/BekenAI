@@ -308,6 +308,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
   const selectedTurn = selected ? turns.find((turn) => turn.assistant?.id === selected.messageId) : undefined;
   const selectedSource = selectedTurn?.rendered?.sources.find((source) => source.sourceId === selected?.sourceId) ?? null;
+  const selectedWarnings =
+    selectedTurn?.rendered?.kind === 'conversational'
+      ? selectedTurn.rendered.temporalChecks.filter((check) => check.sourceId === selected?.sourceId)
+      : [];
 
   if (loadError && !messages) {
     return (
@@ -518,6 +522,9 @@ export function ConversationView({ conversationId }: { conversationId: string })
               min={SOURCE_PANEL.min}
               max={panelMax}
               onChange={(width) => sourcePanel.change(Math.min(width, panelMax))}
+              // Dragged well past its narrowest width, the panel closes, like the sidebar.
+              collapseBelow={SOURCE_PANEL.min - 80}
+              onCollapse={() => setSelected(null)}
               onReset={sourcePanel.reset}
               label="Kaynak panelinin genişliği"
             />
@@ -526,6 +533,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
               sources={selectedTurn.rendered.sources}
               onSelect={(sourceId) => setSelected((current) => (current ? { ...current, sourceId } : current))}
               onClose={() => setSelected(null)}
+              warnings={selectedWarnings}
             />
           </aside>
           <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Kaynak">
@@ -537,6 +545,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
                 sources={selectedTurn.rendered.sources}
                 onSelect={(sourceId) => setSelected((current) => (current ? { ...current, sourceId } : current))}
                 onClose={() => setSelected(null)}
+                warnings={selectedWarnings}
               />
             </div>
           </div>

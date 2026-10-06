@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -52,11 +52,14 @@ export function SourcePanel({
   sources,
   onSelect,
   onClose,
+  warnings = [],
 }: {
   selected: SourceRef;
   sources: SourceRef[];
   onSelect: (sourceId: string) => void;
   onClose: () => void;
+  /** The answer's Yürürlük kontrolü notes about this source (the red dot on its chip). */
+  warnings?: { level: string; text: string }[];
 }) {
   const [copied, setCopied] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
@@ -141,7 +144,23 @@ export function SourcePanel({
               {selected.label}
             </span>
             <span className={`flex h-[22px] items-center rounded-md px-2 text-xs font-medium ${tone.soft}`}>{kind}</span>
+            {allPartial && (
+              <span className="flex h-[22px] items-center rounded-md border border-dashed border-line-strong px-2 text-xs text-fg2">Kısmen destekliyor</span>
+            )}
           </div>
+          {warnings.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-3">
+              <span className="flex items-center gap-2 text-[12.5px] font-semibold text-err">
+                <span aria-hidden className="size-[7px] rounded-full bg-err" />
+                Yürürlük uyarısı
+              </span>
+              {warnings.map((warning) => (
+                <p key={warning.text} className="m-0 text-[12.5px] leading-normal text-fg2">
+                  {warning.text}
+                </p>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <h3 className="m-0 text-[17px] font-semibold tracking-[-0.01em]">{snapshot.title}</h3>
             {snapshot.breadcrumb.length > 0 && (
@@ -285,7 +304,43 @@ export function SourcePanel({
             })}
           </section>
         )}
+
+        <CitationLegend />
       </div>
     </div>
+  );
+}
+
+/** What the chips' frames, dots and colours mean, at the foot of the panel. */
+function CitationLegend() {
+  const chip = 'flex h-[19px] min-w-[22px] shrink-0 items-center justify-center gap-[3px] rounded-[5px] border px-[5px] font-mono text-[11px] font-medium';
+  const rows: [ReactNode, string][] = [
+    [<span key="ok" className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span>, 'Kaynak, ifadeyi destekliyor.'],
+    [<span key="partial" className={`${chip} border-dashed border-accent text-accent`}>1</span>, 'Kesikli çerçeve: kaynak ifadenin yalnız bir kısmını destekliyor.'],
+    [
+      <span key="changed" className={`${chip} border-accent-line bg-accent-bg text-accent`}>
+        1<span className="size-[5px] rounded-full bg-err" />
+      </span>,
+      'Kırmızı nokta: atıf yapılan hüküm sonradan değişmiş; ayrıntısı cevabın altındaki Yürürlük kontrolünde.',
+    ],
+  ];
+  return (
+    <section aria-labelledby="citation-legend" className="flex flex-col gap-2 border-t border-line pt-3.5">
+      <h3 id="citation-legend" className="m-0 text-[12.5px] font-medium text-fg3">
+        Atıf işaretleri
+      </h3>
+      {rows.map(([sample, text]) => (
+        <p key={text} className="m-0 flex items-start gap-2.5 text-[12.5px] leading-normal text-fg2">
+          {sample}
+          <span>{text}</span>
+        </p>
+      ))}
+      <p className="m-0 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12.5px] text-fg2">
+        <span className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span> mevzuat ve içtihat
+        <span className={`${chip} border-doc-line bg-doc-bg text-doc`}>D1</span> doktrin
+        <span className={`${chip} border-file-line bg-file-bg text-file`}>F1</span> dosya
+        <span className={`${chip} border-web-line bg-web-bg text-web`}>W1</span> web
+      </p>
+    </section>
   );
 }
