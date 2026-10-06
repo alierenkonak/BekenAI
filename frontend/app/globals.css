@@ -145,6 +145,13 @@ summary::-webkit-details-marker {
   display: none;
 }
 
+/* Images drawn for one theme (brand.tsx). The theme lives in data-theme, which a media query
+   cannot read, so the other one is hidden here. */
+:root[data-theme='dark'] .theme-light,
+:root:not([data-theme='dark']) .theme-dark {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

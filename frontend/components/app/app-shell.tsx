@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { LogoMark } from '@/components/brand';
+import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { AuthGate } from './auth';
 import { ConversationsProvider } from './conversations';
@@ -65,10 +65,7 @@ function Frame({ children }: { children: ReactNode }) {
           >
             <Icon name="menu" size={20} />
           </button>
-          <Link href="/sohbet" className="flex grow items-center gap-2 text-fg no-underline" aria-label="Yeni sohbet">
-            <LogoMark size={22} />
-            <span className="text-[15px] font-semibold">BekenAI</span>
-          </Link>
+          <Logo href="/sohbet" size={22} className="grow" />
           <Link
             href="/sohbet"
             aria-label="Yeni sohbet"

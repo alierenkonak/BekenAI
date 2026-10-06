@@ -1,21 +1,53 @@
+import Image from 'next/image';
 import Link from 'next/link';
 
-/** Text lines ending in a citation dot: "every answer has a source". */
-export function LogoMark({ size = 26 }: { size?: number }) {
+// The logo comes in two colourings: dark ink for the light theme and the original cream for
+// the dark one. Both are rendered and globals.css hides the one that does not match
+// `data-theme` (a media query cannot see the user's theme choice). The hidden one is lazy,
+// so it is never downloaded.
+const LOGO_RATIO = 382 / 144;
+
+function ThemedImage({
+  name,
+  width,
+  height,
+  alt,
+  className = '',
+}: {
+  name: 'logo' | 'mark';
+  width: number;
+  height: number;
+  alt: string;
+  className?: string;
+}) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="shrink-0">
-      <rect width="32" height="32" rx="8" fill="var(--inv)" />
-      <path d="M9 11h14M9 16h10M9 21h6" fill="none" stroke="var(--inv-fg)" strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx="21.5" cy="21" r="2.6" fill="var(--dot)" />
-    </svg>
+    <>
+      {(['light', 'dark'] as const).map((theme) => (
+        <Image
+          key={theme}
+          src={`/brand/${name}-${theme}.png`}
+          width={width}
+          height={height}
+          alt={alt}
+          unoptimized
+          className={`theme-${theme} shrink-0 ${className}`}
+        />
+      ))}
+    </>
   );
 }
 
-export function Logo({ href = '/', size = 26 }: { href?: string; size?: number }) {
+/** The emblem alone, where the name is written beside it or space is tight. */
+export function LogoMark({ size = 26 }: { size?: number }) {
+  return <ThemedImage name="mark" width={size} height={size} alt="" />;
+}
+
+/** The full logo, emblem and name; it is drawn about one and a half times `size` tall. */
+export function Logo({ href = '/', size = 26, className = '' }: { href?: string; size?: number; className?: string }) {
+  const height = Math.round(size * 1.55);
   return (
-    <Link href={href} className="flex items-center gap-2.5 text-fg no-underline" aria-label="BekenAI ana sayfa">
-      <LogoMark size={size} />
-      <span className="text-[15px] font-semibold tracking-[-0.01em]">BekenAI</span>
+    <Link href={href} className={`flex items-center no-underline ${className}`} aria-label="BekenAI ana sayfa">
+      <ThemedImage name="logo" width={Math.round(height * LOGO_RATIO)} height={height} alt="BekenAI" />
     </Link>
   );
 }

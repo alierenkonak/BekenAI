@@ -133,7 +133,7 @@ export function FullScreenMessage({ title, children }: { title: string; children
   return (
     <div className="flex min-h-dvh items-center justify-center px-6">
       <div className="flex max-w-md flex-col items-center gap-4 text-center">
-        <LogoMark size={36} />
+        <LogoMark size={48} />
         <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">{title}</h1>
         <div className="flex flex-col items-center text-sm leading-relaxed text-fg2">{children}</div>
       </div>

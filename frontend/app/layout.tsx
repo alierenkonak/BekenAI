@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   },
   description:
     'Türk iş hukuku için kaynağa dayalı yapay zekâ araştırması: hibrit arama, iddia bazlı doğrulama ve sürümlü kaynak kaydı. Demo proje.',
-  icons: { icon: '/favicon.svg' },
+  icons: { icon: '/favicon.png', apple: '/apple-icon.png' },
 };
 
 export const viewport: Viewport = {

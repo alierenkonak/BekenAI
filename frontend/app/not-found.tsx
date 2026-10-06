@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-dvh items-center justify-center px-6">
       <div className="flex max-w-md flex-col items-center gap-4 text-center">
-        <LogoMark size={36} />
+        <LogoMark size={48} />
         <h1 className="m-0 font-serif text-5xl font-normal">Sayfa bulunamadı</h1>
         <p className="m-0 text-sm text-fg2">Aradığınız sayfa taşınmış ya da hiç var olmamış olabilir.</p>
         <div className="flex gap-2">

@@ -389,14 +389,18 @@ function VerifyScene({ L }: { L: number }) {
     <div className="flex grow flex-col gap-2.5">
       {checks.map(([claim, source, verdict], index) => {
         const shown = L >= 4 + index * 4;
-        const rejected = verdict === 'no' && shown;
+        // As in the app: the unsupported citation is dropped and the sentence is marked, not deleted.
+        const flagged = verdict === 'no' && L >= 24;
         return (
           <div
             key={`${claim}-${source}`}
-            className="flex items-center gap-3.5 rounded-[10px] border border-line bg-bg px-3.5 py-3 transition-opacity duration-500"
-            style={{ opacity: verdict === 'no' && L >= 24 ? 0.4 : 1 }}
+            className="flex items-center gap-3.5 rounded-[10px] border border-line bg-bg px-3.5 py-3"
           >
-            <span className={`grow text-[13.5px] leading-normal transition-colors ${rejected ? 'text-fg3 line-through' : 'text-fg'}`}>{claim}</span>
+            <span
+              className={`grow text-[13.5px] leading-normal text-fg ${flagged ? 'underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]' : ''}`}
+            >
+              {claim}
+            </span>
             <span className="hidden shrink-0 font-mono text-[11px] text-fg3 sm:inline">↔ {source}</span>
             <span
               className={`flex h-6 shrink-0 items-center rounded-full border px-2.5 text-[11.5px] font-medium transition-opacity ${
@@ -415,7 +419,7 @@ function VerifyScene({ L }: { L: number }) {
       })}
       <div className="flex flex-wrap items-center gap-2.5 pt-2 text-[13px] text-fg2 transition-opacity duration-500" style={{ opacity: L >= 22 ? 1 : 0 }}>
         <span className="flex h-6 items-center rounded-full bg-ok-bg px-2.5 text-xs font-medium text-ok">Doğrulandı</span>
-        2 iddia ve 3 atıf kaldı; kaynakla desteklenmeyen 1 iddia çıkarıldı. Hiç iddia kalmasaydı cevap “yeterli kaynak bulunamadı” olurdu.
+        3 atıf doğrulandı. Desteklenmeyen atıf kaldırıldı ve dayanağı kalmayan 1 iddia “doğrulanamadı” diye işaretlendi; kullanıcı ona güvenmemesi gerektiğini cevapta görür.
       </div>
     </div>
   );

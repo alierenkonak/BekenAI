@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { Logo, LogoMark } from '@/components/brand';
+import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { SectionLabel } from '@/components/ui';
@@ -94,7 +94,7 @@ export function Hero() {
         </h1>
         <p className="m-0 max-w-[520px] text-lg leading-relaxed text-fg2">
           BekenAI; mevzuatı, Yargıtay kararlarını ve doktrini birlikte tarar. Yazdığı her iddiayı dayandığı pasajla
-          karşılaştırır, desteklenmeyeni cevaptan çıkarır.
+          karşılaştırır, desteklenmeyeni açıkça işaretler.
         </p>
         <div className="flex flex-wrap gap-3">
           <Link href="/giris" className="flex h-[46px] items-center gap-2 rounded-[10px] bg-inv px-5 text-[15px] font-medium text-inv-fg no-underline">
@@ -207,16 +207,20 @@ export function HowItWorks() {
         />
         <FeatureCard
           title="İddia bazlı doğrulama"
-          body="Her iddia–pasaj çifti ayrı bir modelle kontrol edilir. Desteklenmeyen iddia cevaptan çıkarılır; hiçbiri kalmazsa BekenAI cevap vermez."
+          body="Her iddia–pasaj çifti ayrı bir modelle kontrol edilir. Desteklenmeyen atıf kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. İlgili kaynak hiç yoksa BekenAI tahmin yürütmez."
           vignette={
             <Vignette>
               {[
                 ['Bildirim süresi sekiz haftadır.', '✓ Destekliyor', 'border-transparent bg-ok-bg text-ok', false],
                 ['Kıdem tazminatı her tam yıl için 30 günlük ücrettir.', '◐ Kısmen', 'border-dashed border-accent text-accent', false],
-                ['İşveren ayrıca kötüniyet tazminatı öder.', '✕ Çıkarıldı', 'border-transparent bg-err-bg text-err', true],
-              ].map(([text, badge, tone, struck]) => (
+                ['İşveren ayrıca kötüniyet tazminatı öder.', '✕ Doğrulanamadı', 'border-dashed border-err-line text-err', true],
+              ].map(([text, badge, tone, flagged]) => (
                 <div key={String(text)} className="flex h-12 items-center gap-3 rounded-[10px] border border-line bg-surface px-3.5">
-                  <span className={`grow truncate text-[13.5px] ${struck ? 'text-fg3 line-through' : ''}`}>{text}</span>
+                  <span
+                    className={`grow truncate text-[13.5px] ${flagged ? 'underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]' : ''}`}
+                  >
+                    {text}
+                  </span>
                   <span className={`flex h-[22px] shrink-0 items-center rounded-full border px-2 text-[11.5px] font-medium ${tone}`}>{badge}</span>
                 </div>
               ))}
@@ -225,7 +229,7 @@ export function HowItWorks() {
         />
         <FeatureCard
           title="Pasaja tek tıkla ulaşın"
-          body="Atıfa tıkladığınızda pasajın tamamı, künyesi ve doğrulama gerekçesi yan panelde açılır."
+          body="Atıfa tıkladığınızda pasajın tamamı, künyesi, maddenin değişiklik geçmişi ve doğrulama gerekçesi yan panelde açılır."
           vignette={
             <Vignette>
               <div className="flex flex-wrap items-center gap-2">
@@ -415,7 +419,7 @@ export function Architecture() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <SubHead n="04" title="Mühendislik kararları" note="Kararlar depoda ADR olarak belgelendi" />
+          <SubHead n="04" title="Mühendislik kararları" note="Depoda 11 ADR; her biri ölçümleriyle birlikte" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {ADRS.map((adr) => (
               <div key={adr.id} className="flex flex-col gap-2 rounded-2xl border border-line bg-surface px-6 py-[22px]">
@@ -594,10 +598,7 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-line">
       <div className={`${container} flex flex-wrap items-center gap-x-7 gap-y-3 pb-10 pt-8 text-[13px] text-fg3`}>
-        <span className="flex items-center gap-2 text-fg">
-          <LogoMark size={22} />
-          <span className="font-semibold">BekenAI</span>
-        </span>
+        <Logo size={22} />
         <span>© 2026 · Demo proje</span>
         <span className="grow">Hukuki danışmanlık yerine geçmez.</span>
         <a href="#mimari" className="text-fg2 no-underline hover:text-fg">Mimari</a>

@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Giriş' };
 const POINTS = [
   'Mevzuat, Yargıtay kararları ve doktrin tek yerde',
   'Her iddia, dayandığı pasajla ayrıca doğrulanır',
-  'Desteklenmeyen iddia cevaba hiç girmez',
+  'Desteklenmeyen iddia cevapta açıkça işaretlenir',
 ];
 
 export default function SignInPage() {
