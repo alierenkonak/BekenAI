@@ -37,7 +37,7 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
   return (
     <nav aria-label="Ana gezinme" className="flex h-full w-[264px] flex-col gap-4 border-r border-line bg-side p-3">
       <div className="flex h-10 items-center justify-between pl-1.5 pr-1">
-        <Logo href="/sohbet" />
+        <Logo href="/sohbet" size={30} />
         {onClose && (
           <button
             type="button"

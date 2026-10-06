@@ -1,21 +1,40 @@
 import Link from 'next/link';
 
-/** Text lines ending in a citation dot: "every answer has a source". */
+/**
+ * An answer bubble whose last line ends in a footnote spark: "every answer has a source".
+ * Colours come from the --logo-* tokens in globals.css, so it follows the theme.
+ */
 export function LogoMark({ size = 26 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="shrink-0">
-      <rect width="32" height="32" rx="8" fill="var(--inv)" />
-      <path d="M9 11h14M9 16h10M9 21h6" fill="none" stroke="var(--inv-fg)" strokeWidth="2.4" strokeLinecap="round" />
-      <circle cx="21.5" cy="21" r="2.6" fill="var(--dot)" />
+    <svg width={size} height={size} viewBox="0 0 120 120" aria-hidden="true" className="shrink-0">
+      <path
+        d="M28 16H92a20 20 0 0 1 20 20V74a20 20 0 0 1-20 20H52L32 108V94H28A20 20 0 0 1 8 74V36A20 20 0 0 1 28 16Z"
+        fill="var(--logo-tile)"
+        stroke="var(--logo-tile-line)"
+        strokeWidth="2"
+      />
+      <path d="M30 40H90M30 56H80M30 72H58" fill="none" stroke="var(--logo-line)" strokeWidth="8" strokeLinecap="round" />
+      <path d="M77 61Q77 72 88 72Q77 72 77 83Q77 72 66 72Q77 72 77 61Z" fill="var(--logo-spark)" />
     </svg>
   );
 }
 
-export function Logo({ href = '/', size = 26 }: { href?: string; size?: number }) {
+/** The mark and the BekenAI wordmark; `size` is the mark's size. */
+export function Logo({ href = '/', size = 26, className = '' }: { href?: string; size?: number; className?: string }) {
   return (
-    <Link href={href} className="flex items-center gap-2.5 text-fg no-underline" aria-label="BekenAI ana sayfa">
+    <Link
+      href={href}
+      className={`flex items-center no-underline ${className}`}
+      style={{ gap: Math.round(size * 0.3) }}
+      aria-label="BekenAI ana sayfa"
+    >
       <LogoMark size={size} />
-      <span className="text-[15px] font-semibold tracking-[-0.01em]">BekenAI</span>
+      <span
+        className="font-bold leading-none tracking-[-0.02em] text-[var(--logo-word)]"
+        style={{ fontSize: Math.round(size * 0.66) }}
+      >
+        Beken<span className="text-[var(--logo-ai)]">AI</span>
+      </span>
     </Link>
   );
 }

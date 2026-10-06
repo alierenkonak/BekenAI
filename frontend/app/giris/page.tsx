@@ -9,14 +9,14 @@ export const metadata: Metadata = { title: 'Giriş' };
 const POINTS = [
   'Mevzuat, Yargıtay kararları ve doktrin tek yerde',
   'Her iddia, dayandığı pasajla ayrıca doğrulanır',
-  'Desteklenmeyen iddia cevaba hiç girmez',
+  'Desteklenmeyen iddia cevapta açıkça işaretlenir',
 ];
 
 export default function SignInPage() {
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[680px_minmax(0,1fr)]">
       <section className="hidden flex-col justify-between border-r border-line bg-side px-16 py-10 lg:flex">
-        <Logo size={28} />
+        <Logo size={34} />
         <div className="flex flex-col gap-9">
           <h1 className="m-0 font-serif text-[60px] font-normal leading-[1.02] tracking-[-0.015em]">
             Her cevabın arkasında
@@ -61,7 +61,7 @@ export default function SignInPage() {
         </div>
         <div className="flex w-full max-w-[380px] flex-col gap-7">
           <div className="lg:hidden">
-            <Logo size={28} />
+            <Logo size={34} />
           </div>
           <SignInPanel />
         </div>
