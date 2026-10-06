@@ -29,9 +29,9 @@ const CLAIM_STARTS = CLAIMS.map((_, index) =>
 
 /**
  * Question → sources → drafting → claim verification, including a claim the sources do not
- * support: as in the app, it loses its citation and is marked, not deleted. Every element holds
- * its place from the first frame (untyped text is only invisible), so the card never changes
- * height and the page around it stays still.
+ * support, which is struck through and leaves the answer; the summary takes its place. Every
+ * element holds its place from the first frame (untyped text is only invisible), so the card
+ * never changes height and the page around it stays still.
  */
 export function HeroAnimation() {
   const ref = useRef<HTMLDivElement>(null);
@@ -62,7 +62,8 @@ export function HeroAnimation() {
     const complete = count >= claim.text.length;
     const verified = t >= 60 + index * 6;
     const rejected = !claim.ok && verified;
-    return { ...claim, shown: claim.text.slice(0, count), rest: claim.text.slice(count), count, complete, verified, rejected };
+    const removed = !claim.ok && t >= 90;
+    return { ...claim, shown: claim.text.slice(0, count), rest: claim.text.slice(count), count, complete, verified, rejected, removed };
   });
 
   return (
@@ -135,51 +136,75 @@ export function HeroAnimation() {
             {status.label}
           </span>
         </div>
-        {claims.map((claim) => (
-          <div key={claim.text} className="flex items-start gap-3">
-            <p className="m-0 grow text-sm leading-[1.55] text-fg">
-              <span className={claim.rejected ? 'underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]' : ''}>
-                {claim.shown}
-              </span>
-              {claim.count > 0 && !claim.complete && (
-                // A zero-width anchor, so the cursor never pushes a word to the next line.
-                <span className="relative">
-                  <span className="absolute left-0.5 top-[-1px] h-[15px] w-[7px] bg-accent" />
-                </span>
-              )}
-              <span className="invisible">{claim.rest}</span>
-              {/* An unsupported claim's chip and its "doğrulanamadı" tag share one cell, so the swap keeps the width. */}
-              <span className="ml-1 inline-grid align-[1px]">
-                <span
-                  className="inline-flex h-[18px] min-w-[18px] items-center justify-center justify-self-start rounded-[5px] border border-accent-line bg-accent-bg px-1 font-mono text-[10.5px] font-medium text-accent transition-opacity duration-300 [grid-area:1/1]"
-                  style={{ opacity: claim.complete && !claim.rejected ? 1 : 0 }}
-                >
-                  {claim.src}
-                </span>
-                {!claim.ok && (
-                  <span
-                    className="inline-flex h-[18px] items-center rounded-[5px] border border-dashed border-err-line px-1.5 text-[10.5px] font-medium text-err transition-opacity duration-300 [grid-area:1/1]"
-                    style={{ opacity: claim.rejected ? 1 : 0 }}
-                  >
-                    doğrulanamadı
-                  </span>
-                )}
-              </span>
-            </p>
-            <span
-              className={`flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium transition-opacity ${
-                claim.ok ? 'bg-ok-bg text-ok' : 'bg-err-bg text-err'
-              }`}
-              style={{ opacity: claim.verified ? 1 : 0 }}
-            >
-              {claim.ok ? '✓ Destekliyor' : '✕ Desteklenmiyor'}
-            </span>
-          </div>
-        ))}
-        <span className="text-[12.5px] text-fg2 transition-opacity duration-500" style={{ opacity: t >= 94 ? 1 : 0 }}>
-          3 iddia doğrulandı · kaynakla desteklenmeyen 1 iddia işaretlendi
-        </span>
+        {claims
+          .filter((claim) => claim.ok)
+          .map((claim) => (
+            <ClaimRow key={claim.text} claim={claim} />
+          ))}
+        {/* The unsupported claim and the summary share one cell: the claim is struck through,
+            fades out, and the summary appears in its place, so nothing below moves. */}
+        <div className="grid">
+          {claims
+            .filter((claim) => !claim.ok)
+            .map((claim) => (
+              <div
+                key={claim.text}
+                className="transition-opacity duration-500 [grid-area:1/1]"
+                style={{ opacity: claim.removed ? 0 : 1 }}
+              >
+                <ClaimRow claim={claim} />
+              </div>
+            ))}
+          <span
+            className="self-center text-[12.5px] text-fg2 transition-opacity duration-500 [grid-area:1/1]"
+            style={{ opacity: t >= 94 ? 1 : 0 }}
+          >
+            3 iddia doğrulandı
+          </span>
+        </div>
       </div>
+    </div>
+  );
+}
+
+type Claim = {
+  text: string;
+  src: string;
+  ok: boolean;
+  shown: string;
+  rest: string;
+  count: number;
+  complete: boolean;
+  verified: boolean;
+  rejected: boolean;
+};
+
+function ClaimRow({ claim }: { claim: Claim }) {
+  const typing = claim.count > 0 && !claim.complete;
+  return (
+    <div className="flex items-start gap-3">
+      <p className={`m-0 grow text-sm leading-[1.55] transition-colors ${claim.rejected ? 'text-fg3 line-through' : 'text-fg'}`}>
+        {claim.shown}
+        {/* The cursor is the next character itself, drawn as a block: it can never drift from
+            the text or move a word onto another line. The rest is typed but invisible, so the
+            line breaks are final from the first frame. */}
+        {typing && <span className="rounded-[2px] bg-accent text-transparent">{claim.rest.charAt(0)}</span>}
+        <span className="invisible">{typing ? claim.rest.slice(1) : claim.rest}</span>
+        <span
+          className="ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[5px] border border-accent-line bg-accent-bg px-1 align-[1px] font-mono text-[10.5px] font-medium text-accent no-underline transition-opacity duration-300"
+          style={{ opacity: claim.complete && !claim.rejected ? 1 : 0 }}
+        >
+          {claim.src}
+        </span>
+      </p>
+      <span
+        className={`flex h-[22px] shrink-0 items-center rounded-full px-2 text-[11.5px] font-medium transition-opacity ${
+          claim.ok ? 'bg-ok-bg text-ok' : 'bg-err-bg text-err'
+        }`}
+        style={{ opacity: claim.verified ? 1 : 0 }}
+      >
+        {claim.ok ? '✓ Destekliyor' : '✕ Desteklenmiyor'}
+      </span>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { AuthGate } from './auth';
 import { ConversationsProvider } from './conversations';
-import { ResizeHandle, useStoredWidth } from './resize-handle';
+import { ResizeHandle, useStoredFlag, useStoredWidth } from './resize-handle';
 import { Sidebar } from './sidebar';
 
 const SIDEBAR = { initial: 264, min: 220, max: 420 };
@@ -26,6 +26,7 @@ function Frame({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const sidebar = useStoredWidth('bekenai-sidebar-width', SIDEBAR);
+  const [sidebarClosed, setSidebarClosed] = useStoredFlag('bekenai-sidebar-closed');
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -41,18 +42,44 @@ function Frame({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-bg">
-      <div className="relative hidden shrink-0 lg:flex" style={{ width: sidebar.width }}>
-        <Sidebar />
-        <ResizeHandle
-          edge="right"
-          width={sidebar.width}
-          min={SIDEBAR.min}
-          max={SIDEBAR.max}
-          onChange={sidebar.change}
-          onReset={sidebar.reset}
-          label="Kenar çubuğunun genişliği"
-        />
-      </div>
+      {sidebarClosed ? (
+        // Closed: a thin strip keeps the way back and a new chat one click away.
+        <div className="hidden w-[52px] shrink-0 flex-col items-center gap-1.5 border-r border-line bg-side py-3 lg:flex">
+          <button
+            type="button"
+            onClick={() => setSidebarClosed(false)}
+            aria-label="Kenar çubuğunu aç"
+            title="Kenar çubuğunu aç"
+            className="flex size-9 items-center justify-center rounded-lg text-fg2 hover:bg-hover hover:text-fg"
+          >
+            <Icon name="sidebar" size={18} />
+          </button>
+          <Link
+            href="/sohbet"
+            aria-label="Yeni sohbet"
+            title="Yeni sohbet"
+            className="flex size-9 items-center justify-center rounded-lg text-fg2 hover:bg-hover hover:text-fg"
+          >
+            <Icon name="edit" size={17} />
+          </Link>
+        </div>
+      ) : (
+        <div className="relative hidden shrink-0 lg:flex" style={{ width: sidebar.width }}>
+          <Sidebar onCollapse={() => setSidebarClosed(true)} />
+          <ResizeHandle
+            edge="right"
+            width={sidebar.width}
+            min={SIDEBAR.min}
+            max={SIDEBAR.max}
+            onChange={sidebar.change}
+            // Dragged well past its narrowest width, the sidebar closes.
+            collapseBelow={SIDEBAR.min - 64}
+            onCollapse={() => setSidebarClosed(true)}
+            onReset={sidebar.reset}
+            label="Kenar çubuğunun genişliği"
+          />
+        </div>
+      )}
 
       {drawerOpen && (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menü">

@@ -21,7 +21,16 @@ const NAV: { href: string; label: string; icon: IconName; match: (path: string) 
 
 const GROUP_ORDER = ['Bugün', 'Önceki 7 gün', 'Daha eski'] as const;
 
-export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onClose?: () => void }) {
+export function Sidebar({
+  onNavigate,
+  onClose,
+  onCollapse,
+}: {
+  onNavigate?: () => void;
+  onClose?: () => void;
+  /** Desktop only: folds the sidebar away to a thin strip. */
+  onCollapse?: () => void;
+}) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
   const { pinned, conversations } = useConversations();
@@ -41,6 +50,17 @@ export function Sidebar({ onNavigate, onClose }: { onNavigate?: () => void; onCl
     <nav aria-label="Ana gezinme" className="flex h-full w-full flex-col gap-4 border-r border-line bg-side p-3">
       <div className="flex h-10 items-center justify-between pl-1.5 pr-1">
         <Logo href="/sohbet" size={30} />
+        {onCollapse && (
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Kenar çubuğunu kapat"
+            title="Kenar çubuğunu kapat"
+            className="flex size-8 items-center justify-center rounded-lg text-fg3 hover:bg-hover hover:text-fg"
+          >
+            <Icon name="sidebar" size={17} />
+          </button>
+        )}
         {onClose && (
           <button
             type="button"

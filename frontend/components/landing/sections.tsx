@@ -362,31 +362,56 @@ export function Architecture() {
         </div>
 
         <div className="flex flex-col gap-6">
-          <SubHead n="02" title="Bir soru cevaba nasıl dönüşür?" note="Altı adım, her biri ayrı test edilen bir modül" />
+          <SubHead
+            n="02"
+            title="Kaynaktan cevaba: sistem nasıl çalışır?"
+            note="İlk üç adım kaynaklar eklenirken bir kez, son dördü her soruda çalışır"
+          />
           <PipelineAnimation />
-          <ol className="m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2 lg:grid-cols-3">
-            {PIPELINE.map((step, index) => (
-              <li key={step.en} className="flex flex-col overflow-hidden rounded-2xl border border-line bg-surface">
-                <div className="flex flex-col gap-2.5 px-6 pb-5 pt-[22px]">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-bg font-mono text-xs font-medium text-accent">{index + 1}</span>
-                    <h4 className="m-0 grow text-[17px] font-semibold">{step.title}</h4>
-                    <span className="font-mono text-[11px] text-fg3">{step.en}</span>
-                  </div>
-                  <p className="m-0 text-[15px] leading-relaxed">{step.plain}</p>
-                </div>
-                <div className="flex grow flex-col gap-2.5 border-t border-line bg-bg px-6 pb-5 pt-4">
-                  <span className="text-[11px] font-semibold tracking-[0.14em] text-fg3">TEKNİK</span>
-                  <p className="m-0 text-[13.5px] leading-relaxed text-fg2">{step.tech}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {step.tags.map((tag) => (
-                      <span key={tag} className="flex h-[22px] items-center rounded-md border border-line px-2 font-mono text-[11px] text-fg2">{tag}</span>
-                    ))}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ol>
+          {(['hazırlık', 'soru'] as const).map((phase) => (
+            <div key={phase} className="flex flex-col gap-3">
+              <h4 className="m-0 flex items-center gap-2 text-[11.5px] font-semibold tracking-[0.12em] text-fg3">
+                {phase === 'hazırlık' ? 'HAZIRLIK · KAYNAKLAR EKLENİRKEN BİR KEZ' : 'HER SORUDA'}
+                <span className="h-px grow bg-line" />
+              </h4>
+              {/* Each card spans two rows of a shared grid (subgrid), so the cards in a row line up:
+                  their descriptions end, and their technical parts begin, at the same height. */}
+              <ol
+                className={`m-0 grid list-none grid-cols-1 gap-4 p-0 md:grid-cols-2 ${phase === 'hazırlık' ? 'lg:grid-cols-3' : 'xl:grid-cols-4'}`}
+              >
+                {PIPELINE.map((step, index) => ({ step, index }))
+                  .filter(({ step }) => step.phase === phase)
+                  .map(({ step, index }) => (
+                    <li
+                      key={step.en}
+                      className="row-span-2 grid grid-rows-subgrid gap-0 overflow-hidden rounded-2xl border border-line bg-surface"
+                    >
+                      <div className="flex flex-col gap-2.5 px-6 pb-5 pt-[22px]">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-accent-bg font-mono text-xs font-medium text-accent">
+                            {index + 1}
+                          </span>
+                          <h4 className="m-0 grow text-[17px] font-semibold">{step.title}</h4>
+                        </div>
+                        <span className="font-mono text-[11px] text-fg3">{step.en}</span>
+                        <p className="m-0 text-[15px] leading-relaxed">{step.plain}</p>
+                      </div>
+                      <div className="flex flex-col gap-2.5 border-t border-line bg-bg px-6 pb-5 pt-4">
+                        <span className="text-[11px] font-semibold tracking-[0.14em] text-fg3">TEKNİK</span>
+                        <p className="m-0 text-[13.5px] leading-relaxed text-fg2">{step.tech}</p>
+                        <div className="mt-auto flex flex-wrap gap-1.5">
+                          {step.tags.map((tag) => (
+                            <span key={tag} className="flex h-[22px] items-center rounded-md border border-line px-2 font-mono text-[11px] text-fg2">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+              </ol>
+            </div>
+          ))}
         </div>
 
         <div className="flex flex-col gap-6">
