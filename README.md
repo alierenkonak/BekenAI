@@ -133,8 +133,9 @@ Also:
 - **Web search, on request.** When the corpus has no source, or a provision has changed, the
   user can add a clearly labelled web section (Tavily). It never replaces the grounded answer.
 - **A workspace that stays out of the way.** Chats can be pinned, renamed and deleted from the
-  sidebar. The sidebar and the source panel can be resized by dragging, while the answer column
-  keeps a readable width. Light and dark themes.
+  sidebar. The sidebar and the source panel can be resized by dragging, or dragged shut, while
+  the answer column keeps a readable width. The source panel explains the citation marks
+  (supports, partly supports, provision changed later). Light and dark themes.
 
 ## How an answer is built
 
