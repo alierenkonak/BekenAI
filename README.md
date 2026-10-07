@@ -27,6 +27,7 @@
   <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml"><img alt="Security audit" src="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml/badge.svg"></a>
   <a href="https://bekenai.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/demo-bekenai.vercel.app-2B59C3"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-2B59C3"></a>
 </p>
 
 <p align="center">
@@ -337,6 +338,11 @@ make build     # frontend production build
   analysis three to five.
 - Scanned PDFs without a text layer cannot be read.
 - Answers are for research. They are not legal advice.
+
+## License
+
+The code is released under the [MIT License](LICENSE). The legal corpus, the search indexes
+and the doctrine source are not part of the repository and are not covered by it.
 
 <br>
 

@@ -27,6 +27,7 @@
   <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/alierenkonak/BekenAI/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml"><img alt="Security audit" src="https://github.com/alierenkonak/BekenAI/actions/workflows/security-audit.yml/badge.svg"></a>
   <a href="https://bekenai.vercel.app"><img alt="Canlı demo" src="https://img.shields.io/badge/demo-bekenai.vercel.app-2B59C3"></a>
+  <a href="LICENSE"><img alt="Lisans: MIT" src="https://img.shields.io/badge/license-MIT-2B59C3"></a>
 </p>
 
 <p align="center">
@@ -341,6 +342,11 @@ make build     # frontend production build
   dakika, bir dava analizi üç beş dakika sürer.
 - Metin katmanı olmayan taranmış PDF'ler okunamaz.
 - Cevaplar araştırma içindir, hukuki danışmanlık değildir.
+
+## Lisans
+
+Kod [MIT Lisansı](LICENSE) ile yayımlanır. Hukuk kaynakları, arama dizinleri ve doktrin kaynağı
+repoda yer almaz ve bu lisansın kapsamında değildir.
 
 <br>
 
