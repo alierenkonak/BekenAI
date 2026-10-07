@@ -6,6 +6,10 @@
 </p>
 
 <p align="center">
+  <b>English</b> · <a href="README.tr.md">Türkçe</a>
+</p>
+
+<p align="center">
   <a href="https://bekenai.vercel.app"><b>Live demo</b></a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
