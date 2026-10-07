@@ -17,33 +17,39 @@ import {
 } from '@/lib/files';
 import { describeError, formatBytes, formatRelativeDay, isRetryableIngestFailure } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { useI18n } from '@/lib/i18n/client';
+import { rich } from '@/lib/i18n/rich';
 import type { Conversation, FileStorage, LegalCase, UserFile } from '@/lib/types';
 import { ConversationMenuButton, RenameField } from './conversation-item';
 
 type LocalUpload = { key: string; name: string; size: number; error: string | null };
 
-const FILE_STATUS: Record<UserFile['status'], { label: string; tone: 'ok' | 'accent' | 'neutral' | 'err' }> = {
-  pending_upload: { label: 'Yükleme bekleniyor', tone: 'neutral' },
-  verifying: { label: 'Doğrulanıyor', tone: 'accent' },
-  uploaded: { label: 'Sırada', tone: 'neutral' },
-  indexing: { label: 'İşleniyor', tone: 'accent' },
-  ready: { label: 'Hazır', tone: 'ok' },
-  failed: { label: 'Hata', tone: 'err' },
-  delete_pending: { label: 'Siliniyor', tone: 'neutral' },
-  deleted: { label: 'Silindi', tone: 'neutral' },
+const FILE_STATUS_TONE: Record<UserFile['status'], 'ok' | 'accent' | 'neutral' | 'err'> = {
+  pending_upload: 'neutral',
+  verifying: 'accent',
+  uploaded: 'neutral',
+  indexing: 'accent',
+  ready: 'ok',
+  failed: 'err',
+  delete_pending: 'neutral',
+  deleted: 'neutral',
 };
 
+// The chat message that starts a case analysis; sent to the backend, so it stays in Turkish.
 export const ANALYSIS_MESSAGE = 'Dava dosyalarını analiz et';
 
 export function CaseDetail({ caseId }: { caseId: string }) {
   const router = useRouter();
+  const { m } = useI18n();
+  const t = m.caseDetail;
   const now = useNow(60_000);
   const [analysing, setAnalysing] = useState(false);
   const [legalCase, setLegalCase] = useState<LegalCase | null>(null);
   const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [files, setFiles] = useState<UserFile[] | null>(null);
   const [uploads, setUploads] = useState<LocalUpload[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Kept as the error itself and described when shown, so it follows a language switch.
+  const [error, setError] = useState<{ error: unknown } | null>(null);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -78,7 +84,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         setFiles(filePage.items);
       })
       .catch((loadError) => {
-        if (active) setError(describeError(loadError));
+        if (active) setError({ error: loadError });
       });
     return () => {
       active = false;
@@ -103,7 +109,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   const upload = async (file: File) => {
     const key = `${file.name}-${file.size}-${file.lastModified}`;
     const mediaType = mediaTypeOf(file);
-    const problem = uploadProblem(file);
+    const problem = uploadProblem(file, m);
     setUploads((current) => [...current.filter((item) => item.key !== key), { key, name: file.name, size: file.size, error: problem }]);
     if (problem || !mediaType) return;
     try {
@@ -111,7 +117,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       setUploads((current) => current.filter((item) => item.key !== key));
       await reloadFiles();
     } catch (uploadError) {
-      setUploads((current) => current.map((item) => (item.key === key ? { ...item, error: describeError(uploadError) } : item)));
+      setUploads((current) => current.map((item) => (item.key === key ? { ...item, error: describeError(uploadError, m) } : item)));
       await reloadFiles().catch(() => {});
     }
   };
@@ -126,7 +132,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       const { url } = await api.downloadUrl(file.id);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (downloadError) {
-      setError(describeError(downloadError));
+      setError({ error: downloadError });
     }
   };
 
@@ -135,18 +141,18 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       const updated = await api.reindexFile(file.id);
       setFiles((current) => current?.map((item) => (item.id === file.id ? updated : item)) ?? current);
     } catch (reindexError) {
-      setError(describeError(reindexError));
+      setError({ error: reindexError });
     }
   };
 
   const remove = async (file: UserFile) => {
-    if (!window.confirm(`“${file.original_name}” silinsin mi?`)) return;
+    if (!window.confirm(t.confirmDelete(file.original_name))) return;
     try {
       const updated = await api.deleteFile(file.id);
       setFiles((current) => current?.map((item) => (item.id === file.id ? updated : item)) ?? current);
       reloadStorage();
     } catch (deleteError) {
-      setError(describeError(deleteError));
+      setError({ error: deleteError });
     }
   };
 
@@ -157,7 +163,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       setLegalCase(updated);
       setEditing(false);
     } catch (saveError) {
-      setError(describeError(saveError));
+      setError({ error: saveError });
     }
   };
 
@@ -177,7 +183,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       );
       router.push(`/sohbet/${queued.conversation_id}`);
     } catch (analysisError) {
-      setError(describeError(analysisError));
+      setError({ error: analysisError });
       setAnalysing(false);
     }
   };
@@ -187,14 +193,14 @@ export function CaseDetail({ caseId }: { caseId: string }) {
       <div className="flex h-full items-center justify-center gap-3 px-6 text-sm text-fg3" role="status">
         {error ? (
           <span className="flex flex-col items-center gap-3 text-center">
-            {error}
+            {describeError(error.error, m)}
             <Link href="/davalar" className="text-fg2 underline">
-              Davalara dön
+              {t.back}
             </Link>
           </span>
         ) : (
           <>
-            <Spinner /> Dava yükleniyor…
+            <Spinner /> {t.loading}
           </>
         )}
       </div>
@@ -204,9 +210,9 @@ export function CaseDetail({ caseId }: { caseId: string }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-4 py-7 sm:px-8">
-        <nav aria-label="Konum" className="flex items-center gap-1.5 text-[13px] text-fg3">
+        <nav aria-label={t.breadcrumb} className="flex items-center gap-1.5 text-[13px] text-fg3">
           <Link href="/davalar" className="text-fg2 no-underline hover:text-fg">
-            Davalar
+            {m.cases.heading}
           </Link>
           <Icon name="chevRight" size={13} />
           <span className="min-w-0 truncate">{legalCase.name}</span>
@@ -222,7 +228,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
           >
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
               <span className="flex justify-between">
-                Dava adı
+                {m.cases.name}
                 <span className="font-mono text-[11.5px] font-normal text-fg3">{name.length} / 160</span>
               </span>
               <input
@@ -236,7 +242,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             </label>
             <label className="flex flex-col gap-1.5 text-[13px] font-medium">
               <span className="flex justify-between">
-                Açıklama
+                {m.cases.description}
                 <span className="font-mono text-[11.5px] font-normal text-fg3">{description.length} / 2000</span>
               </span>
               <textarea
@@ -249,10 +255,10 @@ export function CaseDetail({ caseId }: { caseId: string }) {
             </label>
             <div className="flex gap-2">
               <button type="submit" className="h-9 rounded-[9px] bg-inv px-4 text-[13.5px] font-medium text-inv-fg">
-                Kaydet
+                {m.common.save}
               </button>
               <button type="button" onClick={() => setEditing(false)} className="h-9 rounded-[9px] px-3 text-[13.5px] text-fg2 hover:bg-hover">
-                Vazgeç
+                {m.common.cancel}
               </button>
             </div>
           </form>
@@ -273,21 +279,21 @@ export function CaseDetail({ caseId }: { caseId: string }) {
               }}
               className="h-9 rounded-[9px] border border-line-strong bg-surface px-3.5 text-[13.5px] font-medium text-fg hover:bg-hover"
             >
-              Düzenle
+              {t.edit}
             </button>
             <Link
               href={`/sohbet?dava=${caseId}`}
               className="flex h-9 items-center gap-1.5 rounded-[9px] bg-inv px-3.5 text-[13.5px] font-medium text-inv-fg no-underline"
             >
               <Icon name="plus" size={15} strokeWidth={2} />
-              Bu davada yeni sohbet
+              {t.newChat}
             </Link>
           </div>
         )}
 
         {error && (
           <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">
-            {error}
+            {describeError(error.error, m)}
           </p>
         )}
 
@@ -298,11 +304,11 @@ export function CaseDetail({ caseId }: { caseId: string }) {
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <section className="flex flex-col rounded-[14px] border border-line bg-surface">
             <header className="flex h-[52px] items-center gap-2 border-b border-line px-5">
-              <h2 className="m-0 text-[14.5px] font-semibold">Sohbetler</h2>
+              <h2 className="m-0 text-[14.5px] font-semibold">{t.chats}</h2>
               <span className="text-[13px] text-fg3">{conversations?.length ?? ''}</span>
             </header>
             {conversations?.length === 0 && (
-              <p className="m-0 px-5 py-6 text-[13.5px] text-fg3">Bu davaya bağlı sohbet yok. İlk soruyu sorun.</p>
+              <p className="m-0 px-5 py-6 text-[13.5px] text-fg3">{t.noChats}</p>
             )}
             {conversations?.map((conversation) =>
               renamingId === conversation.id ? (
@@ -323,7 +329,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                     <span className="min-w-0 grow truncate text-sm font-medium" title={conversation.title}>
                       {conversation.title}
                     </span>
-                    <span className="shrink-0 text-[12.5px] text-fg3">{now ? formatRelativeDay(conversation.updated_at, now) : ''}</span>
+                    <span className="shrink-0 text-[12.5px] text-fg3">{now ? formatRelativeDay(conversation.updated_at, now, m) : ''}</span>
                   </Link>
                   <ConversationMenuButton
                     conversation={conversation}
@@ -337,16 +343,16 @@ export function CaseDetail({ caseId }: { caseId: string }) {
 
           <section className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-surface px-5 pb-5 pt-[18px]">
             <header className="flex items-center gap-2">
-              <h2 className="m-0 text-[14.5px] font-semibold">Dosyalar</h2>
+              <h2 className="m-0 text-[14.5px] font-semibold">{t.files}</h2>
               <span className="text-[13px] text-fg3">{files?.length ?? ''}</span>
               <span className="grow" />
               <span
                 className="text-[12.5px] text-fg3"
-                title={storage ? 'Bütün davalarınızdaki ve sohbetlerinizdeki dosyalar, hesabınızın depolama alanına göre' : undefined}
+                title={storage ? t.storageTitle : undefined}
               >
                 {storage
-                  ? `${formatBytes(storage.used_bytes)} / ${formatBytes(storage.quota_bytes)} kullanılıyor`
-                  : `${formatBytes(usedBytes)} kullanılıyor`}
+                  ? t.storageOf(formatBytes(storage.used_bytes, m), formatBytes(storage.quota_bytes, m))
+                  : t.storageUsed(formatBytes(usedBytes, m))}
               </span>
             </header>
 
@@ -369,14 +375,17 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                 <Icon name="upload" size={17} />
               </span>
               <span className="text-[13.5px] font-medium">
-                Dosyayı buraya sürükleyin veya{' '}
-                <button type="button" onClick={() => inputRef.current?.click()} className="font-medium text-accent underline">
-                  bilgisayardan seçin
-                </button>
+                {rich(t.drop, {
+                  pick: (
+                    <button type="button" onClick={() => inputRef.current?.click()} className="font-medium text-accent underline">
+                      {t.pick}
+                    </button>
+                  ),
+                })}
               </span>
-              <span className="text-[12.5px] text-fg3">PDF, Word (DOCX) veya TXT · dosya başına en fazla 50 MB</span>
+              <span className="text-[12.5px] text-fg3">{t.formats}</span>
               <a href={SAMPLE_FILE_URL} download className="text-[12.5px] font-medium text-file underline">
-                Elinizde dosya yok mu? Kurgusal örnek dava dosyasını indirin
+                {t.sample}
               </a>
               <input
                 ref={inputRef}
@@ -397,13 +406,13 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                   <Icon name="file" size={18} strokeWidth={1.6} className={item.error ? 'text-err' : 'text-fg3'} />
                   <div className="flex min-w-0 grow flex-col">
                     <span className="truncate text-[13.5px] font-medium">{item.name}</span>
-                    <span className={`text-xs ${item.error ? 'text-err' : 'text-fg3'}`}>{item.error ?? `${formatBytes(item.size)} · yükleniyor`}</span>
+                    <span className={`text-xs ${item.error ? 'text-err' : 'text-fg3'}`}>{item.error ?? t.uploading(formatBytes(item.size, m))}</span>
                   </div>
                   {item.error ? (
                     <button
                       type="button"
                       onClick={() => setUploads((current) => current.filter((entry) => entry.key !== item.key))}
-                      aria-label="Kapat"
+                      aria-label={m.common.close}
                       className="flex size-7 items-center justify-center rounded-[7px] text-fg3 hover:bg-hover"
                     >
                       <Icon name="x" size={14} />
@@ -414,25 +423,25 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                 </li>
               ))}
               {files?.map((file) => {
-                const status = FILE_STATUS[file.status];
+                const tone = FILE_STATUS_TONE[file.status];
                 return (
                   <li key={file.id} className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
                     <Icon name="file" size={18} strokeWidth={1.6} className={file.status === 'failed' ? 'text-err' : 'text-fg3'} />
                     <div className="flex min-w-0 grow flex-col">
                       <span className="truncate text-[13.5px] font-medium">{file.original_name}</span>
-                      <span className={`text-xs ${file.status === 'failed' ? 'text-err' : 'text-fg3'}`}>{fileDetail(file)}</span>
+                      <span className={`text-xs ${file.status === 'failed' ? 'text-err' : 'text-fg3'}`}>{fileDetail(file, m)}</span>
                     </div>
-                    <Badge tone={status.tone}>
+                    <Badge tone={tone}>
                       {(file.status === 'verifying' || file.status === 'indexing') && <Spinner size={11} />}
                       {file.status === 'ready' && <Icon name="check" size={12} strokeWidth={2.4} />}
-                      {status.label}
+                      {t.status[file.status]}
                     </Badge>
                     {file.status === 'failed' && file.verified_size_bytes !== null && isRetryableIngestFailure(file.safe_error_code) && (
                       <button
                         type="button"
                         onClick={() => void reindex(file)}
-                        aria-label={`${file.original_name} dosyasını yeniden işle`}
-                        title="Yeniden dene"
+                        aria-label={t.reindexAria(file.original_name)}
+                        title={t.reindex}
                         className="flex size-7 items-center justify-center rounded-[7px] text-fg3 hover:bg-hover hover:text-fg"
                       >
                         <Icon name="refresh" size={14} />
@@ -442,7 +451,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                       <button
                         type="button"
                         onClick={() => void download(file)}
-                        aria-label={`${file.original_name} dosyasını indir`}
+                        aria-label={t.downloadAria(file.original_name)}
                         className="flex size-7 items-center justify-center rounded-[7px] text-fg3 hover:bg-hover hover:text-fg"
                       >
                         <Icon name="download" size={14} />
@@ -452,7 +461,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
                       <button
                         type="button"
                         onClick={() => void remove(file)}
-                        aria-label={`${file.original_name} dosyasını sil`}
+                        aria-label={m.files.deleteAria(file.original_name)}
                         className="flex size-7 items-center justify-center rounded-[7px] text-fg3 hover:bg-hover hover:text-err"
                       >
                         <Icon name="trash" size={14} />
@@ -465,7 +474,7 @@ export function CaseDetail({ caseId }: { caseId: string }) {
 
             <p className="m-0 flex items-start gap-2 text-[12.5px] leading-normal text-fg3">
               <Icon name="lock" size={14} className="mt-0.5" />
-              Dosyalar yalnızca sizin çalışma alanınızda saklanır; ortak kaynak havuzuna hiçbir zaman eklenmez.
+              {t.private}
             </p>
           </section>
         </div>
@@ -486,6 +495,8 @@ export function CaseAnalysisCard({
   busy: boolean;
   onStart: () => void;
 }) {
+  const { m } = useI18n();
+  const t = m.caseDetail;
   const blocked = processing || readyFiles === 0;
   return (
     <section
@@ -497,15 +508,12 @@ export function CaseAnalysisCard({
       </span>
       <div className="flex min-w-0 grow flex-col gap-1">
         <h2 id="case-analysis" className="m-0 text-[14.5px] font-semibold">
-          Dosya analizi
+          {t.analysisTitle}
         </h2>
-        <p className="m-0 text-[13px] leading-normal text-fg2">
-          Davadaki bütün hazır dosyalar okunur, davanın hukuki konuları çıkarılır ve her biri mevzuat, Yargıtay kararları ve
-          doktrinle karşılaştırılır. Rapor yeni bir sohbette açılır; 3–5 dakika sürer.
-        </p>
+        <p className="m-0 text-[13px] leading-normal text-fg2">{t.analysisBody}</p>
         {blocked && (
           <p className="m-0 text-[12.5px] text-fg3">
-            {processing ? 'Dosyalar işleniyor; tamamlanınca analiz başlatılabilir.' : 'Analiz için işlenmesi tamamlanmış bir dosya gerekiyor.'}
+            {processing ? t.analysisProcessing : t.analysisNoFiles}
           </p>
         )}
       </div>
@@ -516,7 +524,7 @@ export function CaseAnalysisCard({
         className="flex h-9 w-fit shrink-0 items-center gap-1.5 rounded-[9px] bg-inv px-3.5 text-[13.5px] font-medium text-inv-fg disabled:opacity-40"
       >
         {busy ? <Spinner size={14} /> : <Icon name="layers" size={15} />}
-        Dosyayı analiz et
+        {t.analyse}
       </button>
     </section>
   );
@@ -524,6 +532,7 @@ export function CaseAnalysisCard({
 
 /** A case description, cut to three lines with a toggle when it is longer. */
 function CaseDescription({ text }: { text: string }) {
+  const { m } = useI18n();
   const [expanded, setExpanded] = useState(false);
   const [overflows, setOverflows] = useState(false);
   const ref = useRef<HTMLParagraphElement>(null);
@@ -548,7 +557,7 @@ function CaseDescription({ text }: { text: string }) {
       </p>
       {(overflows || expanded) && (
         <button type="button" onClick={() => setExpanded((value) => !value)} className="text-[12.5px] font-medium text-fg2 underline hover:text-fg">
-          {expanded ? 'Daha az göster' : 'Devamını göster'}
+          {expanded ? m.caseDetail.showLess : m.caseDetail.showMore}
         </button>
       )}
     </div>

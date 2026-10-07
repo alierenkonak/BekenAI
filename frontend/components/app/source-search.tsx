@@ -5,7 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
 import { api } from '@/lib/api';
-import { describeError } from '@/lib/format';
+import { describeError, formatDate } from '@/lib/format';
+import type { Messages } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n/client';
 import type { SearchResponse, SearchResult } from '@/lib/types';
 
 function escapeRegExp(value: string): string {
@@ -28,49 +30,54 @@ function highlight(text: string, query: string): ReactNode {
   );
 }
 
-function kindOf(result: SearchResult): { label: string; cls: string } {
-  if (result.source_channel === 'doctrine') return { label: 'Doktrin', cls: 'bg-doc-bg text-doc' };
-  if (result.case_number || result.decision_number) return { label: 'Yargıtay kararı', cls: 'bg-muted text-fg2' };
-  return { label: 'Mevzuat', cls: 'bg-accent-bg text-accent' };
+function kindOf(result: SearchResult, m: Messages): { label: string; cls: string } {
+  if (result.source_channel === 'doctrine') return { label: m.search.kindDoctrine, cls: 'bg-doc-bg text-doc' };
+  if (result.case_number || result.decision_number) return { label: m.search.kindDecision, cls: 'bg-muted text-fg2' };
+  return { label: m.search.kindLegislation, cls: 'bg-accent-bg text-accent' };
 }
 
-function meta(result: SearchResult): string {
+function meta(result: SearchResult, m: Messages): string {
   const parts: string[] = [];
   if (result.author) parts.push(result.author);
   if (result.chamber) parts.push(result.chamber);
   if (result.case_number) parts.push(`E. ${result.case_number}`);
   if (result.decision_number) parts.push(`K. ${result.decision_number}`);
-  if (result.document_date) parts.push(new Date(result.document_date).toLocaleDateString('tr-TR'));
+  if (result.document_date) parts.push(formatDate(result.document_date, m));
   if (result.publication_year && !result.document_date) parts.push(String(result.publication_year));
-  if (result.page_number) parts.push(`s. ${result.page_number}`);
+  if (result.page_number) parts.push(m.search.page(result.page_number));
   return parts.join(' · ');
 }
 
 function ResultCard({ result, query }: { result: SearchResult; query: string }) {
-  const kind = kindOf(result);
+  const { m } = useI18n();
+  const kind = kindOf(result, m);
   const passage = result.exact_passage.length > 700 ? `${result.exact_passage.slice(0, 700)}…` : result.exact_passage;
   return (
     <article className={`flex flex-col gap-2 py-[18px] ${result.source_channel === 'doctrine' ? '' : 'border-b border-line'}`}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <span className={`flex h-[22px] items-center rounded-md px-2 text-xs font-medium ${kind.cls}`}>{kind.label}</span>
-        <h2 className="m-0 text-[15px] font-semibold">{result.title}</h2>
+        <h2 lang="tr" className="m-0 text-[15px] font-semibold">
+          {result.title}
+        </h2>
         {result.breadcrumb.length > 0 && <span className="text-[13px] text-fg3">{result.breadcrumb.join(' › ')}</span>}
       </div>
-      <p className="m-0 whitespace-pre-line text-sm leading-relaxed text-fg2">{highlight(passage, query)}</p>
+      <p lang="tr" className="m-0 whitespace-pre-line text-sm leading-relaxed text-fg2">
+        {highlight(passage, query)}
+      </p>
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
-        <span className="font-mono text-[11.5px] text-fg3">{meta(result) || result.corpus_version}</span>
+        <span className="font-mono text-[11.5px] text-fg3">{meta(result, m) || result.corpus_version}</span>
         <span className="grow" />
         <Link
           href={`/sohbet?q=${encodeURIComponent(query)}`}
           className="flex items-center gap-1.5 text-[13px] font-medium text-fg no-underline hover:underline"
         >
           <Icon name="chat" size={14} />
-          Sohbette sor
+          {m.search.askInChat}
         </Link>
         {result.source_url && (
           <a href={result.source_url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[13px] text-fg2 no-underline hover:text-fg">
             <Icon name="ext" size={14} />
-            Kaynağı aç
+            {m.search.openSource}
           </a>
         )}
       </div>
@@ -80,6 +87,8 @@ function ResultCard({ result, query }: { result: SearchResult; query: string }) 
 
 export function SourceSearch() {
   const router = useRouter();
+  const { m } = useI18n();
+  const t = m.search;
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') ?? '';
   const [query, setQuery] = useState(initialQuery);
@@ -88,7 +97,8 @@ export function SourceSearch() {
     initialQuery.trim().length >= 3 ? { query: initialQuery.trim() } : null,
   );
   const [response, setResponse] = useState<SearchResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Kept as the error itself and described when shown, so it follows a language switch.
+  const [error, setError] = useState<{ error: unknown } | null>(null);
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
 
   const requestKey = submitted ? submitted.query : null;
@@ -105,7 +115,7 @@ export function SourceSearch() {
       })
       .catch((searchError) => {
         if (controller.signal.aborted) return;
-        setError(describeError(searchError));
+        setError({ error: searchError });
         setLoadingKey((current) => (current === requestKey ? null : current));
       });
     return () => controller.abort();
@@ -125,8 +135,8 @@ export function SourceSearch() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-[880px] flex-col gap-5 px-4 py-8 sm:px-6 lg:py-9">
         <div className="flex flex-col gap-1.5">
-          <h1 className="m-0 text-[26px] font-semibold tracking-[-0.02em]">Kaynak arama</h1>
-          <p className="m-0 text-sm text-fg2">Sohbet başlatmadan mevzuat, Yargıtay kararları ve doktrin içinde doğrudan arayın.</p>
+          <h1 className="m-0 text-[26px] font-semibold tracking-[-0.02em]">{t.heading}</h1>
+          <p className="m-0 text-sm text-fg2">{t.lead}</p>
         </div>
 
         <form
@@ -139,7 +149,7 @@ export function SourceSearch() {
         >
           <Icon name="search" size={18} className="text-fg3" />
           <label htmlFor="kaynak-ara" className="sr-only">
-            Aranacak ifade
+            {t.label}
           </label>
           <input
             id="kaynak-ara"
@@ -148,7 +158,7 @@ export function SourceSearch() {
             minLength={3}
             maxLength={500}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Örneğin: ihbar süresi bildirim şartı"
+            placeholder={t.placeholder}
             className="min-w-0 grow border-0 bg-transparent text-[15px] text-fg outline-none placeholder:text-fg3"
           />
           <button
@@ -157,23 +167,23 @@ export function SourceSearch() {
             className="flex h-[38px] items-center gap-2 rounded-[9px] bg-inv px-4 text-[13.5px] font-medium text-inv-fg disabled:opacity-40"
           >
             {loading && <Spinner size={14} />}
-            Ara
+            {t.submit}
           </button>
         </form>
 
-        <p className="m-0 text-[12.5px] text-fg3">Mevzuat, Yargıtay kararları ve doktrin · Hibrit arama · BM25 + BGE-M3 · yeniden sıralama</p>
+        <p className="m-0 text-[12.5px] text-fg3">{t.tech}</p>
 
         {error && (
           <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">
-            {error}
+            {describeError(error.error, m)}
           </p>
         )}
 
         {!submitted && (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center">
             <Icon name="book" size={22} className="text-fg3" />
-            <p className="m-0 text-sm font-medium">Bir kavram, madde ya da olay yazın</p>
-            <p className="m-0 max-w-md text-[13px] text-fg3">Sonuçlar alaka düzeyine göre sıralanır; her pasajın künyesi ve kaynağı gösterilir.</p>
+            <p className="m-0 text-sm font-medium">{t.emptyTitle}</p>
+            <p className="m-0 max-w-md text-[13px] text-fg3">{t.emptyBody}</p>
           </div>
         )}
 
@@ -181,12 +191,12 @@ export function SourceSearch() {
           <div className={`flex flex-col gap-4 transition-opacity ${loading ? 'opacity-50' : ''}`} aria-busy={loading}>
             <div className="flex items-center justify-between text-[13px] text-fg3">
               <span>
-                <span className="font-semibold text-fg">Birincil kaynaklar</span> · {response.results.length} sonuç
+                <span className="font-semibold text-fg">{t.primary}</span> · {t.results(response.results.length)}
               </span>
-              <span>Alaka düzeyine göre sıralı</span>
+              <span>{t.ranked}</span>
             </div>
             <div className="flex flex-col border-t border-line">
-              {response.results.length === 0 && <p className="m-0 py-6 text-sm text-fg3">Bu ifadeyle eşleşen birincil kaynak bulunamadı.</p>}
+              {response.results.length === 0 && <p className="m-0 py-6 text-sm text-fg3">{t.noResults}</p>}
               {response.results.map((result) => (
                 <ResultCard key={result.chunk_id} result={result} query={response.query} />
               ))}
@@ -196,7 +206,7 @@ export function SourceSearch() {
                 <div className="flex items-center gap-2 pt-2 text-[13px] text-fg3">
                   <span className="size-2 rounded-[2px] bg-doc" />
                   <span>
-                    <span className="font-semibold text-fg">Doktrin ve yardımcı kaynaklar</span> · {response.doctrine_results.length} sonuç
+                    <span className="font-semibold text-fg">{t.doctrine}</span> · {t.results(response.doctrine_results.length)}
                   </span>
                 </div>
                 <div className="flex flex-col gap-3">

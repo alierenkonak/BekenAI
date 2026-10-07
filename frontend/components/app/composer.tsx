@@ -4,8 +4,7 @@ import type { ReactNode } from 'react';
 import { Icon, Spinner } from '@/components/icons';
 import { DeepResearchSwitch, WebSearchSwitch } from '@/components/ui';
 import { CHAT_MESSAGE_MAX } from '@/lib/config';
-import { DEEP_RESEARCH_HINT } from '@/lib/research';
-import { WEB_SEARCH_HINT } from '@/lib/web-search';
+import { useI18n } from '@/lib/i18n/client';
 
 export function Composer({
   value,
@@ -34,6 +33,8 @@ export function Composer({
   /** Why sending is paused (files still processing); typing stays possible. */
   locked?: string | null;
 }) {
+  const { m } = useI18n();
+  const t = m.composer;
   const length = value.trim().length;
   const canSend = !busy && !locked && length >= 3 && value.length <= CHAT_MESSAGE_MAX;
   // The counter appears only as the text nears the limit; a counter that widens with every
@@ -60,7 +61,7 @@ export function Composer({
         </p>
       )}
       <label htmlFor={`composer-${variant}`} className="sr-only">
-        Sorunuz
+        {t.label}
       </label>
       <textarea
         id={`composer-${variant}`}
@@ -87,7 +88,7 @@ export function Composer({
           {variant === 'hero' && (
             <span className="hidden h-8 items-center gap-1.5 rounded-lg border border-line bg-muted px-2.5 text-[13px] font-medium sm:flex">
               <Icon name="scale" size={15} />
-              İş Hukuku
+              {t.domain}
             </span>
           )}
           {webSearch && (
@@ -95,10 +96,10 @@ export function Composer({
               checked={webSearch.checked}
               onChange={webSearch.onChange}
               compact={variant === 'compact'}
-              label={variant === 'hero' ? 'Web araması' : 'Web'}
-              shortLabel="Web"
+              label={variant === 'hero' ? t.webSearch : t.web}
+              shortLabel={t.web}
               hintId={`web-search-hint-${variant}`}
-              hint={WEB_SEARCH_HINT}
+              hint={t.webHint}
             />
           )}
           {deepResearch && (
@@ -106,10 +107,10 @@ export function Composer({
               checked={deepResearch.checked}
               onChange={deepResearch.onChange}
               compact={variant === 'compact'}
-              label={variant === 'hero' ? 'Derin araştırma' : 'Derin'}
-              shortLabel="Derin"
+              label={variant === 'hero' ? t.deepResearch : t.deep}
+              shortLabel={t.deep}
               hintId={`deep-research-hint-${variant}`}
-              hint={DEEP_RESEARCH_HINT}
+              hint={t.deepHint}
             />
           )}
           {extra}
@@ -123,7 +124,7 @@ export function Composer({
           <button
             type="submit"
             disabled={!canSend}
-            aria-label="Soruyu gönder"
+            aria-label={t.send}
             className="flex size-[34px] items-center justify-center rounded-[10px] bg-inv text-inv-fg transition-opacity disabled:opacity-35"
           >
             {busy ? <Spinner /> : <Icon name="arrowUp" size={17} strokeWidth={2} />}

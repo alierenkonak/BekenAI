@@ -20,13 +20,24 @@ export function LogoMark({ size = 26 }: { size?: number }) {
 }
 
 /** The mark and the BekenAI wordmark; `size` is the mark's size. */
-export function Logo({ href = '/', size = 26, className = '' }: { href?: string; size?: number; className?: string }) {
+export function Logo({
+  href = '/',
+  size = 26,
+  className = '',
+  label = 'BekenAI',
+}: {
+  href?: string;
+  size?: number;
+  className?: string;
+  /** The link's accessible name, in the interface language. */
+  label?: string;
+}) {
   return (
     <Link
       href={href}
       className={`flex items-center no-underline ${className}`}
       style={{ gap: Math.round(size * 0.3) }}
-      aria-label="BekenAI ana sayfa"
+      aria-label={label}
     >
       <LogoMark size={size} />
       <span

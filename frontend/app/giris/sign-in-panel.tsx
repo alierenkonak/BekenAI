@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Spinner } from '@/components/icons';
 import { AUTH_CONFIGURED } from '@/lib/config';
+import { useI18n } from '@/lib/i18n/client';
+import { rich } from '@/lib/i18n/rich';
 import { getSupabase } from '@/lib/supabase';
 
 function GoogleMark() {
@@ -20,6 +22,8 @@ function GoogleMark() {
 
 export function SignInPanel() {
   const router = useRouter();
+  const { m } = useI18n();
+  const t = m.signIn;
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,16 +50,16 @@ export function SignInPanel() {
     });
     if (signInError) {
       setPending(false);
-      setError('Google ile giriş başlatılamadı. Supabase’de Google sağlayıcısının açık olduğundan emin olun.');
+      setError(t.googleFailed);
     }
   };
 
   return (
     <>
       <div className="flex flex-col gap-2">
-        <h2 className="m-0 text-[26px] font-semibold tracking-[-0.02em]">BekenAI’ye giriş yapın</h2>
+        <h2 className="m-0 text-[26px] font-semibold tracking-[-0.02em]">{t.heading}</h2>
         <p className="m-0 text-[14.5px] leading-normal text-fg2">
-          Hesabınız yoksa ilk girişte kişisel çalışma alanınız otomatik olarak oluşturulur.
+          {t.lead}
         </p>
       </div>
       {AUTH_CONFIGURED ? (
@@ -66,12 +70,15 @@ export function SignInPanel() {
           className="flex h-[46px] items-center justify-center gap-2.5 rounded-[10px] border border-line-strong bg-surface text-[14.5px] font-medium text-fg shadow-soft transition-colors hover:bg-hover disabled:opacity-60"
         >
           {pending ? <Spinner size={18} /> : <GoogleMark />}
-          Google ile devam et
+          {t.google}
         </button>
       ) : (
         <p role="alert" className="m-0 rounded-[10px] border border-doc-line bg-doc-bg px-4 py-3 text-[13.5px] leading-normal text-doc">
-          Giriş henüz yapılandırılmadı: kökteki <code className="font-mono">.env</code> dosyasına{' '}
-          <code className="font-mono">SUPABASE_URL</code> ve <code className="font-mono">SUPABASE_PUBLISHABLE_KEY</code> ekleyin.
+          {rich(t.notConfigured, {
+            env: <code className="font-mono">.env</code>,
+            url: <code className="font-mono">SUPABASE_URL</code>,
+            key: <code className="font-mono">SUPABASE_PUBLISHABLE_KEY</code>,
+          })}
         </p>
       )}
       {error && (
@@ -80,9 +87,9 @@ export function SignInPanel() {
         </p>
       )}
       <p className="m-0 text-[12.5px] leading-relaxed text-fg3">
-        Devam ederek bunun bir demo proje olduğunu ve cevapların hukuki danışmanlık yerine geçmediğini kabul etmiş olursunuz.{' '}
+        {t.consent}{' '}
         <Link href="/" className="text-fg2 underline">
-          Ana sayfaya dön
+          {t.backHome}
         </Link>
       </p>
     </>

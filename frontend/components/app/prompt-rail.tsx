@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useI18n } from '@/lib/i18n/client';
 
 const TICK = 16;
 const LENGTHS = [40, 30, 22, 16, 12];
@@ -18,12 +19,13 @@ export function PromptRail({
   activeIndex: number;
   onJump: (index: number) => void;
 }) {
+  const { m } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
   const preview = hover === null ? null : prompts[hover];
 
   return (
     <nav
-      aria-label="Sohbet haritası"
+      aria-label={m.rail.label}
       onMouseLeave={() => setHover(null)}
       className="absolute left-1.5 top-1/2 z-10 hidden w-11 -translate-y-1/2 flex-col lg:flex"
       style={{ height: prompts.length * TICK }}
@@ -38,7 +40,7 @@ export function PromptRail({
           <button
             key={index}
             type="button"
-            aria-label={`${index + 1}. soru: ${prompt.text}`}
+            aria-label={m.rail.item(index + 1, prompt.text)}
             aria-current={active ? 'true' : undefined}
             onMouseEnter={() => setHover(index)}
             onFocus={() => setHover(index)}
@@ -61,7 +63,7 @@ export function PromptRail({
           style={{ top: Math.max(-24, hover * TICK - 22) }}
         >
           <span className="font-mono text-[11px] text-fg3">
-            Soru {hover + 1} · {preview.time}
+            {m.rail.preview(hover + 1, preview.time)}
           </span>
           <span className="text-[13.5px] leading-normal text-fg">
             {preview.text.length > 140 ? `${preview.text.slice(0, 137)}…` : preview.text}

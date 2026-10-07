@@ -85,12 +85,12 @@ function HintedSwitch({ hintId, hint, label, tone, ...props }: HintedSwitchProps
   );
 }
 
-export function WebSearchSwitch({ label = 'Web araması', ...props }: HintedSwitchProps) {
+export function WebSearchSwitch({ label, ...props }: HintedSwitchProps & { label: string }) {
   return <HintedSwitch {...props} label={label} tone="web" />;
 }
 
 /** Deep research for the next question only; it turns itself off once the question is sent. */
-export function DeepResearchSwitch({ label = 'Derin araştırma', ...props }: HintedSwitchProps) {
+export function DeepResearchSwitch({ label, ...props }: HintedSwitchProps & { label: string }) {
   return <HintedSwitch {...props} label={label} tone="accent" />;
 }
 

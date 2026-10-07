@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
+import { useI18n } from '@/lib/i18n/client';
 import { AuthGate } from './auth';
 import { ConversationsProvider } from './conversations';
 import { ResizeHandle, useStoredFlag, useStoredWidth } from './resize-handle';
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Frame({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { m } = useI18n();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const sidebar = useStoredWidth('bekenai-sidebar-width', SIDEBAR);
   const [sidebarClosed, setSidebarClosed] = useStoredFlag('bekenai-sidebar-closed');
@@ -48,16 +50,16 @@ function Frame({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setSidebarClosed(false)}
-            aria-label="Kenar çubuğunu aç"
-            title="Kenar çubuğunu aç"
+            aria-label={m.shell.openSidebar}
+            title={m.shell.openSidebar}
             className="flex size-9 items-center justify-center rounded-lg text-fg2 hover:bg-hover hover:text-fg"
           >
             <Icon name="sidebar" size={18} />
           </button>
           <Link
             href="/sohbet"
-            aria-label="Yeni sohbet"
-            title="Yeni sohbet"
+            aria-label={m.common.newChat}
+            title={m.common.newChat}
             className="flex size-9 items-center justify-center rounded-lg text-fg2 hover:bg-hover hover:text-fg"
           >
             <Icon name="edit" size={17} />
@@ -76,16 +78,16 @@ function Frame({ children }: { children: ReactNode }) {
             collapseBelow={SIDEBAR.min - 64}
             onCollapse={() => setSidebarClosed(true)}
             onReset={sidebar.reset}
-            label="Kenar çubuğunun genişliği"
+            label={m.shell.sidebarWidth}
           />
         </div>
       )}
 
       {drawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menü">
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={m.shell.menu}>
           <button
             type="button"
-            aria-label="Menüyü kapat"
+            aria-label={m.shell.closeMenu}
             className="absolute inset-0 bg-[var(--scrim)]"
             onClick={() => setDrawerOpen(false)}
           />
@@ -100,15 +102,15 @@ function Frame({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            aria-label="Menüyü aç"
+            aria-label={m.shell.openMenu}
             className="flex size-11 items-center justify-center rounded-[10px] text-fg hover:bg-hover"
           >
             <Icon name="menu" size={20} />
           </button>
-          <Logo href="/sohbet" size={28} className="grow" />
+          <Logo href="/sohbet" size={28} className="grow" label={m.common.homeLabel} />
           <Link
             href="/sohbet"
-            aria-label="Yeni sohbet"
+            aria-label={m.common.newChat}
             className="flex size-11 items-center justify-center rounded-[10px] text-fg hover:bg-hover"
           >
             <Icon name="edit" size={20} />

@@ -7,6 +7,7 @@ import { Icon, Spinner } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
 import { isConversational, renderAnswer, type RenderedAnswer } from '@/lib/answer';
 import { describeError } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
 import type { Conversation, GenerationSummary, Message, SearchMode } from '@/lib/types';
 import { readWebSearch, rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AnswerView, CancelledCard, FailedCard, InsufficientCard } from './answer';
@@ -24,8 +25,6 @@ type Turn = {
   assistant: Message | null;
   rendered: RenderedAnswer | null;
 };
-
-const timeFormatter = new Intl.DateTimeFormat('tr-TR', { hour: '2-digit', minute: '2-digit' });
 
 const SOURCE_PANEL = { initial: 440, min: 340, max: 720 };
 // The answer column never gets narrower than this; with less room the source panel opens over it.
@@ -62,12 +61,15 @@ function offersWebSearch(turns: Turn[], index: number): boolean {
 
 export function ConversationView({ conversationId }: { conversationId: string }) {
   const router = useRouter();
+  const { m } = useI18n();
+  const t = m.chat;
   const { refresh: refreshSidebar } = useConversations();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [caseName, setCaseName] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[] | null>(null);
   const [olderCursor, setOlderCursor] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Kept as the error itself and described when shown, so it follows a language switch.
+  const [loadError, setLoadError] = useState<{ error: unknown } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // A question typed on "new chat" before attaching a file continues here.
   const [draft, setDraft] = useState(() => readDraftHandoff(conversationId));
@@ -85,7 +87,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
   const sourcePanel = useStoredWidth('bekenai-source-panel-width', SOURCE_PANEL);
   const stickToBottom = useRef(true);
   const chatFiles = useChatFiles(conversationId);
-  const lockNote = processingNote(chatFiles);
+  const lockNote = processingNote(chatFiles, m);
 
   useEffect(() => clearDraftHandoff(conversationId), [conversationId]);
 
@@ -108,7 +110,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
         setLoadError(null);
       })
       .catch((error) => {
-        if (active) setLoadError(describeError(error));
+        if (active) setLoadError({ error });
       });
     return () => {
       active = false;
@@ -254,7 +256,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
       stickToBottom.current = true;
       refreshSidebar();
     } catch (error) {
-      setActionError(describeError(error));
+      setActionError(describeError(error, m));
       // Another tab (or the case page) may have added a file: show why we are waiting.
       if (error instanceof ApiError && error.code === 'files_processing') void chatFiles.reload().catch(() => {});
     } finally {
@@ -267,7 +269,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
     try {
       await api.cancelGeneration(generationId);
     } catch (error) {
-      setActionError(describeError(error));
+      setActionError(describeError(error, m));
     } finally {
       setCancelling(false);
       setReloadKey((value) => value + 1);
@@ -291,18 +293,18 @@ export function ConversationView({ conversationId }: { conversationId: string })
         if (scroller) scroller.scrollTop += scroller.scrollHeight - previousHeight;
       });
     } catch (error) {
-      setActionError(describeError(error));
+      setActionError(describeError(error, m));
     }
   };
 
   const removeConversation = async () => {
-    if (!window.confirm('Bu sohbet ve tüm cevapları kalıcı olarak silinsin mi?')) return;
+    if (!window.confirm(t.confirmDelete)) return;
     try {
       await api.deleteConversation(conversationId);
       refreshSidebar();
       router.push('/sohbet');
     } catch (error) {
-      setActionError(describeError(error));
+      setActionError(describeError(error, m));
     }
   };
 
@@ -316,13 +318,13 @@ export function ConversationView({ conversationId }: { conversationId: string })
   if (loadError && !messages) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="m-0 text-sm text-fg2">{loadError}</p>
+        <p className="m-0 text-sm text-fg2">{describeError(loadError.error, m)}</p>
         <div className="flex gap-2">
           <button type="button" onClick={() => setReloadKey((value) => value + 1)} className="h-9 rounded-[9px] bg-inv px-4 text-[13.5px] font-medium text-inv-fg">
-            Tekrar dene
+            {m.common.retry}
           </button>
           <Link href="/sohbet" className="flex h-9 items-center rounded-[9px] border border-line-strong px-4 text-[13.5px] font-medium text-fg no-underline">
-            Yeni sohbet
+            {m.common.newChat}
           </Link>
         </div>
       </div>
@@ -340,24 +342,24 @@ export function ConversationView({ conversationId }: { conversationId: string })
     <div ref={rootRef} className="relative flex h-full min-h-0">
       <div className="flex min-w-0 grow flex-col">
         <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4 sm:px-6">
-          <h1 className="m-0 min-w-0 truncate text-sm font-medium">{conversation?.title ?? 'Sohbet'}</h1>
+          <h1 className="m-0 min-w-0 truncate text-sm font-medium">{conversation?.title ?? t.fallbackTitle}</h1>
           {caseId && (
             <Link
               href={`/davalar/${caseId}`}
               className="hidden h-6 min-w-0 items-center gap-1.5 rounded-md bg-muted px-2 text-xs text-fg2 no-underline hover:text-fg sm:flex"
             >
               <Icon name="cases" size={13} />
-              <span className="truncate">{caseName ?? 'Dava'}</span>
+              <span className="truncate">{caseName ?? t.case}</span>
             </Link>
           )}
           <span className="grow" />
-          {turns.length > 0 && <span className="hidden whitespace-nowrap text-[12.5px] text-fg3 sm:inline">{turns.length} soru</span>}
+          {turns.length > 0 && <span className="hidden whitespace-nowrap text-[12.5px] text-fg3 sm:inline">{t.questions(turns.length)}</span>}
           <ChatFilesButton chatFiles={chatFiles} caseId={caseId} />
           <button
             type="button"
             onClick={() => void removeConversation()}
-            aria-label="Sohbeti sil"
-            title="Sohbeti sil"
+            aria-label={t.delete}
+            title={t.delete}
             className="flex size-8 items-center justify-center rounded-lg text-fg3 hover:bg-hover hover:text-err"
           >
             <Icon name="trash" />
@@ -370,16 +372,16 @@ export function ConversationView({ conversationId }: { conversationId: string })
               {!messages && (
                 <div className="flex items-center gap-3 text-sm text-fg3" role="status">
                   <Spinner />
-                  Sohbet yükleniyor…
+                  {t.loading}
                 </div>
               )}
               {olderCursor && (
                 <button type="button" onClick={() => void loadOlder()} className="self-center rounded-full border border-line px-3.5 py-1.5 text-[12.5px] text-fg2 hover:bg-hover">
-                  Daha eski mesajları yükle
+                  {t.loadOlder}
                 </button>
               )}
               {messages && turns.length === 0 && (
-                <p className="m-0 text-center text-sm text-fg3">Bu sohbette henüz soru yok. Aşağıdan ilk sorunuzu yazın.</p>
+                <p className="m-0 text-center text-sm text-fg3">{t.empty}</p>
               )}
               {turns.map((turn, index) => {
                 const generation = turn.generation;
@@ -392,27 +394,27 @@ export function ConversationView({ conversationId }: { conversationId: string })
                 const analysisTurn = generation?.search_mode === 'analysis';
                 const researchTurn = Boolean(generation?.deep_research);
                 return (
-                  <section key={turn.user.id} data-turn={index} aria-label={`${index + 1}. soru`} className="flex flex-col gap-5">
+                  <section key={turn.user.id} data-turn={index} aria-label={t.turn(index + 1)} className="flex flex-col gap-5">
                     <div className="flex max-w-[500px] flex-col items-end gap-1.5 self-end">
                       {webTurn && (
                         <span className="flex items-center gap-1 text-xs font-medium text-web">
                           <Icon name="globe" size={13} />
-                          Web araması açık
+                          {t.webOn}
                         </span>
                       )}
                       {researchTurn && (
                         <span className="flex items-center gap-1 text-xs font-medium text-accent">
                           <Icon name="search" size={13} />
-                          Derin araştırma
+                          {t.deepResearch}
                         </span>
                       )}
                       {analysisTurn && (
                         <span className="flex items-center gap-1 text-xs font-medium text-file">
                           <Icon name="layers" size={13} />
-                          Davadaki bütün dosyalar
+                          {t.allCaseFiles}
                         </span>
                       )}
-                      <div className="whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">
+                      <div lang="tr" className="whitespace-pre-wrap rounded-[14px] bg-muted px-4 py-2.5 text-[14.5px] leading-normal">
                         {turn.user.content}
                       </div>
                     </div>
@@ -456,7 +458,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
           </div>
           {turns.length >= 2 && (
             <PromptRail
-              prompts={turns.map((turn) => ({ text: turn.user.content, time: timeFormatter.format(new Date(turn.user.created_at)) }))}
+              prompts={turns.map((turn) => ({
+                text: turn.user.content,
+                time: new Date(turn.user.created_at).toLocaleTimeString(m.intl, { hour: '2-digit', minute: '2-digit' }),
+              }))}
               activeIndex={activePrompt}
               onJump={jumpTo}
             />
@@ -465,7 +470,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
 
         <div className="shrink-0 px-4 pb-4 pt-3 sm:px-6">
           <div className="mx-auto flex max-w-[640px] flex-col gap-2">
-            {actionError && !(lockNote && actionError === describeError('files_processing')) && (
+            {actionError && !(lockNote && actionError === describeError('files_processing', m)) && (
               <p role="alert" className="m-0 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-2.5 text-[13px] text-err">
                 {actionError}
               </p>
@@ -478,9 +483,9 @@ export function ConversationView({ conversationId }: { conversationId: string })
               >
                 <Icon name="alert" size={14} className="mt-0.5 shrink-0" />
                 <span className="min-w-0 grow">
-                  <span className="font-medium">{item.name}</span> yüklenemedi: {item.error}
+                  <span className="font-medium">{item.name}</span> {t.uploadFailed} {item.error}
                 </span>
-                <button type="button" onClick={() => chatFiles.dismissUpload(item.key)} aria-label="Kapat" className="shrink-0">
+                <button type="button" onClick={() => chatFiles.dismissUpload(item.key)} aria-label={m.common.close} className="shrink-0">
                   <Icon name="x" size={14} />
                 </button>
               </p>
@@ -499,10 +504,10 @@ export function ConversationView({ conversationId }: { conversationId: string })
               deepResearch={{ checked: deepResearchOn, onChange: setDeepResearchOn }}
               busy={sending}
               locked={lockNote}
-              placeholder={turns.length ? 'Takip sorusu sorun…' : 'Dosya ya da hukuki konu hakkında sorun…'}
+              placeholder={turns.length ? t.followUp : t.firstQuestion}
               extra={<AttachButton onFiles={(files) => files.forEach((file) => void chatFiles.upload(file))} />}
             />
-            <p className="m-0 text-center text-[11.5px] text-fg3">BekenAI hukuki danışmanlık yerine geçmez.</p>
+            <p className="m-0 text-center text-[11.5px] text-fg3">{m.common.notLegalAdvice}</p>
           </div>
         </div>
       </div>
@@ -510,7 +515,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
       {selectedSource && selectedTurn?.rendered && (
         <>
           <aside
-            aria-label="Kaynak paneli"
+            aria-label={t.sourcePanel}
             style={{ width: panelWidth }}
             className={`hidden shrink-0 border-l border-line bg-surface lg:flex lg:flex-col ${
               panelDocked ? 'relative' : 'absolute inset-y-0 right-0 z-30 shadow-lg'
@@ -526,7 +531,7 @@ export function ConversationView({ conversationId }: { conversationId: string })
               collapseBelow={SOURCE_PANEL.min - 80}
               onCollapse={() => setSelected(null)}
               onReset={sourcePanel.reset}
-              label="Kaynak panelinin genişliği"
+              label={t.sourcePanelWidth}
             />
             <SourcePanel
               selected={selectedSource}
@@ -536,8 +541,8 @@ export function ConversationView({ conversationId }: { conversationId: string })
               warnings={selectedWarnings}
             />
           </aside>
-          <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Kaynak">
-            <button type="button" aria-label="Kaynak panelini kapat" className="absolute inset-0 bg-[var(--scrim)]" onClick={() => setSelected(null)} />
+          <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label={t.source}>
+            <button type="button" aria-label={t.closeSourcePanel} className="absolute inset-0 bg-[var(--scrim)]" onClick={() => setSelected(null)} />
             <div className="absolute inset-x-0 bottom-0 flex max-h-[85dvh] flex-col overflow-hidden rounded-t-[20px] bg-surface shadow-lg">
               <span aria-hidden="true" className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong" />
               <SourcePanel

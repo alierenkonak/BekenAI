@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
+import { LocaleProvider } from '@/lib/i18n/client';
+import { getI18n, getLocale } from '@/lib/i18n/server';
 import { THEME_STORAGE_KEY } from '@/lib/theme-key';
 import './globals.css';
 
@@ -12,15 +14,14 @@ const instrumentSerif = Instrument_Serif({
   style: ['normal', 'italic'],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: 'BekenAI — Kaynağı belli hukuki cevaplar',
-    template: '%s · BekenAI',
-  },
-  description:
-    'Türk iş hukuku için kaynağa dayalı yapay zekâ araştırması: hibrit arama, iddia bazlı doğrulama ve sürümlü kaynak kaydı. Demo proje.',
-  icons: { icon: '/favicon.svg' },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { m } = await getI18n();
+  return {
+    title: { default: m.meta.title, template: '%s · BekenAI' },
+    description: m.meta.description,
+    icons: { icon: '/favicon.svg' },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [
@@ -32,10 +33,11 @@ export const viewport: Viewport = {
 // Runs before first paint so the stored or system theme never flashes.
 const themeScript = `(function(){try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`;
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const locale = await getLocale();
   return (
     <html
-      lang="tr"
+      lang={locale}
       data-theme="light"
       suppressHydrationWarning
       className={`${geist.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
@@ -43,7 +45,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-dvh bg-bg text-fg antialiased">{children}</body>
+      <body className="min-h-dvh bg-bg text-fg antialiased">
+        <LocaleProvider locale={locale}>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { Icon } from '@/components/icons';
+import { useI18n } from '@/lib/i18n/client';
 import type { Conversation } from '@/lib/types';
 import { useConversations } from './conversations';
 import { Menu } from './popover';
@@ -21,6 +22,8 @@ export function ConversationMenuButton({
   onChanged?: () => void;
 }) {
   const { togglePin, remove } = useConversations();
+  const { m } = useI18n();
+  const t = m.chatMenu;
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -29,7 +32,7 @@ export function ConversationMenuButton({
       <button
         ref={triggerRef}
         type="button"
-        aria-label={`“${conversation.title}” için seçenekler`}
+        aria-label={t.options(conversation.title)}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -41,16 +44,16 @@ export function ConversationMenuButton({
         open={open}
         onClose={() => setOpen(false)}
         anchorRef={triggerRef}
-        label="Sohbet seçenekleri"
+        label={t.label}
         items={[
           {
-            label: conversation.pinned_at ? 'Sabitlemeyi kaldır' : 'Sabitle',
+            label: conversation.pinned_at ? t.unpin : t.pin,
             icon: 'pin',
             onSelect: () => void togglePin(conversation).then((updated) => updated && onChanged?.()),
           },
-          { label: 'Yeniden adlandır', icon: 'edit', onSelect: onRename },
+          { label: t.rename, icon: 'edit', onSelect: onRename },
           {
-            label: 'Sil',
+            label: t.delete,
             icon: 'trash',
             danger: true,
             onSelect: () => void remove(conversation).then((removed) => removed && onChanged?.()),
@@ -72,6 +75,7 @@ export function RenameField({
   className?: string;
 }) {
   const { rename } = useConversations();
+  const { m } = useI18n();
   const [value, setValue] = useState(conversation.title);
   const settled = useRef(false);
 
@@ -84,7 +88,7 @@ export function RenameField({
   return (
     <input
       autoFocus
-      aria-label="Sohbetin yeni adı"
+      aria-label={m.chatMenu.newName}
       value={value}
       maxLength={160}
       onFocus={(event) => event.currentTarget.select()}

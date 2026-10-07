@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useI18n } from '@/lib/i18n/client';
 
 type Bounds = { initial: number; min: number; max: number };
 
@@ -67,6 +68,7 @@ export function ResizeHandle({
   collapseBelow?: number;
   onCollapse?: () => void;
 }) {
+  const { m } = useI18n();
   const direction = edge === 'right' ? 1 : -1;
 
   const startDrag = (event: PointerEvent<HTMLDivElement>) => {
@@ -115,7 +117,7 @@ export function ResizeHandle({
       aria-valuemin={min}
       aria-valuemax={max}
       tabIndex={0}
-      title="Sürükleyerek boyutlandırın; çift tıklayınca varsayılana döner"
+      title={m.common.resizeHint}
       onPointerDown={startDrag}
       onDoubleClick={onReset}
       onKeyDown={onKeyDown}

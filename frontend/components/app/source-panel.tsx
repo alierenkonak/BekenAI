@@ -5,18 +5,14 @@ import { Icon } from '@/components/icons';
 import { Badge } from '@/components/ui';
 import { api } from '@/lib/api';
 import { sourceKind, sourceSubtitle, type SourceRef } from '@/lib/answer';
-import { describeError } from '@/lib/format';
+import { describeError, formatDate } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
 import type { ProvisionChange } from '@/lib/types';
-
-const CHANGE_NAME: Record<ProvisionChange['event_type'], string> = {
-  added: 'Eklendi',
-  amended: 'Değiştirildi',
-  repealed: 'Yürürlükten kaldırıldı',
-  annulled: 'AYM iptal etti',
-};
 
 /** Official amendment notes, newest first: a law passage's own, or those of a decision's articles. */
 function ProvisionHistory({ changes, title }: { changes: ProvisionChange[]; title: string }) {
+  const { m } = useI18n();
+  const t = m.panel;
   return (
     <div className="flex flex-col gap-2 rounded-[10px] border border-line px-3.5 py-3">
       <div className="flex items-center gap-2 text-[12.5px]">
@@ -27,21 +23,23 @@ function ProvisionHistory({ changes, title }: { changes: ProvisionChange[]; titl
         {changes.map((change) => (
           <li key={`${change.change_date}:${change.provision}:${change.annotation}`} className="flex gap-3 text-[12.5px] leading-normal">
             <span className="w-[74px] shrink-0 font-mono text-[11.5px] text-fg3">
-              {new Date(change.change_date).toLocaleDateString('tr-TR')}
+              {formatDate(change.change_date, m)}
             </span>
             <span className="text-fg2">
               <span className="font-medium text-fg">
-                {CHANGE_NAME[change.event_type]}
+                {t.changes[change.event_type]}
                 {change.provision ? ` · ${change.provision}` : ''}
               </span>
-              {change.amending_law ? ` (${change.amending_law} sayılı Kanun)` : ''}
-              <span className="block text-fg3">{change.annotation}</span>
+              {change.amending_law ? t.amendingLaw(change.amending_law) : ''}
+              <span lang="tr" className="block text-fg3">
+                {change.annotation}
+              </span>
             </span>
           </li>
         ))}
       </ul>
       <p className="m-0 text-[12px] leading-normal text-fg3">
-        Resmî değişiklik notları. Tarih, değiştiren kanunun kabul tarihidir (AYM iptalinde karar tarihi); değişiklikten önceki metin kaynaklarda yok.
+        {t.historyNote}
       </p>
     </div>
   );
@@ -61,6 +59,8 @@ export function SourcePanel({
   /** The answer's Yürürlük kontrolü notes about this source (the red dot on its chip). */
   warnings?: { level: string; text: string }[];
 }) {
+  const { m } = useI18n();
+  const t = m.panel;
   const [copied, setCopied] = useState(false);
   const [openError, setOpenError] = useState<string | null>(null);
   const { snapshot } = selected;
@@ -75,12 +75,12 @@ export function SourcePanel({
         ? { solid: 'bg-web', soft: 'bg-web-bg text-web' }
         : { solid: 'bg-accent', soft: 'bg-accent-bg text-accent' };
   const kind = file
-    ? `Dosya${snapshot.location_label ? ` · ${snapshot.location_label}` : ''}`
+    ? `${t.kindFile}${snapshot.location_label ? ` · ${snapshot.location_label}` : ''}`
     : doctrine
-      ? 'Doktrin · yardımcı kaynak'
+      ? t.kindDoctrine
       : web
-        ? 'Web sayfası · resmî kaynak değil'
-        : `Birincil · ${sourceKind(snapshot, selected.channel)}`;
+        ? t.kindWeb
+        : `${t.kindPrimary} · ${sourceKind(snapshot, selected.channel, m)}`;
   const allPartial = selected.claims.every((claim) => claim.status === 'partial');
   const claimNumbers = selected.claims.map((claim) => claim.number).join(', ');
   const others = sources.filter((source) => source.sourceId !== selected.sourceId);
@@ -102,7 +102,7 @@ export function SourcePanel({
       }
     } catch (error) {
       tab?.close();
-      setOpenError(describeError(error));
+      setOpenError(describeError(error, m));
     }
   };
 
@@ -120,7 +120,7 @@ export function SourcePanel({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line pl-5 pr-4">
-        <h2 className="m-0 text-sm font-semibold">Kaynaklar</h2>
+        <h2 className="m-0 text-sm font-semibold">{t.sources}</h2>
         <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11.5px] font-medium text-fg2">
           {sources.length}
         </span>
@@ -128,7 +128,7 @@ export function SourcePanel({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Kaynak panelini kapat"
+          aria-label={t.close}
           className="flex size-8 items-center justify-center rounded-lg text-fg3 hover:bg-hover hover:text-fg"
         >
           <Icon name="x" />
@@ -145,76 +145,77 @@ export function SourcePanel({
             </span>
             <span className={`flex h-[22px] items-center rounded-md px-2 text-xs font-medium ${tone.soft}`}>{kind}</span>
             {allPartial && (
-              <span className="flex h-[22px] items-center rounded-md border border-dashed border-line-strong px-2 text-xs text-fg2">Kısmen destekliyor</span>
+              <span className="flex h-[22px] items-center rounded-md border border-dashed border-line-strong px-2 text-xs text-fg2">{t.partly}</span>
             )}
           </div>
           {warnings.length > 0 && (
             <div className="flex flex-col gap-1.5 rounded-[10px] border border-err-line bg-err-bg px-3.5 py-3">
               <span className="flex items-center gap-2 text-[12.5px] font-semibold text-err">
                 <span aria-hidden className="size-[7px] rounded-full bg-err" />
-                Yürürlük uyarısı
+                {t.warning}
               </span>
               {warnings.map((warning) => (
-                <p key={warning.text} className="m-0 text-[12.5px] leading-normal text-fg2">
+                <p key={warning.text} lang="tr" className="m-0 text-[12.5px] leading-normal text-fg2">
                   {warning.text}
                 </p>
               ))}
             </div>
           )}
           <div className="flex flex-col gap-1">
-            <h3 className="m-0 text-[17px] font-semibold tracking-[-0.01em]">{snapshot.title}</h3>
+            <h3 lang="tr" className="m-0 text-[17px] font-semibold tracking-[-0.01em]">
+              {snapshot.title}
+            </h3>
             {snapshot.breadcrumb.length > 0 && (
               <span className="text-[12.5px] text-fg3">{snapshot.breadcrumb.join(' › ')}</span>
             )}
-            {!file && (snapshot.authority || sourceSubtitle(snapshot)) && (
+            {!file && (snapshot.authority || sourceSubtitle(snapshot, m)) && (
               <span className="font-mono text-[11.5px] text-fg3">
-                {[snapshot.authority, snapshot.decision_metadata.chamber, sourceSubtitle(snapshot)].filter(Boolean).join(' · ')}
+                {[snapshot.authority, snapshot.decision_metadata.chamber, sourceSubtitle(snapshot, m)].filter(Boolean).join(' · ')}
               </span>
             )}
           </div>
           {snapshot.redacted ? (
             <p className="m-0 rounded-[10px] border border-dashed border-line-strong px-4 py-3.5 text-[13px] leading-normal text-fg3">
-              Bu dosya silindiği için pasaj artık gösterilmiyor.
+              {t.redacted}
             </p>
           ) : (
-            <blockquote className="m-0 max-h-[360px] overflow-y-auto whitespace-pre-line rounded-[10px] bg-muted px-4 py-3.5 text-[13.5px] leading-[1.65] text-fg2">
+            <blockquote lang="tr" className="m-0 max-h-[360px] overflow-y-auto whitespace-pre-line rounded-[10px] bg-muted px-4 py-3.5 text-[13.5px] leading-[1.65] text-fg2">
               {snapshot.exact_passage}
             </blockquote>
           )}
           {!file && !web && snapshot.provision_changes && snapshot.provision_changes.length > 0 && (
-            <ProvisionHistory changes={snapshot.provision_changes} title="Değişiklik geçmişi" />
+            <ProvisionHistory changes={snapshot.provision_changes} title={t.history} />
           )}
           {!file && !web && snapshot.cited_provision_changes && snapshot.cited_provision_changes.length > 0 && (
             <ProvisionHistory
               changes={snapshot.cited_provision_changes}
-              title="Dayandığı maddelerde karardan sonraki değişiklikler"
+              title={t.citedHistory}
             />
           )}
           {web && (
             <p className="m-0 text-[12.5px] leading-normal text-fg3">
-              Sayfadan arama anında alınan alıntı{snapshot.retrieved_on ? ` (${new Date(snapshot.retrieved_on).toLocaleDateString('tr-TR')})` : ''}.
-              Sayfa sonradan değişmiş olabilir; bilgiyi resmî kaynaktan doğrulayın.
+              {t.webExcerpt(snapshot.retrieved_on ? formatDate(snapshot.retrieved_on, m) : null)}
             </p>
           )}
           <div className="flex flex-col gap-2 rounded-[10px] border border-line px-3.5 py-3">
             <div className="flex items-center gap-2 text-[12.5px]">
-              <span className="font-semibold">Doğrulama</span>
+              <span className="font-semibold">{t.verification}</span>
               <span className="grow" />
-              <span className="text-fg3">İfade {claimNumbers}</span>
+              <span className="text-fg3">{t.statements(claimNumbers)}</span>
               {allPartial ? (
-                <span className="rounded-full border border-dashed border-line-strong px-2 py-px text-[11.5px] text-fg2">Kısmen destekliyor</span>
+                <span className="rounded-full border border-dashed border-line-strong px-2 py-px text-[11.5px] text-fg2">{t.partly}</span>
               ) : (
                 <Badge tone="ok">
                   <Icon name="check" size={12} strokeWidth={2.2} />
-                  Destekliyor
+                  {t.supports}
                 </Badge>
               )}
             </div>
             {selected.claims.map((claim) => (
               <p key={claim.number} className="m-0 text-[12.5px] leading-normal text-fg2">
-                <span className="font-medium text-fg">İfade {claim.number}:</span>{' '}
-                {claim.status === 'partial' ? 'Kısmen destekliyor. ' : ''}
-                {claim.reason || 'Pasaj bu ifadeyi destekliyor.'}
+                <span className="font-medium text-fg">{t.statement(claim.number)}</span>{' '}
+                {claim.status === 'partial' ? t.partlyLead : ''}
+                {claim.reason ? <span lang="tr">{claim.reason}</span> : t.supportsDefault}
               </p>
             ))}
           </div>
@@ -226,7 +227,7 @@ export function SourcePanel({
                 className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg hover:bg-hover"
               >
                 <Icon name="ext" size={14} />
-                {snapshot.page_number ? `Dosyada aç · s. ${snapshot.page_number}` : 'Dosyayı aç'}
+                {snapshot.page_number ? t.openInFile(snapshot.page_number) : t.openFile}
               </button>
             )}
             {snapshot.source_url && (
@@ -237,7 +238,7 @@ export function SourcePanel({
                 className="flex h-8 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-[13px] font-medium text-fg no-underline hover:bg-hover"
               >
                 <Icon name="ext" size={14} />
-                {web ? 'Sayfayı aç' : 'Kaynağı aç'}
+                {web ? t.openPage : t.openSource}
               </a>
             )}
             {!snapshot.redacted && (
@@ -247,12 +248,12 @@ export function SourcePanel({
                 className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[13px] text-fg2 hover:bg-hover hover:text-fg"
               >
                 <Icon name={copied ? 'check' : 'copy'} size={14} />
-                {copied ? 'Kopyalandı' : 'Pasajı kopyala'}
+                {copied ? m.common.copied : t.copyPassage}
               </button>
             )}
             <span className="grow" />
             {snapshot.corpus_version && (
-              <span className="font-mono text-[11px] text-fg3" title="Kaynak sürümü">
+              <span className="font-mono text-[11px] text-fg3" title={t.sourceVersion}>
                 {snapshot.corpus_version}
               </span>
             )}
@@ -262,7 +263,7 @@ export function SourcePanel({
 
         {others.length > 0 && (
           <section className="flex flex-col gap-0.5 border-t border-line pt-3.5">
-            <h3 className="m-0 mb-1.5 text-[12.5px] font-medium text-fg3">Bu cevaptaki diğer kaynaklar</h3>
+            <h3 className="m-0 mb-1.5 text-[12.5px] font-medium text-fg3">{t.others}</h3>
             {others.map((source) => {
               const isDoctrine = source.channel === 'doctrine';
               const isFile = source.channel === 'file';
@@ -291,13 +292,15 @@ export function SourcePanel({
                     {source.label}
                   </span>
                   <span className="flex min-w-0 grow flex-col">
-                    <span className="truncate text-[13px] font-medium">{source.snapshot.title}</span>
+                    <span lang="tr" className="truncate text-[13px] font-medium">
+                      {source.snapshot.title}
+                    </span>
                     <span className="truncate text-xs text-fg3">
-                      {isDoctrine ? 'Doktrin' : sourceSubtitle(source.snapshot) || sourceKind(source.snapshot, source.channel)}
+                      {isDoctrine ? t.doctrine : sourceSubtitle(source.snapshot, m) || sourceKind(source.snapshot, source.channel, m)}
                     </span>
                   </span>
                   {partial && !isDoctrine && !isFile && !isWeb && (
-                    <span className="shrink-0 rounded-full border border-dashed border-line-strong px-[7px] py-px text-[11.5px] text-fg2">Kısmen</span>
+                    <span className="shrink-0 rounded-full border border-dashed border-line-strong px-[7px] py-px text-[11.5px] text-fg2">{t.partlyShort}</span>
                   )}
                 </button>
               );
@@ -313,21 +316,23 @@ export function SourcePanel({
 
 /** What the chips' frames, dots and colours mean, at the foot of the panel. */
 function CitationLegend() {
+  const { m } = useI18n();
+  const t = m.panel;
   const chip = 'flex h-[19px] min-w-[22px] shrink-0 items-center justify-center gap-[3px] rounded-[5px] border px-[5px] font-mono text-[11px] font-medium';
   const rows: [ReactNode, string][] = [
-    [<span key="ok" className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span>, 'Kaynak, ifadeyi destekliyor.'],
-    [<span key="partial" className={`${chip} border-dashed border-accent text-accent`}>1</span>, 'Kesikli çerçeve: kaynak ifadenin yalnız bir kısmını destekliyor.'],
+    [<span key="ok" className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span>, t.legendSupports],
+    [<span key="partial" className={`${chip} border-dashed border-accent text-accent`}>1</span>, t.legendPartial],
     [
       <span key="changed" className={`${chip} border-accent-line bg-accent-bg text-accent`}>
         1<span className="size-[5px] rounded-full bg-err" />
       </span>,
-      'Kırmızı nokta: atıf yapılan hüküm sonradan değişmiş; ayrıntısı cevabın altındaki Yürürlük kontrolünde.',
+      t.legendChanged,
     ],
   ];
   return (
     <section aria-labelledby="citation-legend" className="flex flex-col gap-2 border-t border-line pt-3.5">
       <h3 id="citation-legend" className="m-0 text-[12.5px] font-medium text-fg3">
-        Atıf işaretleri
+        {t.legend}
       </h3>
       {rows.map(([sample, text]) => (
         <p key={text} className="m-0 flex items-start gap-2.5 text-[12.5px] leading-normal text-fg2">
@@ -336,10 +341,10 @@ function CitationLegend() {
         </p>
       ))}
       <p className="m-0 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[12.5px] text-fg2">
-        <span className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span> mevzuat ve içtihat
-        <span className={`${chip} border-doc-line bg-doc-bg text-doc`}>D1</span> doktrin
-        <span className={`${chip} border-file-line bg-file-bg text-file`}>F1</span> dosya
-        <span className={`${chip} border-web-line bg-web-bg text-web`}>W1</span> web
+        <span className={`${chip} border-accent-line bg-accent-bg text-accent`}>1</span> {t.legendChannels.primary}
+        <span className={`${chip} border-doc-line bg-doc-bg text-doc`}>D1</span> {t.legendChannels.doctrine}
+        <span className={`${chip} border-file-line bg-file-bg text-file`}>F1</span> {t.legendChannels.file}
+        <span className={`${chip} border-web-line bg-web-bg text-web`}>W1</span> {t.legendChannels.web}
       </p>
     </section>
   );

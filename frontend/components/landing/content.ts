@@ -1,178 +1,371 @@
 import type { IconName } from '@/components/icons';
+import type { Locale } from '@/lib/i18n';
+import { LANDING_EN } from './content.en';
 
-export const HERO_FACTS = ['Hibrit arama', 'İddia bazlı doğrulama', 'Sürümlü kaynak kaydı'];
-
-export const TECH = [
-  ['Next.js', 'React arayüzü · Vercel'],
-  ['Tailwind CSS', 'Stil sistemi'],
-  ['FastAPI', 'API ve worker'],
-  ['PostgreSQL', 'Sürümlü hukuk şeması'],
-  ['Supabase', 'Kimlik, veri, depolama'],
-  ['Qdrant', 'Vektör arama'],
-  ['BM25', 'Türkçe kök bulmalı kelime arama'],
-  ['BGE-M3', 'Çok dilli gömme modeli'],
-  ['BGE Reranker v2', 'int8 ONNX yeniden sıralama'],
-  ['Gemini', 'Planlama, yazım, doğrulama'],
-  ['Tavily', 'İsteğe bağlı web araması'],
-  ['Oracle Cloud', 'Arama ve model sunucusu'],
-] as const;
-
-export const METRICS = [
-  ['7', 'adımlı hat: kaynakları toplamaktan iddiaları doğrulamaya'],
-  ['25', 'aday pasaj, her soru için yeniden sıralanır'],
-  ['%99', 'test sorusunda beklenen kanun maddesi ilk 25 sonuçta (72 soru)'],
-  ['450+', 'otomatik test, CI’da her değişiklikte çalışır'],
-] as const;
-
-export const APPROACHES = [
-  {
-    title: 'Yalnızca dil modeli',
-    flow: ['Soru', 'Model', 'Cevap'],
-    body: 'Cevabı eğitim sırasında öğrendiklerinden üretir. Kaynak göstermez; yanlış bir bilgiyi de aynı özgüvenle yazabilir. Buna halüsinasyon denir.',
-    verdict: 'Kaynak yok · halüsinasyon riski yüksek',
-    tone: 'err',
+/**
+ * Landing page text. The legal examples inside the illustrations (questions, claims, passages)
+ * stay in Turkish in both languages: they are what BekenAI actually reads and writes.
+ */
+export const LANDING_TR = {
+  demoBar: {
+    badge: 'Demo proje',
+    text: 'BekenAI bir portföy çalışmasıdır; gerçek hukuki danışmanlık sunmaz.',
+    link: 'Proje hakkında →',
   },
-  {
-    title: 'Klasik RAG',
-    flow: ['Soru', 'Arama', 'Kaynaklar', 'Model', 'Cevap'],
-    body: 'Önce ilgili belgeleri bulur, cevabı onlara dayanarak yazar ve kaynak gösterir. Ancak her cümlenin gerçekten kaynakta yazıp yazmadığını ayrıca kontrol etmez.',
-    verdict: 'Kaynak var · cümleler kontrol edilmez',
-    tone: 'neutral',
+  nav: {
+    label: 'Sayfa bölümleri',
+    how: 'Nasıl çalışır',
+    architecture: 'Mimari',
+    tech: 'Teknolojiler',
+    faq: 'SSS',
+    tryDemo: 'Demoyu dene',
+    home: 'BekenAI ana sayfa',
   },
-] as const;
+  hero: {
+    title: 'Her cevabın arkasında bir {em} var.',
+    titleEm: 'kaynak',
+    lead: 'BekenAI; mevzuatı, Yargıtay kararlarını ve doktrini birlikte tarar. Yazdığı her iddiayı dayandığı pasajla karşılaştırır, desteklenmeyeni açıkça işaretler.',
+    /** Shown only in English. */
+    languageNote: '',
+    explore: 'Mimariyi incele',
+    facts: ['Hibrit arama', 'İddia bazlı doğrulama', 'Sürümlü kaynak kaydı'],
+  },
+  heroAnimation: {
+    label: 'BekenAI’nin bir soruyu kaynaklarla cevaplayıp iddiaları tek tek doğrulamasını gösteren animasyon',
+    steps: ['Arama', 'Yazım', 'Doğrulama'],
+    searching: 'Kaynaklar aranıyor',
+    writing: 'Cevap yazılıyor',
+    verifying: 'İddialar doğrulanıyor',
+    verified: 'Doğrulandı',
+    reranked: '25 aday pasaj → yeniden sıralandı → 3 kaynak seçildi',
+    summary: '3 iddia doğrulandı',
+    supported: '✓ Destekliyor',
+    unsupported: '✕ Desteklenmiyor',
+  },
+  techLabel: 'KULLANILAN TEKNOLOJİLER',
+  tech: [
+    ['Next.js', 'React arayüzü · Vercel'],
+    ['Tailwind CSS', 'Stil sistemi'],
+    ['FastAPI', 'API ve worker'],
+    ['PostgreSQL', 'Sürümlü hukuk şeması'],
+    ['Supabase', 'Kimlik, veri, depolama'],
+    ['Qdrant', 'Vektör arama'],
+    ['BM25', 'Türkçe kök bulmalı kelime arama'],
+    ['BGE-M3', 'Çok dilli gömme modeli'],
+    ['BGE Reranker v2', 'int8 ONNX yeniden sıralama'],
+    ['Gemini', 'Planlama, yazım, doğrulama'],
+    ['Tavily', 'İsteğe bağlı web araması'],
+    ['Oracle Cloud', 'Arama ve model sunucusu'],
+  ] as [string, string][],
+  how: {
+    label: 'NASIL ÇALIŞIR',
+    titleLine: 'Aramadan doğrulamaya,',
+    titleRest: 'her adım görünür.',
+    lead: 'Cevabın nasıl üretildiği gizli kalmaz. Hangi kaynağın bulunduğunu, hangi iddiaya dayandığını ve neyin elendiğini görürsünüz.',
+    search: {
+      title: 'Hibrit arama',
+      body: 'Anahtar kelime ve anlam temelli arama birlikte çalışır. En iyi 25 aday pasaj ayrı bir modelle yeniden puanlanır.',
+      results: [
+        ['İş Kanunu · Madde 17', 'BM25 · anlam'],
+        ['Yargıtay 9. Hukuk Dairesi kararı', 'anlam'],
+        ['İş Hukuku Ders Notu · Süreli fesih', 'BM25'],
+      ] as [string, string][],
+      flow: 'BM25 + BGE-M3 → RRF → yeniden sıralama',
+    },
+    write: {
+      title: 'Kaynağa bağlı yazım',
+      body: 'Cevap yalnızca bulunan kaynaklarla yazılır. Her hukuki iddia ayrı bir cümledir ve dayandığı kaynağa numarasıyla bağlanır.',
+      source: '4857 sayılı İş Kanunu',
+      article: 'Madde 17 · Süreli fesih',
+    },
+    verify: {
+      title: 'İddia bazlı doğrulama',
+      body: 'Her iddia–pasaj çifti ayrı bir modelle kontrol edilir. Desteklenmeyen atıf kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. İlgili kaynak hiç yoksa BekenAI tahmin yürütmez.',
+      supported: '✓ Destekliyor',
+      partial: '◐ Kısmen',
+      unverified: '✕ Doğrulanamadı',
+    },
+    passage: {
+      title: 'Pasaja tek tıkla ulaşın',
+      body: 'Atıfa tıkladığınızda pasajın tamamı, künyesi, maddenin değişiklik geçmişi ve doğrulama gerekçesi yan panelde açılır.',
+      kind: 'Birincil · Mevzuat',
+      source: '4857 sayılı İş Kanunu',
+      article: 'Madde 17',
+      supports: '✓ İddia 1 ve 2’yi destekliyor',
+    },
+  },
+  architecture: {
+    label: 'MİMARİ',
+    title: 'Arka planda neler oluyor?',
+    lead: 'Kısaca: BekenAI bir {rag} sistemidir. Model cevabı hafızasından uydurmaz; önce ilgili hukuk kaynaklarını bulur, sonra yalnızca onlara dayanarak yazar. BekenAI buna bir adım ekler: yazdığı her iddiayı kaynağıyla yeniden karşılaştırır.',
+    metrics: [
+      ['7', 'adımlı hat: kaynakları toplamaktan iddiaları doğrulamaya'],
+      ['25', 'aday pasaj, her soru için yeniden sıralanır'],
+      ['%99', 'test sorusunda beklenen kanun maddesi ilk 25 sonuçta (72 soru)'],
+      ['450+', 'otomatik test, CI’da her değişiklikte çalışır'],
+    ] as [string, string][],
+    ragTitle: 'RAG nedir, BekenAI neyi farklı yapıyor?',
+    approaches: [
+      {
+        title: 'Yalnızca dil modeli',
+        flow: ['Soru', 'Model', 'Cevap'],
+        body: 'Cevabı eğitim sırasında öğrendiklerinden üretir. Kaynak göstermez; yanlış bir bilgiyi de aynı özgüvenle yazabilir. Buna halüsinasyon denir.',
+        verdict: 'Kaynak yok · halüsinasyon riski yüksek',
+        tone: 'err',
+      },
+      {
+        title: 'Klasik RAG',
+        flow: ['Soru', 'Arama', 'Kaynaklar', 'Model', 'Cevap'],
+        body: 'Önce ilgili belgeleri bulur, cevabı onlara dayanarak yazar ve kaynak gösterir. Ancak her cümlenin gerçekten kaynakta yazıp yazmadığını ayrıca kontrol etmez.',
+        verdict: 'Kaynak var · cümleler kontrol edilmez',
+        tone: 'neutral',
+      },
+    ] as { title: string; flow: string[]; body: string; verdict: string; tone: 'err' | 'neutral' }[],
+    oursTitle: 'RAG + iddia doğrulama',
+    oursBody:
+      'Klasik RAG’in üzerine iki kontrol katmanı ekler: yazılan atıfların gerçekten var olduğunu denetler ve her iddiayı dayandığı pasajla ayrı bir modele karşılaştırtır. Sorunun cevaba dönüşmesi on adımda gerçekleşir.',
+    phases: { search: 'arama', select: 'seçim', write: 'yazım', verify: 'doğrulama' },
+    ourSteps: [
+      { title: 'Sorgu planlama', phase: 'search', body: 'Soru, sohbetin önceki mesajlarıyla birlikte tek başına anlaşılır bir arama sorgusuna çevrilir; soruyu düzenleyen en fazla 3 kanun maddesi de belirlenir.' },
+      { title: 'Anahtar kelime araması', phase: 'search', body: 'BM25 kelimeleri ilk 5 harfiyle eşleştirir; “savunmam” ile “savunmasını” aynı kökten bulunur.' },
+      { title: 'Anlam araması', phase: 'search', body: 'BGE-M3 vektörleri, farklı kelimelerle sorulan aynı soruyu da yakalar.' },
+      { title: 'RRF birleştirme', phase: 'search', body: 'İki sıralama, pasajların konumlarına göre tek listede birleştirilir.' },
+      { title: 'Yeniden sıralama', phase: 'select', body: 'En iyi 25 aday ve planlamada belirlenen maddeler, soruyla birlikte okunarak yeniden puanlanır.' },
+      { title: 'Bağlam seçimi', phase: 'select', body: 'Pasajlar token bütçesine göre seçilir: önce dosyalarınız, sonra mevzuat ve içtihat, kalan yere doktrin. Kanun pasajlarına resmî değişiklik notları eklenir.' },
+      { title: 'Yapılandırılmış yazım', phase: 'write', body: 'Model her iddiayı, dayandığı kaynak kimlikleriyle birlikte JSON şemasına göre yazar; model hata verirse yedek model devralır.' },
+      { title: 'Atıf bütünlüğü', phase: 'write', body: 'Bir cümlenin gösteremeyeceği kaynak kimlikleri, yani var olmayan ya da yanlış kanaldan olanlar, silinir.' },
+      { title: 'İddia doğrulama', phase: 'verify', body: 'Her iddia–pasaj çifti ayrı bir modelle “destekliyor”, “kısmen” veya “desteklemiyor” olarak etiketlenir.' },
+      { title: 'İşaretleme ve kayıt', phase: 'verify', body: 'Desteklenmeyen atıflar kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. Cevap atıflar ve kaynak sürümleriyle kaydedilir.' },
+    ] as { title: string; phase: 'search' | 'select' | 'write' | 'verify'; body: string }[],
+    oursVerdict: 'Kaynak var · her iddia kontrol edilir · doktrin ayrı kanalda aynı adımlardan geçer',
+    pipelineTitle: 'Kaynaktan cevaba: sistem nasıl çalışır?',
+    pipelineNote: 'İlk üç adım kaynaklar eklenirken bir kez, son dördü her soruda çalışır',
+    preparation: 'HAZIRLIK · KAYNAKLAR EKLENİRKEN BİR KEZ',
+    everyQuestion: 'HER SORUDA',
+    technical: 'TEKNİK',
+    pipeline: [
+      {
+        phase: 'preparation',
+        title: 'Kaynakları toplar',
+        en: 'Ingestion',
+        plain: 'Kanunlar, Yargıtay kararları ve doktrin sisteme yüklenir. Her güncelleme ayrı bir sürüm olarak saklanır; eski bir cevabın hangi kaynağa dayandığı kaybolmaz.',
+        tech: 'Manifest tabanlı içe aktarma, içerik hash’iyle tekrar kontrolü ve değiştirilemez ham belge deposu. Meta veriler sürümlü bir PostgreSQL şemasında tutulur.',
+        tags: ['Python', 'Supabase Storage', 'PostgreSQL'],
+      },
+      {
+        phase: 'preparation',
+        title: 'Metni parçalara ayırır',
+        en: 'Chunking',
+        plain: 'Belgeler madde, fıkra ve bent yapısı korunarak küçük parçalara bölünür. Böylece cevap belgenin tamamına değil, tam ilgili pasaja işaret eder.',
+        tech: 'Hukuki yapıyı tanıyan ayrıştırıcı; her parça künye, madde yolu ve sayfa bilgisini taşır. Madde değişiklikleri ayrı sürümler olarak izlenir.',
+        tags: ['Yapı farkında parser', 'Madde sürümleri'],
+      },
+      {
+        phase: 'preparation',
+        title: 'Dizine ekler',
+        en: 'Embedding & indexing',
+        plain: 'Her parça iki dizine yazılır: kelimeleriyle bulunabilsin diye bir kelime dizinine, anlamıyla bulunabilsin diye bir vektör dizinine. Vektör, parçanın anlamını sayılarla özetler; benzer anlamlı metinlerin vektörleri birbirine yakın düşer.',
+        tech: 'BGE-M3 her parçayı 1024 boyutlu bir vektöre çevirir (ONNX, ayrı model servisi); vektörler Qdrant’a yazılır. BM25 dizini kanunlarda Türkçe ekler için kelimelerin ilk 5 harfiyle kurulur. Her dizin hangi kaynak sürümüyle kurulduğunu kaydeder.',
+        tags: ['BGE-M3', 'Qdrant', 'BM25', 'Embedding'],
+      },
+      {
+        phase: 'question',
+        title: 'İlgili pasajları bulur',
+        en: 'Hybrid retrieval',
+        plain: 'Soru önce sohbetin geçmişiyle birlikte tek başına anlaşılır bir arama sorgusuna çevrilir. Sonra hem kelime kelime hem de anlamca aranır: “işten çıkarıldım” diye soran biri, “fesih” geçen maddeyi de bulur.',
+        tech: 'Gemini sorguyu yazar ve soruyu düzenleyen en fazla 3 kanun maddesini önerir. Sorgu da BGE-M3 ile vektöre çevrilir; BM25 ve vektör araması birlikte çalışır, sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
+        tags: ['Sorgu planlama', 'BM25', 'BGE-M3', 'RRF'],
+      },
+      {
+        phase: 'question',
+        title: 'En alakalıları seçer',
+        en: 'Reranking',
+        plain: 'Bulunan 25 aday pasaj daha güçlü bir modelle tek tek puanlanır; soruya en iyi cevap veren pasajlar öne çıkar.',
+        tech: 'Cross-encoder ile yeniden sıralama; model int8 ONNX’e çevrildi ve 3,3 kat hızlandı. Planlamada belirlenen kanun maddeleri de adaylara katılır. Gömme ve sıralama modelleri, yalnızca iç ağdan erişilen ayrı bir model servisinde çalışır.',
+        tags: ['bge-reranker-v2-m3', 'ONNX Runtime', 'Model servisi'],
+      },
+      {
+        phase: 'question',
+        title: 'Kaynaklara dayanarak yazar',
+        en: 'Generation',
+        plain: 'Dil modeli yalnızca seçilen pasajları görür ve cevabı, her biri kaynağına bağlı kısa iddialar halinde yazar.',
+        tech: 'JSON şemalı yapılandırılmış çıktı ve token bütçesine göre bağlam seçimi. Geçici hatada yedek modele geçilir; kaynak metinleri güvenilmeyen veri olarak işaretlenir (prompt injection koruması).',
+        tags: ['Gemini', 'Structured output', 'Pydantic'],
+      },
+      {
+        phase: 'question',
+        title: 'Her iddiayı doğrular',
+        en: 'Verification',
+        plain: 'Ayrı bir model, her iddianın gerçekten kaynağında yazıp yazmadığını kontrol eder. Desteklenmeyen atıf kaldırılır; dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir, böylece hangi cümleye güvenebileceğinizi görürsünüz.',
+        tech: 'Her iddia–pasaj çifti supported, partial veya unsupported olarak sınıflandırılır. Atıf bütünlüğü kontrolü, bir cümlenin gösteremeyeceği kaynak kimliklerini ayıklar.',
+        tags: ['Claim verification', 'unverified'],
+      },
+    ] as { phase: 'preparation' | 'question'; title: string; en: string; plain: string; tech: string; tags: string[] }[],
+    journeyTitle: 'Sistemin parçaları: bir isteğin yolculuğu',
+    journeyNote: 'Cevap 1–2 dakika sürebildiği için iş arka planda yürür',
+    journey: [
+      { where: 'Tarayıcı · Next.js', title: 'Soru gönderilir', body: 'Arayüz soruyu API’ye iletir ve işin hangi adımda olduğunu canlı olarak gösterir.', tech: 'React 19 · Tailwind 4' },
+      { where: 'API · FastAPI', title: 'İstek kabul edilir', body: 'Kimlik doğrulanır, soru kuyruğa eklenir ve kullanıcıya hemen “sırada” yanıtı döner.', tech: '202 Accepted · Idempotency-Key' },
+      { where: 'İş kuyruğu · PostgreSQL', title: 'İş sıraya girer', body: 'Aynı soru iki kez işlenmez. Bir hata olursa iş otomatik olarak yeniden denenir.', tech: 'en fazla 2 deneme · takılı iş kurtarma' },
+      { where: 'Worker', title: 'Cevap üretilir', body: 'Arama, yazım ve doğrulama arka planda çalışır; kullanıcı sayfayı kapatsa bile iş devam eder.', tech: 'Qdrant · model servisi · Gemini' },
+      { where: 'Veritabanı', title: 'Sonuç kaydedilir', body: 'Cevap, atıflar ve kullanılan kaynak sürümleri birlikte saklanır; bir cevabın dayanağı sonradan izlenebilir.', tech: 'corpus_version · index_version' },
+    ],
+    infrastructure: 'ALTYAPI',
+    infraVm: 'A1 (ARM) · systemd servisleri',
+    infraPrivate: 'Qdrant ve model servisi yalnızca iç ağda',
+    decisionsTitle: 'Mühendislik kararları',
+    decisionsNote: 'Depoda 11 ADR; her biri ölçümleriyle birlikte',
+    adrs: [
+      { id: 'ADR 0001', title: 'Modüler monolit', body: 'Tek geliştirici için mikroservis yükü gereksizdi. Uygulama tek parça dağıtılır, ama arama, içe aktarma ve API ayrı paketlerdir; gerektiğinde ayrılabilir.' },
+      { id: 'ADR 0002', title: 'Ortak ve özel veri sınırı', body: 'Kullanıcı dosyaları ile ortak hukuk kaynakları ayrı depolama ve vektör sınırlarında tutulur. Bir müvekkil belgesinin başkasının cevabına karışması mimari olarak engellenir.' },
+      { id: 'ADR 0005', title: 'int8 ONNX yeniden sıralama', body: 'Yeniden sıralama modeli int8 ONNX’e çevrildi. 40 soruluk ölçümde yeniden sıralama 3,3 kat hızlandı; beklenen maddeyi bulma oranı değişmedi.' },
+      { id: 'ADR 0006', title: 'Yürürlük kontrolü', body: 'Kanun pasajları resmî değişiklik notlarını taşır. Olaydan sonra değişen hüküm ve dayandığı madde sonradan değişen Yargıtay kararı cevapta uyarıyla işaretlenir.' },
+      { id: 'ADR 0009', title: 'Süreler kodla hesaplanır', body: 'Dosya analizindeki kritik süreleri model değil kod hesaplar; tarihler dosyadan okunur ve HMK’nın süre kuralları uygulanır.' },
+      { id: 'ADR 0010 · 0011', title: 'Ölçerek iyileştirme', body: 'Türkçe kök bulma ve planlayıcının madde ipuçları, 72 soruda beklenen maddeyi ilk 25’te bulmayı %92’den %97’ye çıkardı. İşe yaramayan seçenekler de kayda geçti.' },
+    ],
+    glossaryTitle: 'Kısa sözlük',
+    glossaryNote: 'Teknik olmayan okuyucular için',
+    glossary: [
+      ['RAG', 'Retrieval-Augmented Generation. Modelin cevap yazmadan önce ilgili belgeleri bulup onlara dayanması.'],
+      ['Halüsinasyon', 'Dil modelinin gerçekte olmayan bir bilgiyi kendinden emin biçimde üretmesi.'],
+      ['Embedding', 'Metnin anlamını sayılara çeviren temsil. Benzer anlamlı metinler birbirine yakın düşer.'],
+      ['Vektör veritabanı', 'Bu sayısal temsiller arasında en yakın olanları hızla bulan veritabanı. Burada Qdrant.'],
+      ['Reranker', 'Bulunan adayları soruyla birlikte okuyup yeniden puanlayan, daha hassas model.'],
+    ] as [string, string][],
+  },
+  pipelineAnimation: {
+    label: 'Cevap hattının adımları',
+    steps: [
+      { title: 'Kaynakları toplar', en: 'Ingestion', caption: 'manifest → sha256 kontrolü → sürümlü depo' },
+      { title: 'Metni parçalara ayırır', en: 'Chunking', caption: 'madde / fıkra / bent yapısı korunur' },
+      { title: 'Dizine ekler', en: 'Embedding & indexing', caption: 'BGE-M3 → 1024 boyutlu vektör → Qdrant · BM25' },
+      { title: 'İlgili pasajları bulur', en: 'Hybrid retrieval', caption: 'sorgu planlama → BM25 + BGE-M3 → RRF (k=60)' },
+      { title: 'En alakalıları seçer', en: 'Reranking', caption: 'bge-reranker-v2-m3 · cross-encoder' },
+      { title: 'Kaynaklara dayanarak yazar', en: 'Generation', caption: 'Gemini · JSON şemalı yapılandırılmış çıktı' },
+      { title: 'Her iddiayı doğrular', en: 'Verification', caption: 'supported · partial · unsupported' },
+    ],
+    stepOf: (step: number, total: number, preparation: boolean) => `Adım ${step} / ${total} · ${preparation ? 'hazırlık' : 'her soruda'}`,
+    stepLabel: (step: number, title: string) => `Adım ${step}: ${title}`,
+    paused: 'Duraklatıldı',
+    current: (title: string, paused: boolean) =>
+      `${title}, ${paused ? 'duraklatıldı. Devam etmek için tıklayın.' : 'oynatılıyor. Duraklatmak için tıklayın.'}`,
+    goTo: (title: string) => `${title} adımına geç`,
+    ingest: {
+      docs: [
+        { pill: 'Mevzuat', title: '4857 sayılı İş Kanunu', meta: 'kanun · 122 madde' },
+        { pill: 'İçtihat', title: 'Yargıtay 9. Hukuk Dairesi', meta: 'karar · iş hukuku' },
+        { pill: 'Doktrin', title: 'İş Hukuku Ders Notu (2026)', meta: 'ders notu · izinli kaynak' },
+      ],
+      store: 'SÜRÜMLÜ KAYNAK DEPOSU',
+      documents: '/ 3 belge',
+      immutable: '✓ Ham kopya değiştirilemez olarak saklandı',
+    },
+    chunk: {
+      heading: '4857 sayılı İş Kanunu',
+      article: 'Madde 17 · Süreli fesih',
+      note: '4 parça · her biri künye, madde yolu ve sayfa bilgisini taşır',
+    },
+    index: {
+      chunks: 'Parçalar',
+      chunkSource: '4857 · Madde 17',
+      vectors: 'Vektör dizini · Qdrant',
+      vectorMeta: 'BGE-M3 · 1024 boyut',
+      keywords: 'Kelime dizini · BM25',
+      keywordMeta: 'md. 17/4 · ilk 5 harf',
+      note: 'Soru geldiğinde aynı model soruyu da vektöre çevirir; arama bu iki dizinde yapılır.',
+    },
+    search: {
+      keyword: 'Anahtar kelime · BM25',
+      meaning: 'Anlam · BGE-M3',
+      fused: 'Birleşik sıra · RRF',
+      note: 'RRF skoru = Σ 1 / (60 + sıra) · iki listede de üst sıralarda olan pasaj öne çıkar',
+    },
+    rerank: {
+      top: '25 adaydan ilk 5',
+      crossScore: 'cross-encoder skoru',
+      rrfScore: 'RRF skoru',
+      picked: 'Bağlama alındı',
+    },
+    write: {
+      context: 'Modele verilen bağlam',
+      budget: 'Bağlam bütçesi · hedef 96k token',
+    },
+    verify: {
+      supported: '✓ Destekliyor',
+      partial: '◐ Kısmen',
+      unsupported: '✕ Desteklemiyor',
+      verified: 'Doğrulandı',
+      summary:
+        '3 atıf doğrulandı. Desteklenmeyen atıf kaldırıldı ve dayanağı kalmayan 1 iddia “doğrulanamadı” diye işaretlendi; kullanıcı ona güvenmemesi gerektiğini cevapta görür.',
+    },
+  },
+  coverage: {
+    label: 'KAPSAM',
+    title: 'Şimdilik iş hukuku.',
+    lead: 'Arama altyapısı hukuk alanı bazında kurgulandı. Kaynak havuzu sürümlüdür ve her cevap hangi sürümle üretildiğini kaydeder.',
+    groups: [
+      { title: 'Mevzuat', tone: 'bg-accent', items: ['25 kanun ve 21 yönetmelik', 'İş Kanunu ve kıdem tazminatı düzenlemesi', 'İş Mahkemeleri Kanunu', 'Türk Borçlar Kanunu', 'Hukuk Muhakemeleri Kanunu', 'Sosyal Sigortalar Kanunu'] },
+      { title: 'İçtihat', tone: 'bg-fg2', items: ['49 Yargıtay kararı', 'İş hukuku uyuşmazlıkları', 'Dayandığı maddelerin güncelliği kontrol edilir'] },
+      { title: 'Doktrin', tone: 'bg-doc', items: ['İzinli iş hukuku ders notu', 'Birincil kaynaklardan ayrı kanalda', 'Her soruda aranır'] },
+    ],
+  },
+  security: {
+    label: 'GÜVENLİK VE VERİ',
+    title: 'Dosyalarınız sizde kalır.',
+    items: [
+      { icon: 'key', title: 'Google ile giriş', body: 'Kimlik doğrulama Supabase Auth ile yapılır; her istekteki token imzası sunucuda doğrulanır.' },
+      { icon: 'box', title: 'Çalışma alanı izolasyonu', body: 'Her özel kayıt bir çalışma alanına bağlıdır; sorgular bu sınırın dışına çıkamaz.' },
+      { icon: 'shield', title: 'Ortak havuza karışmaz', body: 'Davalara yüklenen dosyalar ortak kaynak dizinine hiçbir zaman yazılmaz.' },
+      { icon: 'lock', title: 'Doğrulanmış bağlantılar', body: 'Veritabanı bağlantıları TLS ve tam sertifika doğrulamasıyla kurulur.' },
+      { icon: 'pin', title: 'Sabitlenmiş bağımlılıklar', body: 'Paketler hash ile kilitlidir; güvenlik taraması her değişiklikte ve ayrıca her hafta çalışır.' },
+      { icon: 'eyeOff', title: 'Sızıntısız kayıtlar', body: 'Özel dosya yolları ve istek adresleri uygulama kayıtlarına yazılmaz.' },
+    ] as { icon: IconName; title: string; body: string }[],
+  },
+  demo: {
+    badge: 'Demo proje',
+    title: 'Bir portföy çalışması, gerçek bir altyapı.',
+    body: 'BekenAI, kaynağa dayalı hukuki yapay zekâ üzerine geliştirilmiş bir demo projedir. Arama, cevap üretimi ve doğrulama hattı gerçek iş hukuku kaynaklarıyla çalışır; ancak ürün ticari değildir ve hukuki danışmanlık sunmaz.',
+    role: 'Tasarım ve geliştirme',
+    github: 'GitHub’da incele',
+    sample: 'Örnek dava dosyası',
+    sampleNote: ' · kurgusal işe iade dosyası; uygulamada sohbete ekleyip soru sorun',
+    limitsTitle: 'Bilinen sınırlar',
+    limits: [
+      'Yalnızca iş hukuku kapsanıyor; diğer alanlar henüz yok.',
+      'Doğrulama adımları nedeniyle bir cevap 1–2 dakika sürebilir.',
+      'Altyapı tek kullanıcılı demo için boyutlandırıldı.',
+      'Taranmış (görüntü) PDF’ler okunmaz; metin katmanı olan PDF, Word (DOCX) veya TXT gerekir.',
+      'Cevaplar araştırma amaçlıdır; hukuki danışmanlık değildir.',
+    ],
+  },
+  faq: {
+    label: 'SSS',
+    title: 'Sık sorulanlar',
+    items: [
+      { q: 'Bu gerçek bir ürün mü?', a: 'Hayır. BekenAI bir demo ve portföy projesidir. Arama ve doğrulama hattı gerçek kaynaklarla çalışır, ancak ticari bir hizmet sunulmaz.' },
+      { q: 'Hangi kaynakları kullanıyor?', a: 'İş hukukuna ilişkin kanunlar, Yargıtay kararları, izinli doktrin kaynakları ve sizin yüklediğiniz dosyalar. Her cevapta kullanılan kaynaklar ve sürümleri gösterilir.' },
+      {
+        q: 'Kendi dosyamı yükleyebilir miyim?',
+        a: 'Evet. Bir sohbete ya da davaya PDF, Word (DOCX) veya TXT ekleyebilirsiniz. Dosya işlendikten sonra sorular dosyadaki pasaja sayfa atfıyla cevaplanır; dosyada yazanlar mevzuat ve içtihattan ayrı bir bölümde gösterilir. Dosyalar yalnızca sizin çalışma alanınızda tutulur. Elinizde dosya yoksa demo bölümündeki kurgusal örnek dava dosyasını kullanabilirsiniz.',
+      },
+      {
+        q: 'Derin araştırma ve dosya analizi nedir?',
+        a: 'Derin araştırma, soruyu en fazla 5 alt soruya böler, her birini ayrı arar, eksik kalanları ikinci turda tamamlar ve bulunan kararların dayandığı maddeleri de getirir; sonuç başlıklı bir rapordur. Dosya analizi bir davanın bütün dosyalarını okur, hukuki konuları çıkarır, her konuyu mevzuat, içtihat ve doktrinle karşılaştırır ve kritik süreleri hesaplar.',
+      },
+      { q: 'Cevap bulamazsa ne olur?', a: 'İlgili kaynak bulunamazsa BekenAI tahmin yürütmez; bunu açıkça söyler ve isterseniz soruyu web’de, cevaptan ayrı ve etiketli bir bölümde arar. Kaynakla doğrulanamayan cümleler de cevapta işaretlenir.' },
+      { q: 'Cevap neden birkaç dakika sürebiliyor?', a: 'Her iddia ayrı bir doğrulama adımından geçer. Bekleme sırasında işin hangi adımda olduğunu görürsünüz.' },
+    ],
+  },
+  cta: {
+    title: 'Kaynağı belli cevapları deneyin.',
+    body: 'Google hesabınızla giriş yapın ve iş hukuku sorunuzu sorun. Demo ortamıdır; cevaplar araştırma amaçlıdır.',
+  },
+  footer: {
+    copyright: '© 2026 · Demo proje',
+    disclaimer: 'Hukuki danışmanlık yerine geçmez.',
+  },
+};
 
-export const OUR_STEPS: { title: string; phase: 'arama' | 'seçim' | 'yazım' | 'doğrulama'; body: string }[] = [
-  { title: 'Sorgu planlama', phase: 'arama', body: 'Soru, sohbetin önceki mesajlarıyla birlikte tek başına anlaşılır bir arama sorgusuna çevrilir; soruyu düzenleyen en fazla 3 kanun maddesi de belirlenir.' },
-  { title: 'Anahtar kelime araması', phase: 'arama', body: 'BM25 kelimeleri ilk 5 harfiyle eşleştirir; “savunmam” ile “savunmasını” aynı kökten bulunur.' },
-  { title: 'Anlam araması', phase: 'arama', body: 'BGE-M3 vektörleri, farklı kelimelerle sorulan aynı soruyu da yakalar.' },
-  { title: 'RRF birleştirme', phase: 'arama', body: 'İki sıralama, pasajların konumlarına göre tek listede birleştirilir.' },
-  { title: 'Yeniden sıralama', phase: 'seçim', body: 'En iyi 25 aday ve planlamada belirlenen maddeler, soruyla birlikte okunarak yeniden puanlanır.' },
-  { title: 'Bağlam seçimi', phase: 'seçim', body: 'Pasajlar token bütçesine göre seçilir: önce dosyalarınız, sonra mevzuat ve içtihat, kalan yere doktrin. Kanun pasajlarına resmî değişiklik notları eklenir.' },
-  { title: 'Yapılandırılmış yazım', phase: 'yazım', body: 'Model her iddiayı, dayandığı kaynak kimlikleriyle birlikte JSON şemasına göre yazar; model hata verirse yedek model devralır.' },
-  { title: 'Atıf bütünlüğü', phase: 'yazım', body: 'Bir cümlenin gösteremeyeceği kaynak kimlikleri, yani var olmayan ya da yanlış kanaldan olanlar, silinir.' },
-  { title: 'İddia doğrulama', phase: 'doğrulama', body: 'Her iddia–pasaj çifti ayrı bir modelle “destekliyor”, “kısmen” veya “desteklemiyor” olarak etiketlenir.' },
-  { title: 'İşaretleme ve kayıt', phase: 'doğrulama', body: 'Desteklenmeyen atıflar kaldırılır, dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir. Cevap atıflar ve kaynak sürümleriyle kaydedilir.' },
-];
+export type LandingContent = typeof LANDING_TR;
 
-/** Steps 1–3 run once, when sources are added; steps 4–7 run for every question. */
-export const PIPELINE: { title: string; en: string; phase: 'hazırlık' | 'soru'; plain: string; tech: string; tags: string[] }[] = [
-  {
-    phase: 'hazırlık',
-    title: 'Kaynakları toplar',
-    en: 'Ingestion',
-    plain: 'Kanunlar, Yargıtay kararları ve doktrin sisteme yüklenir. Her güncelleme ayrı bir sürüm olarak saklanır; eski bir cevabın hangi kaynağa dayandığı kaybolmaz.',
-    tech: 'Manifest tabanlı içe aktarma, içerik hash’iyle tekrar kontrolü ve değiştirilemez ham belge deposu. Meta veriler sürümlü bir PostgreSQL şemasında tutulur.',
-    tags: ['Python', 'Supabase Storage', 'PostgreSQL'],
-  },
-  {
-    phase: 'hazırlık',
-    title: 'Metni parçalara ayırır',
-    en: 'Chunking',
-    plain: 'Belgeler madde, fıkra ve bent yapısı korunarak küçük parçalara bölünür. Böylece cevap belgenin tamamına değil, tam ilgili pasaja işaret eder.',
-    tech: 'Hukuki yapıyı tanıyan ayrıştırıcı; her parça künye, madde yolu ve sayfa bilgisini taşır. Madde değişiklikleri ayrı sürümler olarak izlenir.',
-    tags: ['Yapı farkında parser', 'Madde sürümleri'],
-  },
-  {
-    phase: 'hazırlık',
-    title: 'Dizine ekler',
-    en: 'Embedding & indexing',
-    plain: 'Her parça iki dizine yazılır: kelimeleriyle bulunabilsin diye bir kelime dizinine, anlamıyla bulunabilsin diye bir vektör dizinine. Vektör, parçanın anlamını sayılarla özetler; benzer anlamlı metinlerin vektörleri birbirine yakın düşer.',
-    tech: 'BGE-M3 her parçayı 1024 boyutlu bir vektöre çevirir (ONNX, ayrı model servisi); vektörler Qdrant’a yazılır. BM25 dizini kanunlarda Türkçe ekler için kelimelerin ilk 5 harfiyle kurulur. Her dizin hangi kaynak sürümüyle kurulduğunu kaydeder.',
-    tags: ['BGE-M3', 'Qdrant', 'BM25', 'Embedding'],
-  },
-  {
-    phase: 'soru',
-    title: 'İlgili pasajları bulur',
-    en: 'Hybrid retrieval',
-    plain: 'Soru önce sohbetin geçmişiyle birlikte tek başına anlaşılır bir arama sorgusuna çevrilir. Sonra hem kelime kelime hem de anlamca aranır: “işten çıkarıldım” diye soran biri, “fesih” geçen maddeyi de bulur.',
-    tech: 'Gemini sorguyu yazar ve soruyu düzenleyen en fazla 3 kanun maddesini önerir. Sorgu da BGE-M3 ile vektöre çevrilir; BM25 ve vektör araması birlikte çalışır, sonuçlar Reciprocal Rank Fusion (k=60) ile birleştirilir.',
-    tags: ['Sorgu planlama', 'BM25', 'BGE-M3', 'RRF'],
-  },
-  {
-    phase: 'soru',
-    title: 'En alakalıları seçer',
-    en: 'Reranking',
-    plain: 'Bulunan 25 aday pasaj daha güçlü bir modelle tek tek puanlanır; soruya en iyi cevap veren pasajlar öne çıkar.',
-    tech: 'Cross-encoder ile yeniden sıralama; model int8 ONNX’e çevrildi ve 3,3 kat hızlandı. Planlamada belirlenen kanun maddeleri de adaylara katılır. Gömme ve sıralama modelleri, yalnızca iç ağdan erişilen ayrı bir model servisinde çalışır.',
-    tags: ['bge-reranker-v2-m3', 'ONNX Runtime', 'Model servisi'],
-  },
-  {
-    phase: 'soru',
-    title: 'Kaynaklara dayanarak yazar',
-    en: 'Generation',
-    plain: 'Dil modeli yalnızca seçilen pasajları görür ve cevabı, her biri kaynağına bağlı kısa iddialar halinde yazar.',
-    tech: 'JSON şemalı yapılandırılmış çıktı ve token bütçesine göre bağlam seçimi. Geçici hatada yedek modele geçilir; kaynak metinleri güvenilmeyen veri olarak işaretlenir (prompt injection koruması).',
-    tags: ['Gemini', 'Structured output', 'Pydantic'],
-  },
-  {
-    phase: 'soru',
-    title: 'Her iddiayı doğrular',
-    en: 'Verification',
-    plain: 'Ayrı bir model, her iddianın gerçekten kaynağında yazıp yazmadığını kontrol eder. Desteklenmeyen atıf kaldırılır; dayanağı kalmayan cümle “doğrulanamadı” diye işaretlenir, böylece hangi cümleye güvenebileceğinizi görürsünüz.',
-    tech: 'Her iddia–pasaj çifti supported, partial veya unsupported olarak sınıflandırılır. Atıf bütünlüğü kontrolü, bir cümlenin gösteremeyeceği kaynak kimliklerini ayıklar.',
-    tags: ['Claim verification', 'unverified'],
-  },
-];
-
-export const JOURNEY = [
-  { where: 'Tarayıcı · Next.js', title: 'Soru gönderilir', body: 'Arayüz soruyu API’ye iletir ve işin hangi adımda olduğunu canlı olarak gösterir.', tech: 'React 19 · Tailwind 4' },
-  { where: 'API · FastAPI', title: 'İstek kabul edilir', body: 'Kimlik doğrulanır, soru kuyruğa eklenir ve kullanıcıya hemen “sırada” yanıtı döner.', tech: '202 Accepted · Idempotency-Key' },
-  { where: 'İş kuyruğu · PostgreSQL', title: 'İş sıraya girer', body: 'Aynı soru iki kez işlenmez. Bir hata olursa iş otomatik olarak yeniden denenir.', tech: 'en fazla 2 deneme · takılı iş kurtarma' },
-  { where: 'Worker', title: 'Cevap üretilir', body: 'Arama, yazım ve doğrulama arka planda çalışır; kullanıcı sayfayı kapatsa bile iş devam eder.', tech: 'Qdrant · model servisi · Gemini' },
-  { where: 'Veritabanı', title: 'Sonuç kaydedilir', body: 'Cevap, atıflar ve kullanılan kaynak sürümleri birlikte saklanır; bir cevabın dayanağı sonradan izlenebilir.', tech: 'corpus_version · index_version' },
-];
-
-export const ADRS = [
-  { id: 'ADR 0001', title: 'Modüler monolit', body: 'Tek geliştirici için mikroservis yükü gereksizdi. Uygulama tek parça dağıtılır, ama arama, içe aktarma ve API ayrı paketlerdir; gerektiğinde ayrılabilir.' },
-  { id: 'ADR 0002', title: 'Ortak ve özel veri sınırı', body: 'Kullanıcı dosyaları ile ortak hukuk kaynakları ayrı depolama ve vektör sınırlarında tutulur. Bir müvekkil belgesinin başkasının cevabına karışması mimari olarak engellenir.' },
-  { id: 'ADR 0005', title: 'int8 ONNX yeniden sıralama', body: 'Yeniden sıralama modeli int8 ONNX’e çevrildi. 40 soruluk ölçümde yeniden sıralama 3,3 kat hızlandı; beklenen maddeyi bulma oranı değişmedi.' },
-  { id: 'ADR 0006', title: 'Yürürlük kontrolü', body: 'Kanun pasajları resmî değişiklik notlarını taşır. Olaydan sonra değişen hüküm ve dayandığı madde sonradan değişen Yargıtay kararı cevapta uyarıyla işaretlenir.' },
-  { id: 'ADR 0009', title: 'Süreler kodla hesaplanır', body: 'Dosya analizindeki kritik süreleri model değil kod hesaplar; tarihler dosyadan okunur ve HMK’nın süre kuralları uygulanır.' },
-  { id: 'ADR 0010 · 0011', title: 'Ölçerek iyileştirme', body: 'Türkçe kök bulma ve planlayıcının madde ipuçları, 72 soruda beklenen maddeyi ilk 25’te bulmayı %92’den %97’ye çıkardı. İşe yaramayan seçenekler de kayda geçti.' },
-];
-
-export const GLOSSARY = [
-  ['RAG', 'Retrieval-Augmented Generation. Modelin cevap yazmadan önce ilgili belgeleri bulup onlara dayanması.'],
-  ['Halüsinasyon', 'Dil modelinin gerçekte olmayan bir bilgiyi kendinden emin biçimde üretmesi.'],
-  ['Embedding', 'Metnin anlamını sayılara çeviren temsil. Benzer anlamlı metinler birbirine yakın düşer.'],
-  ['Vektör veritabanı', 'Bu sayısal temsiller arasında en yakın olanları hızla bulan veritabanı. Burada Qdrant.'],
-  ['Reranker', 'Bulunan adayları soruyla birlikte okuyup yeniden puanlayan, daha hassas model.'],
-] as const;
-
-export const COVERAGE = [
-  { title: 'Mevzuat', tone: 'bg-accent', items: ['25 kanun ve 21 yönetmelik', 'İş Kanunu ve kıdem tazminatı düzenlemesi', 'İş Mahkemeleri Kanunu', 'Türk Borçlar Kanunu', 'Hukuk Muhakemeleri Kanunu', 'Sosyal Sigortalar Kanunu'] },
-  { title: 'İçtihat', tone: 'bg-fg2', items: ['49 Yargıtay kararı', 'İş hukuku uyuşmazlıkları', 'Dayandığı maddelerin güncelliği kontrol edilir'] },
-  { title: 'Doktrin', tone: 'bg-doc', items: ['İzinli iş hukuku ders notu', 'Birincil kaynaklardan ayrı kanalda', 'Her soruda aranır'] },
-];
-
-export const SECURITY: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'key', title: 'Google ile giriş', body: 'Kimlik doğrulama Supabase Auth ile yapılır; her istekteki token imzası sunucuda doğrulanır.' },
-  { icon: 'box', title: 'Çalışma alanı izolasyonu', body: 'Her özel kayıt bir çalışma alanına bağlıdır; sorgular bu sınırın dışına çıkamaz.' },
-  { icon: 'shield', title: 'Ortak havuza karışmaz', body: 'Davalara yüklenen dosyalar ortak kaynak dizinine hiçbir zaman yazılmaz.' },
-  { icon: 'lock', title: 'Doğrulanmış bağlantılar', body: 'Veritabanı bağlantıları TLS ve tam sertifika doğrulamasıyla kurulur.' },
-  { icon: 'pin', title: 'Sabitlenmiş bağımlılıklar', body: 'Paketler hash ile kilitlidir; güvenlik taraması her değişiklikte ve ayrıca her hafta çalışır.' },
-  { icon: 'eyeOff', title: 'Sızıntısız kayıtlar', body: 'Özel dosya yolları ve istek adresleri uygulama kayıtlarına yazılmaz.' },
-];
-
-export const LIMITS = [
-  'Yalnızca iş hukuku kapsanıyor; diğer alanlar henüz yok.',
-  'Doğrulama adımları nedeniyle bir cevap 1–2 dakika sürebilir.',
-  'Altyapı tek kullanıcılı demo için boyutlandırıldı.',
-  'Taranmış (görüntü) PDF’ler okunmaz; metin katmanı olan PDF, Word (DOCX) veya TXT gerekir.',
-  'Cevaplar araştırma amaçlıdır; hukuki danışmanlık değildir.',
-];
-
-export const FAQ = [
-  { q: 'Bu gerçek bir ürün mü?', a: 'Hayır. BekenAI bir demo ve portföy projesidir. Arama ve doğrulama hattı gerçek kaynaklarla çalışır, ancak ticari bir hizmet sunulmaz.' },
-  { q: 'Hangi kaynakları kullanıyor?', a: 'İş hukukuna ilişkin kanunlar, Yargıtay kararları, izinli doktrin kaynakları ve sizin yüklediğiniz dosyalar. Her cevapta kullanılan kaynaklar ve sürümleri gösterilir.' },
-  {
-    q: 'Kendi dosyamı yükleyebilir miyim?',
-    a: 'Evet. Bir sohbete ya da davaya PDF, Word (DOCX) veya TXT ekleyebilirsiniz. Dosya işlendikten sonra sorular dosyadaki pasaja sayfa atfıyla cevaplanır; dosyada yazanlar mevzuat ve içtihattan ayrı bir bölümde gösterilir. Dosyalar yalnızca sizin çalışma alanınızda tutulur. Elinizde dosya yoksa demo bölümündeki kurgusal örnek dava dosyasını kullanabilirsiniz.',
-  },
-  {
-    q: 'Derin araştırma ve dosya analizi nedir?',
-    a: 'Derin araştırma, soruyu en fazla 5 alt soruya böler, her birini ayrı arar, eksik kalanları ikinci turda tamamlar ve bulunan kararların dayandığı maddeleri de getirir; sonuç başlıklı bir rapordur. Dosya analizi bir davanın bütün dosyalarını okur, hukuki konuları çıkarır, her konuyu mevzuat, içtihat ve doktrinle karşılaştırır ve kritik süreleri hesaplar.',
-  },
-  { q: 'Cevap bulamazsa ne olur?', a: 'İlgili kaynak bulunamazsa BekenAI tahmin yürütmez; bunu açıkça söyler ve isterseniz soruyu web’de, cevaptan ayrı ve etiketli bir bölümde arar. Kaynakla doğrulanamayan cümleler de cevapta işaretlenir.' },
-  { q: 'Cevap neden birkaç dakika sürebiliyor?', a: 'Her iddia ayrı bir doğrulama adımından geçer. Bekleme sırasında işin hangi adımda olduğunu görürsünüz.' },
-];
+export const LANDING: Record<Locale, LandingContent> = { tr: LANDING_TR, en: LANDING_EN };

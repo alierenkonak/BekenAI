@@ -1,3 +1,4 @@
+import type { Messages } from './i18n';
 import type {
   AnswerBlock,
   Citation,
@@ -173,19 +174,21 @@ function renderLegacy(answer: LegacyAnswer, citations: Citation[]): RenderedLega
   return { kind: 'legacy', file, primary, doctrine, sources: sources() };
 }
 
-export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel): string {
-  if (channel === 'web') return 'Web';
-  if (channel === 'file') return 'Dosya';
-  if (channel === 'doctrine') return 'Doktrin';
-  return snapshot.decision_metadata.case_number || snapshot.decision_metadata.decision_number ? 'İçtihat' : 'Mevzuat';
+export function sourceKind(snapshot: SourceSnapshot, channel: SourceChannel, m: Messages): string {
+  if (channel === 'web') return m.sourceKinds.web;
+  if (channel === 'file') return m.sourceKinds.file;
+  if (channel === 'doctrine') return m.sourceKinds.doctrine;
+  return snapshot.decision_metadata.case_number || snapshot.decision_metadata.decision_number
+    ? m.sourceKinds.caseLaw
+    : m.sourceKinds.legislation;
 }
 
-export function sourceSubtitle(snapshot: SourceSnapshot): string {
+export function sourceSubtitle(snapshot: SourceSnapshot, m: Messages): string {
   if (snapshot.source_scope === 'private') {
     return [snapshot.location_label, snapshot.section_title].filter(Boolean).join(' · ');
   }
   if (snapshot.source_scope === 'web') {
-    const published = snapshot.published_date ? new Date(snapshot.published_date).toLocaleDateString('tr-TR') : null;
+    const published = snapshot.published_date ? new Date(snapshot.published_date).toLocaleDateString(m.intl) : null;
     return [snapshot.site, published].filter(Boolean).join(' · ');
   }
   const decision = snapshot.decision_metadata;
@@ -193,6 +196,6 @@ export function sourceSubtitle(snapshot: SourceSnapshot): string {
   if (decision.case_number) parts.push(`E. ${decision.case_number}`);
   if (decision.decision_number) parts.push(`K. ${decision.decision_number}`);
   if (parts.length === 0 && snapshot.breadcrumb.length) parts.push(snapshot.breadcrumb[snapshot.breadcrumb.length - 1]);
-  if (decision.document_date) parts.push(new Date(decision.document_date).toLocaleDateString('tr-TR'));
+  if (decision.document_date) parts.push(new Date(decision.document_date).toLocaleDateString(m.intl));
   return parts.join(' · ');
 }

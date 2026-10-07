@@ -8,13 +8,15 @@ import { Spinner } from '@/components/icons';
 import { api } from '@/lib/api';
 import { AUTH_CONFIGURED } from '@/lib/config';
 import { describeError } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
+import { rich } from '@/lib/i18n/rich';
 import { getSupabase } from '@/lib/supabase';
 
 type AuthState =
   | { status: 'loading' }
   | { status: 'unconfigured' }
   | { status: 'signed-out' }
-  | { status: 'error'; message: string }
+  | { status: 'error'; code: unknown }
   | { status: 'ready'; user: User };
 
 type AuthContextValue = { user: User; signOut: () => Promise<void> };
@@ -46,6 +48,7 @@ export async function ensureBootstrapped(userId: string): Promise<void> {
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const { m } = useI18n();
   const [state, setState] = useState<AuthState>(() =>
     AUTH_CONFIGURED ? { status: 'loading' } : { status: 'unconfigured' },
   );
@@ -67,7 +70,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         await ensureBootstrapped(session.user.id);
         if (active) setState({ status: 'ready', user: session.user });
       } catch (error) {
-        if (active) setState({ status: 'error', message: describeError(error) });
+        if (active) setState({ status: 'error', code: error });
       }
     });
     // Only react to sign-out here: calling Supabase from inside this callback can deadlock.
@@ -97,17 +100,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
   if (state.status === 'unconfigured') {
     return (
-      <FullScreenMessage title="Giriş yapılandırılmadı">
-        Uygulamayı kullanmak için <code className="font-mono text-[13px]">SUPABASE_URL</code> ve{' '}
-        <code className="font-mono text-[13px]">SUPABASE_PUBLISHABLE_KEY</code> değerlerini kökteki{' '}
-        <code className="font-mono text-[13px]">.env</code> dosyasına ekleyip geliştirme sunucusunu yeniden başlatın.
+      <FullScreenMessage title={m.auth.unconfiguredTitle}>
+        <span>
+          {rich(m.auth.unconfiguredBody, {
+            url: <code className="font-mono text-[13px]">SUPABASE_URL</code>,
+            key: <code className="font-mono text-[13px]">SUPABASE_PUBLISHABLE_KEY</code>,
+            env: <code className="font-mono text-[13px]">.env</code>,
+          })}
+        </span>
       </FullScreenMessage>
     );
   }
   if (state.status === 'error') {
     return (
-      <FullScreenMessage title="Çalışma alanı hazırlanamadı">
-        {state.message}
+      <FullScreenMessage title={m.auth.workspaceFailed}>
+        {describeError(state.code, m)}
         <button
           type="button"
           onClick={() => {
@@ -116,7 +123,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           }}
           className="mt-5 flex h-9 items-center rounded-[9px] bg-inv px-4 text-[13.5px] font-medium text-inv-fg"
         >
-          Tekrar dene
+          {m.common.retry}
         </button>
       </FullScreenMessage>
     );
@@ -124,7 +131,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-dvh items-center justify-center gap-3 text-sm text-fg3" role="status">
       <Spinner />
-      Oturum kontrol ediliyor…
+      {m.auth.checking}
     </div>
   );
 }

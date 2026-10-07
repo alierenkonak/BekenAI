@@ -7,13 +7,16 @@ import { ensureBootstrapped, FullScreenMessage } from '@/components/app/auth';
 import { Spinner } from '@/components/icons';
 import { AUTH_CONFIGURED } from '@/lib/config';
 import { describeError } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
 import { getSupabase } from '@/lib/supabase';
 
 /** Supabase exchanges the PKCE `?code=` on client init; we only wait for the session. */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(() =>
-    AUTH_CONFIGURED ? null : 'Giriş yapılandırılmadı: SUPABASE_URL ve SUPABASE_PUBLISHABLE_KEY değerleri eksik.',
+  const { m } = useI18n();
+  // Kept as data, not text, so a language switch on this screen still shows the right words.
+  const [error, setError] = useState<{ text: string } | { code: unknown } | 'unconfigured' | 'failed' | null>(() =>
+    AUTH_CONFIGURED ? null : 'unconfigured',
   );
 
   useEffect(() => {
@@ -24,14 +27,15 @@ export default function AuthCallbackPage() {
       if (!active) return;
       const params = new URLSearchParams(window.location.search);
       if (sessionError || !data.session) {
-        setError(params.get('error_description') || 'Giriş tamamlanamadı. Lütfen tekrar deneyin.');
+        const description = params.get('error_description');
+        setError(description ? { text: description } : 'failed');
         return;
       }
       try {
         await ensureBootstrapped(data.session.user.id);
         router.replace('/sohbet');
       } catch (bootstrapError) {
-        if (active) setError(describeError(bootstrapError));
+        if (active) setError({ code: bootstrapError });
       }
     });
     return () => {
@@ -41,10 +45,16 @@ export default function AuthCallbackPage() {
 
   if (error) {
     return (
-      <FullScreenMessage title="Giriş tamamlanamadı">
-        {error}
+      <FullScreenMessage title={m.auth.callbackTitle}>
+        {error === 'unconfigured'
+          ? m.auth.callbackUnconfigured
+          : error === 'failed'
+            ? m.auth.callbackFailed
+            : 'text' in error
+              ? error.text
+              : describeError(error.code, m)}
         <Link href="/giris" className="mt-5 flex h-9 items-center rounded-[9px] bg-inv px-4 text-[13.5px] font-medium text-inv-fg no-underline">
-          Giriş sayfasına dön
+          {m.auth.backToSignIn}
         </Link>
       </FullScreenMessage>
     );
@@ -52,7 +62,7 @@ export default function AuthCallbackPage() {
   return (
     <div className="flex h-dvh items-center justify-center gap-3 text-sm text-fg3" role="status">
       <Spinner />
-      Giriş tamamlanıyor…
+      {m.auth.completing}
     </div>
   );
 }

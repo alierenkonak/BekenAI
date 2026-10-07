@@ -12,24 +12,27 @@ import {
   SiteHeader,
   TechWall,
 } from '@/components/landing/sections';
+import { LANDING } from '@/components/landing/content';
+import { getLocale } from '@/lib/i18n/server';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const c = LANDING[await getLocale()];
   return (
     <>
-      <DemoBar />
-      <SiteHeader />
+      <DemoBar c={c} />
+      <SiteHeader c={c} />
       <main>
-        <Hero />
-        <TechWall />
-        <HowItWorks />
-        <Architecture />
-        <Coverage />
-        <Security />
-        <DemoNote />
-        <Faq />
-        <FinalCta />
+        <Hero c={c} />
+        <TechWall c={c} />
+        <HowItWorks c={c} />
+        <Architecture c={c} />
+        <Coverage c={c} />
+        <Security c={c} />
+        <DemoNote c={c} />
+        <Faq c={c} />
+        <FinalCta c={c} />
       </main>
-      <SiteFooter />
+      <SiteFooter c={c} />
     </>
   );
 }
