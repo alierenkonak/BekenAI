@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import { Geist, Geist_Mono, Instrument_Serif } from 'next/font/google';
 import { LocaleProvider } from '@/lib/i18n/client';
 import { getI18n, getLocale } from '@/lib/i18n/server';
@@ -47,6 +48,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       </head>
       <body className="min-h-dvh bg-bg text-fg antialiased">
         <LocaleProvider locale={locale}>{children}</LocaleProvider>
+        <Analytics />
       </body>
     </html>
   );
