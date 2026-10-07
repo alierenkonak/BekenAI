@@ -15,6 +15,8 @@ import {
   type RenderedTemporalCheck,
 } from '@/lib/answer';
 import { describeError, formatSeconds, isRetryableFailure } from '@/lib/format';
+import type { Messages } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n/client';
 import type {
   ConversationalAnswer,
   GenerationSummary,
@@ -31,13 +33,18 @@ const CHIP_TONE: Record<RenderedClaim['chips'][number]['channel'], { base: ChipT
   web: { base: 'web', selected: 'webSelected', partial: 'webPartial' },
 };
 
-const CHIP_NAME = { primary: 'Kaynak', doctrine: 'Doktrin kaynağı', file: 'Dosya pasajı', web: 'Web kaynağı' } as const;
+type ChipFacts = { label: string; channel: keyof Messages['answer']['chipNames']; partial: boolean; changed?: boolean };
 
 /** The hover text of a citation chip: what its frame and dot mean. */
-function chipTitle(chip: { label: string; channel: keyof typeof CHIP_NAME; partial: boolean; changed?: boolean }): string {
-  const support = chip.partial ? 'kesikli çerçeve: kaynak ifadeyi kısmen destekliyor' : 'kaynak ifadeyi destekliyor';
-  const warning = chip.changed ? ' · kırmızı nokta: atıf yapılan hüküm sonradan değişmiş' : '';
-  return `${CHIP_NAME[chip.channel]} ${chip.label} · ${support}${warning}. Pasajı görmek için tıklayın.`;
+function chipTitle(chip: ChipFacts, m: Messages): string {
+  const t = m.answer;
+  const support = chip.partial ? t.chipPartial : t.chipSupports;
+  return `${t.chipNames[chip.channel]} ${chip.label} · ${support}${chip.changed ? t.chipChanged : ''}. ${t.chipClick}`;
+}
+
+function chipAria(chip: ChipFacts, m: Messages): string {
+  const t = m.answer;
+  return `${t.chipNames[chip.channel]} ${chip.label}${chip.partial ? t.chipPartialAria : ''}${chip.changed ? t.chipChangedAria : ''}`;
 }
 
 function ClaimParagraph({
@@ -49,8 +56,9 @@ function ClaimParagraph({
   selectedSourceId: string | null;
   onSelect: (sourceId: string) => void;
 }) {
+  const { m } = useI18n();
   return (
-    <p className="m-0 text-[15px] leading-[1.65] [text-wrap:pretty]">
+    <p lang="tr" className="m-0 text-[15px] leading-[1.65] [text-wrap:pretty]">
       {claim.text}
       {claim.chips.map((chip) => {
         const tones = CHIP_TONE[chip.channel];
@@ -61,8 +69,8 @@ function ClaimParagraph({
             label={chip.label}
             tone={tone}
             onClick={() => onSelect(chip.sourceId)}
-            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}`}
-            title={chipTitle(chip)}
+            ariaLabel={chipAria(chip, m)}
+            title={chipTitle(chip, m)}
           />
         );
       })}
@@ -130,11 +138,12 @@ function Sentence({
   selectedSourceId: string | null;
   onSelect: (sourceId: string) => void;
 }) {
+  const { locale, m } = useI18n();
   return (
     <span>
       {sentence.unverified ? (
         <span
-          title="Bu ifade kaynaklarla doğrulanamadı"
+          title={m.answer.unverifiedTitle}
           className="underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]"
         >
           <InlineText text={sentence.text} />
@@ -143,8 +152,11 @@ function Sentence({
         <InlineText text={sentence.text} />
       )}
       {sentence.unverified && (
-        <span className="ml-1.5 inline-flex h-[18px] items-center rounded-[5px] border border-dashed border-err-line px-1.5 align-[1px] text-[10.5px] font-medium text-err">
-          doğrulanamadı
+        <span
+          lang={locale}
+          className="ml-1.5 inline-flex h-[18px] items-center rounded-[5px] border border-dashed border-err-line px-1.5 align-[1px] text-[10.5px] font-medium text-err"
+        >
+          {m.answer.unverified}
         </span>
       )}
       <Chips chips={sentence.chips} selectedSourceId={selectedSourceId} onSelect={onSelect} />{' '}
@@ -153,6 +165,7 @@ function Sentence({
 }
 
 function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedSourceId: string | null; onSelect: (sourceId: string) => void }) {
+  const { m } = useI18n();
   return (
     <>
       {chips.map((chip) => {
@@ -165,8 +178,8 @@ function Chips({ chips, selectedSourceId, onSelect }: { chips: Chip[]; selectedS
             tone={tone}
             flagged={chip.changed}
             onClick={() => onSelect(chip.sourceId)}
-            ariaLabel={`${CHIP_NAME[chip.channel]} ${chip.label}${chip.partial ? ', kısmen destekliyor' : ''}${chip.changed ? ', yürürlük uyarısı var' : ''}`}
-            title={chipTitle(chip)}
+            ariaLabel={chipAria(chip, m)}
+            title={chipTitle(chip, m)}
           />
         );
       })}
@@ -191,17 +204,19 @@ function ConversationalAnswerView({
   onWebSearch?: () => void;
   webSearchBusy: boolean;
 }) {
+  const { m } = useI18n();
+  const t = m.answer;
   const [copied, setCopied] = useState(false);
   const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
   const sourceSummary = [
-    count('file') ? `${count('file')} dosya pasajı` : null,
-    count('primary') ? `${count('primary')} birincil kaynak` : null,
-    count('doctrine') ? `${count('doctrine')} doktrin kaynağı` : null,
-    count('web') ? `${count('web')} web sayfası` : null,
+    count('file') ? t.filePassages(count('file')) : null,
+    count('primary') ? t.primarySources(count('primary')) : null,
+    count('doctrine') ? t.doctrineSources(count('doctrine')) : null,
+    count('web') ? t.webPages(count('web')) : null,
   ]
     .filter(Boolean)
     .join(' · ');
-  const seconds = formatSeconds(generation?.latency_ms ?? null);
+  const seconds = formatSeconds(generation?.latency_ms ?? null, m);
   const corpus = generation?.corpus_versions?.['labour_law:primary'];
   const index = generation?.index_versions?.['labour_law:primary'];
   // The badge speaks for the answer itself; the web section is labelled on its own.
@@ -209,11 +224,11 @@ function ConversationalAnswerView({
   const answerUnverified = rendered.blocks.some((block) => block.sentences.some((sentence) => sentence.unverified));
   const status =
     answer.answer_status === 'insufficient_evidence'
-      ? { tone: 'neutral' as const, icon: 'searchX' as const, label: 'Kaynak bulunamadı' }
+      ? { tone: 'neutral' as const, icon: 'searchX' as const, label: t.noSource }
       : answerUnverified
-        ? { tone: 'neutral' as const, icon: 'alert' as const, label: 'Kısmen doğrulandı' }
+        ? { tone: 'neutral' as const, icon: 'alert' as const, label: t.partlyVerified }
         : answerSources.length > 0
-          ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: 'Doğrulandı' }
+          ? { tone: 'ok' as const, icon: 'shieldCheck' as const, label: t.verified }
           : null;
 
   const copy = async () => {
@@ -229,14 +244,14 @@ function ConversationalAnswerView({
       ...(answer.repeal_notice ? [answer.repeal_notice, ''] : []),
       text(rendered.blocks),
       ...(rendered.temporalChecks.length
-        ? ['', 'Yürürlük kontrolü:', ...rendered.temporalChecks.map((check) => `- ${check.label ? `[${check.label}] ` : ''}${check.text}`)]
+        ? ['', t.copyCurrency, ...rendered.temporalChecks.map((check) => `- ${check.label ? `[${check.label}] ` : ''}${check.text}`)]
         : []),
-      ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
-      ...(rendered.webBlocks.length ? ['', 'Web araması (resmî kaynak değildir):', text(rendered.webBlocks)] : []),
+      ...(answer.limitations.length ? ['', t.copyLimitations, ...answer.limitations.map((item) => `- ${item}`)] : []),
+      ...(rendered.webBlocks.length ? ['', t.copyWeb, text(rendered.webBlocks)] : []),
       ...(rendered.sources.length
         ? [
             '',
-            'Kaynaklar:',
+            t.copySources,
             ...rendered.sources.map(
               (source) =>
                 `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}${source.channel === 'web' && source.snapshot.source_url ? ` — ${source.snapshot.source_url}` : ''}`,
@@ -274,6 +289,7 @@ function ConversationalAnswerView({
       {answer.repeal_notice && (
         <p
           role="note"
+          lang="tr"
           className="m-0 flex items-start gap-2 rounded-xl border border-err-line bg-err-bg px-3.5 py-2.5 text-[13.5px] leading-normal text-fg"
         >
           <Icon name="alert" size={15} className="mt-[3px] shrink-0 text-err" />
@@ -286,8 +302,7 @@ function ConversationalAnswerView({
       {rendered.unverifiedCount > 0 && (
         <p className="m-0 flex items-start gap-2 rounded-xl border border-dashed border-err-line px-3.5 py-2.5 text-[12.5px] leading-normal text-fg2">
           <Icon name="alert" size={14} className="mt-0.5 shrink-0 text-err" />
-          {rendered.unverifiedCount === 1 ? 'Bir ifade' : `${rendered.unverifiedCount} ifade`} kaynaklarla doğrulanamadı. İşaretli
-          cümleleri bir kaynağa bakmadan kullanmayın.
+          {t.unverifiedNote(rendered.unverifiedCount)}
         </p>
       )}
 
@@ -297,8 +312,8 @@ function ConversationalAnswerView({
 
       {answer.limitations.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-xl bg-muted px-3.5 py-3">
-          <span className="text-[12.5px] font-semibold text-fg2">Sınırlamalar</span>
-          <ul className="m-0 flex flex-col gap-1 pl-[18px] text-[13px] leading-normal text-fg2">
+          <span className="text-[12.5px] font-semibold text-fg2">{t.limitations}</span>
+          <ul lang="tr" className="m-0 flex flex-col gap-1 pl-[18px] text-[13px] leading-normal text-fg2">
             {answer.limitations.map((item) => (
               <li key={item}>{item}</li>
             ))}
@@ -307,11 +322,11 @@ function ConversationalAnswerView({
       )}
 
       {rendered.webBlocks.length > 0 && (
-        <section aria-label="Web araması" className="flex flex-col gap-2.5 rounded-xl border border-web-line px-4 py-3.5">
+        <section aria-label={t.webSection} className="flex flex-col gap-2.5 rounded-xl border border-web-line px-4 py-3.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
             <Icon name="globe" size={14} className="text-web" />
-            <span className="font-semibold text-web">Web&apos;de ne deniyor?</span>
-            <span className="text-fg3">Resmî kaynak değildir; yukarıdaki cevaptan ayrı değerlendirin.</span>
+            <span className="font-semibold text-web">{t.webHeading}</span>
+            <span className="text-fg3">{t.webNote}</span>
           </div>
           <Blocks blocks={rendered.webBlocks} selectedSourceId={selectedSourceId} onSelect={onSelectSource} compact />
         </section>
@@ -328,11 +343,11 @@ function ConversationalAnswerView({
           className="flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12.5px] text-fg2 hover:bg-hover hover:text-fg"
         >
           <Icon name={copied ? 'check' : 'copy'} size={14} />
-          {copied ? 'Kopyalandı' : 'Kopyala'}
+          {copied ? m.common.copied : m.common.copy}
         </button>
         <span className="grow" />
         {corpus && (
-          <span className="font-mono text-[11px] text-fg3" title="Cevabın üretildiği kaynak ve dizin sürümü">
+          <span className="font-mono text-[11px] text-fg3" title={m.answer.versionTitle}>
             {corpus}
             {index ? ` · ${index}` : ''}
           </span>
@@ -354,7 +369,7 @@ function Blocks({
   compact?: boolean;
 }) {
   return (
-    <div className={`flex flex-col [text-wrap:pretty] ${compact ? 'gap-2 text-[14px] leading-[1.65]' : 'gap-3 text-[15px] leading-[1.7]'}`}>
+    <div lang="tr" className={`flex flex-col [text-wrap:pretty] ${compact ? 'gap-2 text-[14px] leading-[1.65]' : 'gap-3 text-[15px] leading-[1.7]'}`}>
       {blocks.map((block, blockIndex) => {
         if (block.kind === 'heading') {
           return (
@@ -399,14 +414,16 @@ function TemporalChecks({
   selectedSourceId: string | null;
   onSelect: (sourceId: string) => void;
 }) {
+  const { m } = useI18n();
+  const t = m.answer;
   return (
-    <section aria-label="Yürürlük kontrolü" className="flex flex-col gap-2 rounded-xl border border-line-strong px-3.5 py-3">
+    <section aria-label={t.currency} className="flex flex-col gap-2 rounded-xl border border-line-strong px-3.5 py-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">
         <Icon name="history" size={14} className="text-fg2" />
-        <span className="font-semibold">Yürürlük kontrolü</span>
-        <span className="text-fg3">Atıf yapılan hükümlerin ve kararların güncelliği</span>
+        <span className="font-semibold">{t.currency}</span>
+        <span className="text-fg3">{t.currencyLead}</span>
       </div>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[13px] leading-normal text-fg2">
+      <ul lang="tr" className="m-0 flex list-none flex-col gap-2 p-0 text-[13px] leading-normal text-fg2">
         {checks.map((check) => (
           <li key={`${check.sourceId}:${check.text}`} className="flex gap-2">
             <Icon
@@ -421,7 +438,7 @@ function TemporalChecks({
                   label={check.label}
                   tone={check.sourceId === selectedSourceId ? 'selected' : 'primary'}
                   onClick={() => onSelect(check.sourceId)}
-                  ariaLabel={`Kaynak ${check.label}`}
+                  ariaLabel={t.sourceAria(check.label)}
                 />
               )}
             </span>
@@ -429,8 +446,7 @@ function TemporalChecks({
         ))}
       </ul>
       <p className="m-0 text-[12px] leading-normal text-fg3">
-        Değişiklikten önceki metin BekenAI&apos;nin kaynaklarında yok; mevzuat.gov.tr&apos;den ya da ilgili Resmî Gazete&apos;den kontrol
-        edin.
+        {t.currencyNote}
       </p>
     </section>
   );
@@ -438,48 +454,42 @@ function TemporalChecks({
 
 /** What a deep research covered: its parts, and how much it searched and read. */
 function ResearchDetails({ research }: { research: ResearchSummary }) {
+  const { m } = useI18n();
+  const t = m.answer;
   const followed = research.followed_articles.length;
   return (
     <details className="group rounded-xl border border-line px-3.5 py-2.5 text-[13px] text-fg2">
       <summary className="flex cursor-pointer list-none items-center gap-2">
         <Icon name="search" size={14} className="text-accent" />
-        <span className="font-semibold text-fg">Araştırma özeti</span>
-        <span className="text-fg3">
-          {research.parts.length} alt soru · {research.searches} arama · {research.passages} pasaj
-          {followed > 0 ? ` · ${followed} madde atıftan getirildi` : ''}
-        </span>
+        <span className="font-semibold text-fg">{t.researchSummary}</span>
+        <span className="text-fg3">{t.researchStats(research.parts.length, research.searches, research.passages, followed)}</span>
         <Icon name="chevDown" size={14} className="ml-auto shrink-0 transition-transform group-open:rotate-180" />
       </summary>
       <ol className="m-0 mt-2.5 flex flex-col gap-1 pl-5 leading-normal">
         {research.parts.map((part) => (
           <li key={part.question}>
-            {part.question} <span className="text-fg3">({part.sources} kaynak)</span>
+            <span lang="tr">{part.question}</span> <span className="text-fg3">{t.researchSources(part.sources)}</span>
           </li>
         ))}
       </ol>
       {(research.follow_ups > 0 || followed > 0) && (
         <p className="m-0 mt-2 leading-normal text-fg3">
-          {research.follow_ups > 0 ? `İlk turdan sonra ${research.follow_ups} eksik ayrıca arandı. ` : ''}
-          {followed > 0 ? `Kararların dayandığı maddeler getirildi: ${research.followed_articles.join(', ')}.` : ''}
+          {research.follow_ups > 0 ? t.researchFollowUps(research.follow_ups) : ''}
+          {followed > 0 ? t.researchFollowed(research.followed_articles.join(', ')) : ''}
         </p>
       )}
     </details>
   );
 }
 
-const WEB_OFFER_TEXT: Record<WebSearchOfferReason, string> = {
-  no_sources: "BekenAI'nin kaynaklarında bu soruya dayanak bulunamadı. İsterseniz web'de de arayabilirim;",
-  provision_changed:
-    "Atıf yapılan bir hüküm olay tarihinden sonra değişmiş ve eski metni BekenAI'nin kaynaklarında yok. İsterseniz sorunuzu web'de bu hükmün eski haliyle birlikte arayabilirim;",
-  missing_info: "Bu cevap için gereken bazı bilgiler BekenAI'nin kaynaklarında yok. İsterseniz web'de de arayabilirim;",
-};
-
 /** Offered when a web search could help a legal question; never runs on its own. */
 function WebSearchOffer({ reason, onSearch, busy }: { reason: WebSearchOfferReason; onSearch: () => void; busy: boolean }) {
+  const { m } = useI18n();
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-center">
       <p className="m-0 grow text-[13px] leading-normal text-fg2">
-        {WEB_OFFER_TEXT[reason]} bulunanlar cevabın sonuna ayrı ve etiketli bir bölüm olarak eklenir.
+        {m.answer.webOffer[reason]}
+        {m.answer.webOfferSuffix}
       </p>
       <button
         type="button"
@@ -488,7 +498,7 @@ function WebSearchOffer({ reason, onSearch, busy }: { reason: WebSearchOfferReas
         className="flex h-[34px] w-fit shrink-0 items-center gap-1.5 rounded-[9px] border border-web-line bg-web-bg px-3.5 text-[13.5px] font-medium text-web hover:border-web disabled:opacity-60"
       >
         <Icon name="globe" size={15} />
-        Web&apos;de ara
+        {m.answer.searchWeb}
       </button>
     </div>
   );
@@ -507,31 +517,33 @@ function LegacyAnswerView({
   selectedSourceId: string | null;
   onSelectSource: (sourceId: string) => void;
 }) {
+  const { m } = useI18n();
+  const t = m.answer;
   const [copied, setCopied] = useState(false);
   const count = (channel: string) => rendered.sources.filter((source) => source.channel === channel).length;
   const fileCount = count('file');
   const primaryCount = count('primary');
   const doctrineCount = count('doctrine');
   const sourceSummary = [
-    fileCount ? `${fileCount} dosya pasajı` : null,
-    primaryCount ? `${primaryCount} birincil${doctrineCount || fileCount ? '' : ' kaynak'}` : null,
-    doctrineCount ? `${doctrineCount} doktrin kaynağı` : null,
+    fileCount ? t.filePassages(fileCount) : null,
+    primaryCount ? (doctrineCount || fileCount ? t.primaryShort(primaryCount) : t.primarySources(primaryCount)) : null,
+    doctrineCount ? t.doctrineSources(doctrineCount) : null,
   ]
     .filter(Boolean)
     .join(' · ');
-  const seconds = formatSeconds(generation?.latency_ms ?? null);
+  const seconds = formatSeconds(generation?.latency_ms ?? null, m);
   const corpus = generation?.corpus_versions?.['labour_law:primary'];
   const index = generation?.index_versions?.['labour_law:primary'];
 
   const copy = async () => {
     const lines = [
-      ...(rendered.file.length ? ['Dosyadaki bilgiler:', ...rendered.file.map((claim) => claim.text), ''] : []),
-      ...(rendered.file.length && rendered.primary.length ? ['Mevzuat ve içtihat:'] : []),
+      ...(rendered.file.length ? [t.copyFile, ...rendered.file.map((claim) => claim.text), ''] : []),
+      ...(rendered.file.length && rendered.primary.length ? [t.copyPrimary] : []),
       ...rendered.primary.map((claim) => claim.text),
-      ...(rendered.doctrine.length ? ['', 'Doktrin ve yardımcı kaynaklar:', ...rendered.doctrine.map((claim) => claim.text)] : []),
-      ...(answer.limitations.length ? ['', 'Sınırlamalar:', ...answer.limitations.map((item) => `- ${item}`)] : []),
+      ...(rendered.doctrine.length ? ['', t.copyDoctrine, ...rendered.doctrine.map((claim) => claim.text)] : []),
+      ...(answer.limitations.length ? ['', t.copyLimitations, ...answer.limitations.map((item) => `- ${item}`)] : []),
       '',
-      'Kaynaklar:',
+      t.copySources,
       ...rendered.sources.map(
         (source) =>
           `[${source.label}] ${source.snapshot.title}${source.snapshot.location_label ? `, ${source.snapshot.location_label}` : ''}${source.snapshot.breadcrumb.length ? ` — ${source.snapshot.breadcrumb.join(' › ')}` : ''}`,
@@ -553,7 +565,7 @@ function LegacyAnswerView({
         <span className="text-[13.5px] font-semibold">BekenAI</span>
         <Badge tone="ok">
           <Icon name="shieldCheck" size={13} strokeWidth={2} />
-          Doğrulandı
+          {t.verified}
         </Badge>
         <span className="text-[12.5px] text-fg3">
           {sourceSummary}
@@ -565,8 +577,8 @@ function LegacyAnswerView({
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
             <span className="size-2 rounded-[2px] bg-file" />
-            <span className="font-semibold">Dosyadaki bilgiler</span>
-            <span className="text-fg3">Yüklediğiniz belgelerde yazanlar; hukuki değerlendirme değildir</span>
+            <span className="font-semibold">{t.fileHeading}</span>
+            <span className="text-fg3">{t.fileNote}</span>
           </div>
           {rendered.file.map((claim) => (
             <ClaimParagraph key={claim.number} claim={claim} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
@@ -579,7 +591,7 @@ function LegacyAnswerView({
           {rendered.file.length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
               <span className="size-2 rounded-[2px] bg-accent" />
-              <span className="font-semibold">Mevzuat ve içtihat</span>
+              <span className="font-semibold">{t.primaryHeading}</span>
             </div>
           )}
           {rendered.primary.map((claim) => (
@@ -592,8 +604,8 @@ function LegacyAnswerView({
         <div className="flex flex-col gap-2 border-t border-line pt-3.5">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
             <span className="size-2 rounded-[2px] bg-doc" />
-            <span className="font-semibold">Doktrin ve yardımcı kaynaklar</span>
-            <span className="text-fg3">Birincil kaynaklardan ayrı değerlendirilir</span>
+            <span className="font-semibold">{t.doctrineHeading}</span>
+            <span className="text-fg3">{t.doctrineNote}</span>
           </div>
           {rendered.doctrine.map((claim) => (
             <ClaimParagraph key={claim.number} claim={claim} selectedSourceId={selectedSourceId} onSelect={onSelectSource} />
@@ -603,8 +615,8 @@ function LegacyAnswerView({
 
       {answer.limitations.length > 0 && (
         <div className="flex flex-col gap-1.5 rounded-xl bg-muted px-3.5 py-3">
-          <span className="text-[12.5px] font-semibold text-fg2">Sınırlamalar</span>
-          <ul className="m-0 flex flex-col gap-1 pl-[18px] text-[13px] leading-normal text-fg2">
+          <span className="text-[12.5px] font-semibold text-fg2">{t.limitations}</span>
+          <ul lang="tr" className="m-0 flex flex-col gap-1 pl-[18px] text-[13px] leading-normal text-fg2">
             {answer.limitations.map((item) => (
               <li key={item}>{item}</li>
             ))}
@@ -619,11 +631,11 @@ function LegacyAnswerView({
           className="flex h-7 items-center gap-1.5 rounded-[7px] px-2 text-[12.5px] text-fg2 hover:bg-hover hover:text-fg"
         >
           <Icon name={copied ? 'check' : 'copy'} size={14} />
-          {copied ? 'Kopyalandı' : 'Kopyala'}
+          {copied ? m.common.copied : m.common.copy}
         </button>
         <span className="grow" />
         {corpus && (
-          <span className="font-mono text-[11px] text-fg3" title="Cevabın üretildiği kaynak ve dizin sürümü">
+          <span className="font-mono text-[11px] text-fg3" title={m.answer.versionTitle}>
             {corpus}
             {index ? ` · ${index}` : ''}
           </span>
@@ -669,30 +681,37 @@ const secondaryButton =
   'flex h-[34px] w-fit items-center gap-1.5 rounded-[9px] border border-line-strong bg-surface px-3.5 text-[13.5px] font-medium text-fg hover:bg-hover';
 
 export function InsufficientCard({ reason, onEdit }: { reason: string | null; onEdit: () => void }) {
+  const { m } = useI18n();
+  const t = m.answer;
   return (
     <StateCard
       icon="searchX"
       tone="neutral"
-      title="Bu soruyu destekleyen birincil kaynak bulunamadı"
+      title={t.insufficientTitle}
       action={
         <button type="button" onClick={onEdit} className={secondaryButton}>
-          Soruyu düzenle
+          {t.editQuestion}
         </button>
       }
     >
-      BekenAI yalnızca doğrulanabilen kaynaklarla cevap verir. Soruyu somutlaştırmayı ya da ilgili kanun maddesini belirtmeyi deneyin.
-      {reason && <span className="mt-1.5 block text-[12.5px] text-fg3">Gerekçe: {reason}</span>}
+      {t.insufficientBody}
+      {reason && (
+        <span className="mt-1.5 block text-[12.5px] text-fg3">
+          {t.insufficientReason} <span lang="tr">{reason}</span>
+        </span>
+      )}
     </StateCard>
   );
 }
 
 export function FailedCard({ code, onRetry }: { code: string | null; onRetry: () => void }) {
+  const { m } = useI18n();
   const retryable = isRetryableFailure(code);
   return (
     <StateCard
       icon="alert"
       tone="err"
-      title="Cevap şu an oluşturulamadı"
+      title={m.answer.failedTitle}
       action={
         <button
           type="button"
@@ -700,28 +719,29 @@ export function FailedCard({ code, onRetry }: { code: string | null; onRetry: ()
           className="flex h-[34px] w-fit items-center gap-1.5 rounded-[9px] bg-inv px-3.5 text-[13.5px] font-medium text-inv-fg"
         >
           <Icon name="refresh" size={14} strokeWidth={1.9} />
-          {retryable ? 'Tekrar dene' : 'Yeniden gönder'}
+          {retryable ? m.common.retry : m.answer.resend}
         </button>
       }
     >
-      {describeError(code ?? 'job_failed')} Sorunuz kaydedildi; tekrar denediğinizde yeniden işlenir.
+      {describeError(code ?? 'job_failed', m)} {m.answer.failedSaved}
     </StateCard>
   );
 }
 
 export function CancelledCard({ onResend }: { onResend: () => void }) {
+  const { m } = useI18n();
   return (
     <StateCard
       icon="stop"
       tone="muted"
-      title="Cevap üretimi iptal edildi"
+      title={m.answer.cancelledTitle}
       action={
         <button type="button" onClick={onResend} className={secondaryButton}>
-          Yeniden gönder
+          {m.answer.resend}
         </button>
       }
     >
-      Bu soru için kaynak araması ve cevap üretimi durduruldu.
+      {m.answer.cancelledBody}
     </StateCard>
   );
 }

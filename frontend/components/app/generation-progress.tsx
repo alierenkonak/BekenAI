@@ -4,37 +4,8 @@ import { LogoMark } from '@/components/brand';
 import { Icon, Spinner } from '@/components/icons';
 import { formatElapsed } from '@/lib/format';
 import { useNow } from '@/lib/hooks';
+import { useI18n } from '@/lib/i18n/client';
 import type { GenerationSummary } from '@/lib/types';
-
-const CORPUS_STEPS = [
-  { title: 'Sırada', detail: 'İsteğiniz işlenmek üzere kuyruğa alındı' },
-  { title: 'Kaynaklar aranıyor', detail: 'Mevzuat, Yargıtay kararları ve doktrin taranıyor' },
-  { title: 'Cevap hazırlanıyor', detail: 'Yalnızca bulunan kaynaklarla taslak yazılıyor' },
-  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
-];
-
-const ANALYSIS_STEPS = [
-  CORPUS_STEPS[0],
-  { title: 'Dosyalar okunuyor', detail: 'Bütün dosyalar okunup davanın hukuki konuları çıkarılıyor ve her biri için kanun ve doktrin aranıyor' },
-  { title: 'Rapor yazılıyor', detail: 'Her konu için kanunun aradığı, dosyada olan ve değerlendirme yazılıyor' },
-  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı kanun pasajı ya da dosya pasajıyla karşılaştırılıyor' },
-];
-
-// With web search on, the usual search runs and the web is searched alongside it.
-const WEB_STEPS = [
-  CORPUS_STEPS[0],
-  { title: 'Kaynaklar ve web aranıyor', detail: 'Mevzuat, Yargıtay kararları ve web sayfaları taranıyor' },
-  { title: 'Cevap hazırlanıyor', detail: 'Cevap kaynaklarla, en alttaki web bölümü bulunan sayfalarla yazılıyor' },
-  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ya da sayfa alıntısıyla karşılaştırılıyor' },
-];
-
-// A deep research plans, searches twice and follows citations before it writes.
-const RESEARCH_STEPS = [
-  CORPUS_STEPS[0],
-  { title: 'Araştırılıyor', detail: 'Soru alt sorulara bölünüyor, her biri iki turda aranıyor ve kararların dayandığı maddeler getiriliyor' },
-  { title: 'Rapor yazılıyor', detail: 'Her alt soru için kanun, içtihat ve varsa dosya birleştiriliyor' },
-  { title: 'İddialar doğrulanıyor', detail: 'Her iddia, dayandığı pasajla ayrıca karşılaştırılıyor' },
-];
 
 function currentStep(generation: GenerationSummary): number {
   if (generation.status === 'queued') return 0;
@@ -53,18 +24,25 @@ export function GenerationProgress({
   cancelling: boolean;
 }) {
   const now = useNow(1000);
-  const steps = generation.deep_research
-    ? RESEARCH_STEPS
-    : generation.search_mode === 'analysis'
-      ? ANALYSIS_STEPS
-      : generation.search_mode === 'web'
-        ? WEB_STEPS
-        : CORPUS_STEPS;
+  const { m } = useI18n();
+  const t = m.progress;
+  // A deep research plans, searches twice and follows citations before it writes; with web
+  // search on, the web is searched alongside the usual sources.
+  const steps = [
+    t.queued,
+    ...(generation.deep_research
+      ? t.research
+      : generation.search_mode === 'analysis'
+        ? t.analysis
+        : generation.search_mode === 'web'
+          ? t.web
+          : t.corpus),
+  ];
   const active = currentStep(generation);
   const elapsed = now ? formatElapsed(now - new Date(generation.created_at).getTime()) : null;
 
   return (
-    <section aria-live="polite" aria-label="Cevap hazırlanıyor" className="flex flex-col gap-3.5">
+    <section aria-live="polite" aria-label={t.label} className="flex flex-col gap-3.5">
       <div className="flex items-center gap-2">
         <LogoMark size={22} />
         <span className="text-[13.5px] font-semibold">BekenAI</span>
@@ -107,11 +85,7 @@ export function GenerationProgress({
         </ol>
         <div className="flex flex-wrap items-center gap-4 border-t border-line px-5 py-3">
           <span className="min-w-[220px] grow text-[12.5px] leading-normal text-fg3">
-            {generation.deep_research || generation.search_mode === 'analysis'
-              ? 'Genellikle 3–5 dakika sürer.'
-              : 'Genellikle 1–2 dakika sürer.'}{' '}
-            Sayfadan
-            ayrılabilirsiniz; cevap hazır olduğunda bu sohbette görünür.
+            {generation.deep_research || generation.search_mode === 'analysis' ? t.longWait : t.shortWait} {t.leave}
           </span>
           <button
             type="button"
@@ -120,7 +94,7 @@ export function GenerationProgress({
             className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-[13px] font-medium text-fg hover:bg-hover disabled:opacity-60"
           >
             {cancelling ? <Spinner size={14} /> : <Icon name="x" size={14} strokeWidth={1.9} />}
-            İptal et
+            {t.cancel}
           </button>
         </div>
       </div>

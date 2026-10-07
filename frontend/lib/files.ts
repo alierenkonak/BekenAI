@@ -1,5 +1,6 @@
 import { CASE_FILE_MAX_BYTES } from './config';
 import { describeError, formatBytes } from './format';
+import type { Messages } from './i18n';
 import type { FileMediaType, UserFile } from './types';
 
 export const DOCX_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -11,6 +12,7 @@ export const TRANSIENT_STATUSES = new Set<UserFile['status']>(['verifying', 'upl
 export const PROCESSING_STATUSES = new Set<UserFile['status']>(['verifying', 'uploaded', 'indexing']);
 
 export const SAMPLE_FILE_URL = '/ornek/ornek-ise-iade-dosyasi.pdf';
+// Sent to the backend as typed, so they stay in Turkish in both interface languages.
 export const SAMPLE_QUESTIONS = [
   'İşveren fesih gerekçesi olarak ne göstermiş?',
   'Fesihten önce işçinin savunması alınmış mı? Bu fesih geçerli mi?',
@@ -27,28 +29,26 @@ export function mediaTypeOf(file: File): FileMediaType | null {
 }
 
 /** Why a file cannot be uploaded, checked before any request is made. */
-export function uploadProblem(file: File): string | null {
-  if (file.name.toLowerCase().endsWith('.doc')) {
-    return 'Eski Word (.doc) biçimi desteklenmiyor; belgeyi DOCX olarak kaydedip yükleyin.';
-  }
-  if (!mediaTypeOf(file)) return 'Yalnızca PDF, Word (DOCX) ve TXT dosyaları yüklenebilir.';
-  if (file.size > CASE_FILE_MAX_BYTES) return 'Dosya 50 MB sınırını aşıyor.';
-  if (file.size === 0) return 'Dosya boş.';
+export function uploadProblem(file: File, m: Messages): string | null {
+  if (file.name.toLowerCase().endsWith('.doc')) return m.files.legacyDoc;
+  if (!mediaTypeOf(file)) return m.files.unsupported;
+  if (file.size > CASE_FILE_MAX_BYTES) return m.files.tooLarge;
+  if (file.size === 0) return m.files.empty;
   return null;
 }
 
-export function indexingProgress(file: UserFile): string {
-  return file.chunks_total ? `${file.chunks_done ?? 0}/${file.chunks_total} parça işlendi` : 'metin çıkarılıyor';
+export function indexingProgress(file: UserFile, m: Messages): string {
+  return file.chunks_total ? m.files.chunks(file.chunks_done ?? 0, file.chunks_total) : m.files.extracting;
 }
 
-export function fileDetail(file: UserFile): string {
-  if (file.status === 'failed') return describeError(file.safe_error_code ?? 'job_failed');
-  const parts = [formatBytes(file.verified_size_bytes ?? file.expected_size_bytes)];
+export function fileDetail(file: UserFile, m: Messages): string {
+  if (file.status === 'failed') return describeError(file.safe_error_code ?? 'job_failed', m);
+  const parts = [formatBytes(file.verified_size_bytes ?? file.expected_size_bytes, m)];
   if (file.status === 'indexing') {
-    parts.push(indexingProgress(file));
+    parts.push(indexingProgress(file, m));
   } else if (file.status === 'ready') {
-    if (file.page_count) parts.push(`${file.page_count} sayfa`);
-    if (file.unreadable_page_count) parts.push(`${file.unreadable_page_count} sayfa okunamadı`);
+    if (file.page_count) parts.push(m.files.pages(file.page_count));
+    if (file.unreadable_page_count) parts.push(m.files.unreadablePages(file.unreadable_page_count));
   }
   return parts.join(' · ');
 }

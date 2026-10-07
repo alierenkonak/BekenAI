@@ -63,7 +63,8 @@ adımlı bir araştırma yürütebilir.
 
 > [!NOTE]
 > BekenAI bir portfolyo projesidir. Ücretsiz katmanlarda çalışır ve hukuki danışmanlık yerine
-> geçmez. Google ile giriş yapıp sitedeki kurgusal örnek dava dosyasıyla deneyebilirsiniz.
+> geçmez. Arayüz Türkçe ya da İngilizce kullanılabilir; sorular, kaynaklar ve cevaplar Türkçedir.
+> Google ile giriş yapıp sitedeki kurgusal örnek dava dosyasıyla deneyebilirsiniz.
 
 ## Özellikler
 
@@ -142,7 +143,7 @@ Ayrıca:
   adlandırılabilir ve silinebilir. Kenar çubuğu ve kaynak paneli sürüklenerek
   boyutlandırılabilir ya da tamamen kapatılabilir; cevap sütunu okunabilir genişliğini korur.
   Kaynak paneli atıf işaretlerini açıklar (destekliyor, kısmen destekliyor, hüküm sonradan
-  değişmiş). Açık ve koyu tema vardır.
+  değişmiş). Açık ve koyu tema, Türkçe ve İngilizce arayüz vardır.
 
 ## Bir cevap nasıl oluşur
 

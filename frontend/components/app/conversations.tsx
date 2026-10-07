@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { describeError } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
 import type { Conversation } from '@/lib/types';
 
 type ConversationsValue = {
@@ -39,6 +40,7 @@ export function useConversations(): ConversationsValue {
 export function ConversationsProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { m } = useI18n();
   const [pinned, setPinned] = useState<Conversation[] | null>(null);
   const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [version, setVersion] = useState(0);
@@ -82,11 +84,11 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         refresh();
         return updated;
       } catch (error) {
-        setNotice(describeError(error));
+        setNotice(describeError(error, m));
         return null;
       }
     },
-    [refresh],
+    [m, refresh],
   );
 
   const rename = useCallback(
@@ -98,27 +100,27 @@ export function ConversationsProvider({ children }: { children: ReactNode }) {
         refresh();
         return updated;
       } catch (error) {
-        setNotice(describeError(error));
+        setNotice(describeError(error, m));
         return null;
       }
     },
-    [refresh],
+    [m, refresh],
   );
 
   const remove = useCallback(
     async (conversation: Conversation) => {
-      if (!window.confirm(`“${conversation.title}” sohbeti ve bütün cevapları kalıcı olarak silinsin mi?`)) return false;
+      if (!window.confirm(m.chatMenu.confirmDelete(conversation.title))) return false;
       try {
         await api.deleteConversation(conversation.id);
         refresh();
         if (pathname === `/sohbet/${conversation.id}`) router.push('/sohbet');
         return true;
       } catch (error) {
-        setNotice(describeError(error));
+        setNotice(describeError(error, m));
         return false;
       }
     },
-    [pathname, refresh, router],
+    [m, pathname, refresh, router],
   );
 
   const value = useMemo(

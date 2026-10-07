@@ -7,6 +7,7 @@ import { Icon } from '@/components/icons';
 import { ApiError, api } from '@/lib/api';
 import { SAMPLE_FILE_URL, SAMPLE_QUESTIONS, mediaTypeOf, uploadProblem } from '@/lib/files';
 import { describeError } from '@/lib/format';
+import { useI18n } from '@/lib/i18n/client';
 import type { LegalCase } from '@/lib/types';
 import { rememberWebSearch, useWebSearchAvailable } from '@/lib/web-search';
 import { AttachButton, saveDraftHandoff } from './chat-files';
@@ -14,18 +15,21 @@ import { Composer } from './composer';
 import { useConversations } from './conversations';
 import { Popover, moveFocus } from './popover';
 
-// Drawn from the labour-law evaluation set so suggestions exercise real coverage.
+// Drawn from the labour-law evaluation set so suggestions exercise real coverage. They are
+// sent as typed, so they stay in Turkish; the English interface shows a reading under each.
 const SUGGESTIONS = [
-  { topic: 'Fesih', question: 'Savunmam alınmadan davranışım nedeniyle işten çıkarılabilir miyim?' },
-  { topic: 'İşe iade', question: 'İşe iade için arabulucuya kaç gün içinde başvurmalıyım?' },
-  { topic: 'Kıdem tazminatı', question: 'Kıdem tazminatı hesabında hangi ödemeler giydirilmiş ücrete eklenir?' },
-  { topic: 'Fazla çalışma', question: 'İmzalı bordro fazla mesai alacağını engeller mi?' },
+  'Savunmam alınmadan davranışım nedeniyle işten çıkarılabilir miyim?',
+  'İşe iade için arabulucuya kaç gün içinde başvurmalıyım?',
+  'Kıdem tazminatı hesabında hangi ödemeler giydirilmiş ücrete eklenir?',
+  'İmzalı bordro fazla mesai alacağını engeller mi?',
 ];
 
 export function NewChat() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refresh } = useConversations();
+  const { m } = useI18n();
+  const t = m.newChat;
   const [draft, setDraft] = useState(() => searchParams.get('q') ?? '');
   const webSearchAvailable = useWebSearchAvailable();
   const [webSearch, setWebSearch] = useState(false);
@@ -87,7 +91,7 @@ export function NewChat() {
         router.push(`/sohbet/${target}`);
         return;
       }
-      setError(describeError(sendError));
+      setError(describeError(sendError, m));
       setSending(false);
     }
   };
@@ -95,7 +99,7 @@ export function NewChat() {
   // Files belong to a chat, so attaching one opens the chat first and continues there.
   const attach = async (files: File[]) => {
     if (!files.length || attaching || sending) return;
-    const problem = files.map(uploadProblem).find(Boolean);
+    const problem = files.map((file) => uploadProblem(file, m)).find(Boolean);
     if (problem) {
       setError(problem);
       return;
@@ -119,7 +123,7 @@ export function NewChat() {
       refresh();
       router.push(`/sohbet/${targetId}`);
     } catch (attachError) {
-      setError(describeError(attachError));
+      setError(describeError(attachError, m));
       setAttaching(false);
     }
   };
@@ -129,18 +133,22 @@ export function NewChat() {
   return (
     <div className="flex h-full flex-col overflow-y-auto">
       <header className="hidden h-14 shrink-0 items-center px-6 lg:flex">
-        <span className="text-sm text-fg2">Yeni sohbet</span>
+        <span className="text-sm text-fg2">{m.common.newChat}</span>
       </header>
 
       <div className="flex grow flex-col items-center px-4 pb-6 pt-12 sm:px-6 lg:pt-[104px]">
         <div className="flex w-full max-w-[720px] flex-col gap-7">
           <div className="flex flex-col items-center gap-3 text-center">
             <h1 className="m-0 font-serif text-[38px] font-normal leading-[1.05] tracking-[-0.01em] sm:text-5xl">
-              Hangi konuyu araştırıyorsunuz?
+              {t.heading}
             </h1>
-            <p className="m-0 max-w-[560px] text-[15px] leading-relaxed text-fg2">
-              Mevzuat, Yargıtay kararları ve doktrine dayanan cevaplar alın. Her iddia, kaynak pasajıyla karşılaştırılarak doğrulanır.
-            </p>
+            <p className="m-0 max-w-[560px] text-[15px] leading-relaxed text-fg2">{t.lead}</p>
+            {t.languageNote && (
+              <p className="m-0 flex max-w-[560px] items-start gap-2 rounded-[10px] border border-accent-line bg-accent-bg px-3.5 py-2.5 text-left text-[13px] leading-normal text-accent">
+                <Icon name="globe" size={15} className="mt-px shrink-0" />
+                {t.languageNote}
+              </p>
+            )}
           </div>
 
           <Composer
@@ -152,8 +160,8 @@ export function NewChat() {
             deepResearch={{ checked: deepResearch, onChange: setDeepResearch }}
             busy={sending || attaching}
             autoFocus
-            placeholder="Örneğin: İşveren ihbar süresine uymadan sözleşmemi feshetti. Hangi alacaklarımı talep edebilirim?"
-            locked={attaching ? 'Dosya yükleniyor; ardından sohbete geçeceksiniz…' : null}
+            placeholder={t.placeholder}
+            locked={attaching ? t.uploading : null}
             extra={
               <>
                 {caseSelect}
@@ -168,16 +176,19 @@ export function NewChat() {
           )}
 
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            {SUGGESTIONS.map((item) => (
+            {SUGGESTIONS.map((question, index) => (
               <button
-                key={item.question}
+                key={question}
                 type="button"
                 disabled={sending}
-                onClick={() => void send(item.question)}
+                onClick={() => void send(question)}
                 className="flex flex-col gap-1.5 rounded-xl border border-line bg-surface px-4 py-3.5 text-left transition-colors hover:border-line-strong hover:bg-hover disabled:opacity-60"
               >
-                <span className="text-xs font-medium text-fg3">{item.topic}</span>
-                <span className="text-sm leading-snug text-fg">{item.question}</span>
+                <span className="text-xs font-medium text-fg3">{t.topics[index]}</span>
+                <span lang="tr" className="text-sm leading-snug text-fg">
+                  {question}
+                </span>
+                {t.glosses[index] && <span className="text-[12.5px] leading-snug text-fg3">{t.glosses[index]}</span>}
               </button>
             ))}
           </div>
@@ -186,7 +197,7 @@ export function NewChat() {
             <div className="flex flex-wrap items-center gap-2">
               <Icon name="file" size={16} className="text-file" />
               <h2 id="sample-file" className="m-0 text-[13.5px] font-semibold">
-                Kendi dosyanızla deneyin
+                {t.sampleHeading}
               </h2>
               <span className="grow" />
               <a
@@ -195,18 +206,16 @@ export function NewChat() {
                 className="flex h-8 items-center gap-1.5 rounded-lg border border-file-line bg-surface px-3 text-[13px] font-medium text-file no-underline hover:bg-hover"
               >
                 <Icon name="download" size={14} />
-                Örnek dava dosyası (PDF)
+                {t.sampleDownload}
               </a>
             </div>
-            <p className="m-0 text-[13px] leading-normal text-fg2">
-              Ataç simgesiyle bir dilekçe, fesih bildirimi ya da karar ekleyin; cevaplar dosyadaki sayfaya atıf yapar. Elinizde dosya
-              yoksa kurgusal örneği indirip ekleyin, ardından şunları sorun:
-            </p>
+            <p className="m-0 text-[13px] leading-normal text-fg2">{t.sampleBody}</p>
             <div className="flex flex-wrap gap-1.5">
               {SAMPLE_QUESTIONS.map((question) => (
                 <button
                   key={question}
                   type="button"
+                  lang="tr"
                   onClick={() => setDraft(question)}
                   className="rounded-full border border-line bg-surface px-3 py-1 text-left text-[12.5px] text-fg2 hover:border-line-strong hover:text-fg"
                 >
@@ -218,13 +227,13 @@ export function NewChat() {
 
           <div className="flex items-start justify-center gap-2 text-center text-[12.5px] text-fg3">
             <Icon name="book" size={14} className="mt-0.5" />
-            <span>Kapsam: iş hukukuna ilişkin kanunlar · Yargıtay kararları · doktrin · yüklediğiniz dosyalar</span>
+            <span>{t.coverage}</span>
           </div>
         </div>
       </div>
 
       <p className="m-0 px-6 pb-[18px] text-center text-xs text-fg3">
-        BekenAI hukuki danışmanlık yerine geçmez. Cevaplar yalnızca doğrulanabilen kaynaklara dayanır.
+        {t.footer}
       </p>
     </div>
   );
@@ -232,6 +241,8 @@ export function NewChat() {
 
 /** Picks the case a new chat belongs to; the case's files are then searched in the chat too. */
 function CaseSelect({ cases, value, onChange }: { cases: LegalCase[]; value: string; onChange: (id: string) => void }) {
+  const { m } = useI18n();
+  const t = m.newChat;
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -277,20 +288,20 @@ function CaseSelect({ cases, value, onChange }: { cases: LegalCase[]; value: str
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={selected ? `Bağlı dava: ${selected.name}` : 'Davaya bağla'}
+        aria-label={selected ? t.linkedCase(selected.name) : t.linkCase}
         onClick={() => setOpen((current) => !current)}
         className={`flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border px-2.5 text-[13px] transition-colors ${
           selected ? 'border-file-line bg-file-bg font-medium text-file' : 'border-dashed border-line-strong text-fg2 hover:bg-hover hover:text-fg'
         }`}
       >
         <Icon name="cases" size={15} className="shrink-0" />
-        <span className="truncate">{selected ? selected.name : 'Davaya bağla'}</span>
+        <span className="truncate">{selected ? selected.name : t.linkCase}</span>
         <Icon name="chevDown" size={13} className={`shrink-0 opacity-70 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={triggerRef} placement="bottom-start" className="w-[300px]">
-        <div ref={listRef} role="listbox" aria-label="Dava" onKeyDown={(event) => moveFocus(event, '[role="option"]')} className="flex flex-col">
-          <p className="m-0 px-2.5 pb-1.5 pt-1 text-xs leading-snug text-fg3">Bağlanan davanın dosyaları bu sohbette de aranır.</p>
-          {option('', 'Davaya bağlama', 'Sohbet hiçbir davaya ait olmaz')}
+        <div ref={listRef} role="listbox" aria-label={t.caseList} onKeyDown={(event) => moveFocus(event, '[role="option"]')} className="flex flex-col">
+          <p className="m-0 px-2.5 pb-1.5 pt-1 text-xs leading-snug text-fg3">{t.caseHint}</p>
+          {option('', t.noCase, t.noCaseDetail)}
           {cases.length > 0 && <div className="mx-2.5 my-1 h-px bg-line" />}
           <div className="flex max-h-[240px] flex-col overflow-y-auto">
             {cases.map((item) => option(item.id, item.name, item.description))}
@@ -301,7 +312,7 @@ function CaseSelect({ cases, value, onChange }: { cases: LegalCase[]; value: str
             className="flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13px] text-fg2 no-underline hover:bg-hover hover:text-fg"
           >
             <Icon name="plus" size={14} />
-            Yeni dava oluştur
+            {t.createCase}
           </Link>
         </div>
       </Popover>

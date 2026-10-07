@@ -3,24 +3,24 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { Icon } from '@/components/icons';
 import { useInView, useReducedMotion } from '@/lib/hooks';
+import { useI18n } from '@/lib/i18n/client';
+import { LANDING, type LandingContent } from './content';
 
 const STEP = 60; // 100 ms ticks → 6 s per step
 // The first three steps run once, as sources are added; the rest run for every question.
 const PREPARATION_STEPS = 3;
-const STEPS = [
-  { title: 'Kaynakları toplar', en: 'Ingestion', caption: 'manifest → sha256 kontrolü → sürümlü depo' },
-  { title: 'Metni parçalara ayırır', en: 'Chunking', caption: 'madde / fıkra / bent yapısı korunur' },
-  { title: 'Dizine ekler', en: 'Embedding & indexing', caption: 'BGE-M3 → 1024 boyutlu vektör → Qdrant · BM25' },
-  { title: 'İlgili pasajları bulur', en: 'Hybrid retrieval', caption: 'sorgu planlama → BM25 + BGE-M3 → RRF (k=60)' },
-  { title: 'En alakalıları seçer', en: 'Reranking', caption: 'bge-reranker-v2-m3 · cross-encoder' },
-  { title: 'Kaynaklara dayanarak yazar', en: 'Generation', caption: 'Gemini · JSON şemalı yapılandırılmış çıktı' },
-  { title: 'Her iddiayı doğrular', en: 'Verification', caption: 'supported · partial · unsupported' },
-];
+const STEP_COUNT = 7;
+
+// The legal examples in the scenes stay in Turkish in both languages; only the labels change.
+type Text = LandingContent['pipelineAnimation'];
 
 type State = { t: number; paused: boolean };
 
 export function PipelineAnimation() {
   const ref = useRef<HTMLDivElement>(null);
+  const { locale } = useI18n();
+  const t = LANDING[locale].pipelineAnimation;
+  const steps = t.steps;
   const inView = useInView(ref);
   const reduced = useReducedMotion();
   const [state, setState] = useState<State>({ t: 0, paused: false });
@@ -34,7 +34,7 @@ export function PipelineAnimation() {
           const end = Math.floor(current.t / STEP) * STEP + STEP - 1;
           return current.t < end ? { ...current, t: current.t + 1 } : current;
         }
-        return { ...current, t: (current.t + 1) % (STEPS.length * STEP) };
+        return { ...current, t: (current.t + 1) % (STEP_COUNT * STEP) };
       });
     }, 100);
     return () => window.clearInterval(id);
@@ -52,15 +52,15 @@ export function PipelineAnimation() {
 
   return (
     <div ref={ref} className="grid grid-cols-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <ol aria-label="Cevap hattının adımları" className="m-0 grid list-none grid-cols-2 gap-2 p-0 sm:grid-cols-3 xl:flex xl:flex-col">
-        {STEPS.map((item, index) => {
+      <ol aria-label={t.label} className="m-0 grid list-none grid-cols-2 gap-2 p-0 sm:grid-cols-3 xl:flex xl:flex-col">
+        {steps.map((item, index) => {
           const done = index < step;
           const on = index === step;
           return (
             <Fragment key={item.en}>
               {(index === 0 || index === PREPARATION_STEPS) && (
                 <li aria-hidden="true" className="col-span-full flex items-center gap-2 pt-1 text-[11px] font-semibold tracking-[0.12em] text-fg3 first:pt-0">
-                  {index === 0 ? 'HAZIRLIK · KAYNAKLAR EKLENİRKEN BİR KEZ' : 'HER SORUDA'}
+                  {index === 0 ? LANDING[locale].architecture.preparation : LANDING[locale].architecture.everyQuestion}
                   <span className="h-px grow bg-line" />
                 </li>
               )}
@@ -68,11 +68,7 @@ export function PipelineAnimation() {
                 <button
                   type="button"
                   aria-current={on ? 'step' : undefined}
-                  aria-label={
-                    on
-                      ? `${item.title}, ${paused ? 'duraklatıldı. Devam etmek için tıklayın.' : 'oynatılıyor. Duraklatmak için tıklayın.'}`
-                      : `${item.title} adımına geç`
-                  }
+                  aria-label={on ? t.current(item.title, paused) : t.goTo(item.title)}
                   onClick={() => selectStep(index)}
                   className={`relative flex min-h-[64px] grow items-center gap-3 overflow-hidden rounded-[14px] border px-3 text-left transition-colors xl:h-[76px] xl:px-4 ${
                     on ? 'border-accent-line bg-surface' : 'border-line bg-transparent hover:bg-surface'
@@ -94,7 +90,7 @@ export function PipelineAnimation() {
                       <svg width="9" height="9" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
                         <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
                       </svg>
-                      Duraklatıldı
+                      {t.paused}
                     </span>
                   )}
                   <span
@@ -110,23 +106,23 @@ export function PipelineAnimation() {
 
       <div
         role="img"
-        aria-label={`Adım ${step + 1}: ${STEPS[step].title}`}
+        aria-label={t.stepLabel(step + 1, steps[step].title)}
         className="flex min-h-[460px] flex-col gap-[18px] overflow-hidden rounded-[18px] border border-line bg-surface px-5 py-6 sm:px-7"
       >
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line pb-3.5">
           <span className="font-mono text-xs text-accent">
-            Adım {step + 1} / {STEPS.length} · {step < PREPARATION_STEPS ? 'hazırlık' : 'her soruda'}
+            {t.stepOf(step + 1, steps.length, step < PREPARATION_STEPS)}
           </span>
-          <span className="grow text-[17px] font-semibold">{STEPS[step].title}</span>
-          <span className="font-mono text-[11.5px] text-fg3">{STEPS[step].caption}</span>
+          <span className="grow text-[17px] font-semibold">{steps[step].title}</span>
+          <span className="font-mono text-[11.5px] text-fg3">{steps[step].caption}</span>
         </div>
-        {step === 0 && <IngestScene L={L} />}
-        {step === 1 && <ChunkScene L={L} />}
-        {step === 2 && <IndexScene L={L} />}
-        {step === 3 && <SearchScene L={L} />}
-        {step === 4 && <RerankScene L={L} />}
-        {step === 5 && <WriteScene L={L} />}
-        {step === 6 && <VerifyScene L={L} />}
+        {step === 0 && <IngestScene L={L} t={t} />}
+        {step === 1 && <ChunkScene L={L} t={t} />}
+        {step === 2 && <IndexScene L={L} t={t} />}
+        {step === 3 && <SearchScene L={L} t={t} />}
+        {step === 4 && <RerankScene L={L} t={t} />}
+        {step === 5 && <WriteScene L={L} t={t} />}
+        {step === 6 && <VerifyScene L={L} t={t} />}
       </div>
     </div>
   );
@@ -136,12 +132,10 @@ function fade(on: boolean, dy = 6) {
   return { opacity: on ? 1 : 0, transform: `translateY(${on ? 0 : dy}px)` };
 }
 
-function IngestScene({ L }: { L: number }) {
-  const docs = [
-    { pill: 'Mevzuat', cls: 'bg-accent-bg text-accent', title: '4857 sayılı İş Kanunu', meta: 'kanun · 122 madde' },
-    { pill: 'İçtihat', cls: 'bg-muted text-fg2', title: 'Yargıtay 9. Hukuk Dairesi', meta: 'karar · iş hukuku' },
-    { pill: 'Doktrin', cls: 'bg-doc-bg text-doc', title: 'İş Hukuku Ders Notu (2026)', meta: 'ders notu · izinli kaynak' },
-  ];
+const DOC_TONES = ['bg-accent-bg text-accent', 'bg-muted text-fg2', 'bg-doc-bg text-doc'];
+
+function IngestScene({ L, t }: { L: number; t: Text }) {
+  const docs = t.ingest.docs.map((doc, index) => ({ ...doc, cls: DOC_TONES[index] }));
   const stored = [10, 13, 16].filter((value) => L >= value).length;
   return (
     <div className="grid grow grid-cols-1 items-center gap-4 md:grid-cols-[minmax(0,1fr)_48px_280px] md:gap-0">
@@ -167,20 +161,20 @@ function IngestScene({ L }: { L: number }) {
         <Icon name="arrowRight" size={22} strokeWidth={1.6} />
       </div>
       <div className="flex flex-col gap-3 rounded-[14px] border border-accent-line bg-bg p-5">
-        <span className="text-xs font-semibold tracking-[0.12em] text-fg3">SÜRÜMLÜ KAYNAK DEPOSU</span>
+        <span className="text-xs font-semibold tracking-[0.12em] text-fg3">{t.ingest.store}</span>
         <span className="font-mono text-[13px] text-accent">labour-law-pilot-v4</span>
         <span className="font-serif text-5xl leading-none">
-          {stored} <span className="font-sans text-sm text-fg2">/ 3 belge</span>
+          {stored} <span className="font-sans text-sm text-fg2">{t.ingest.documents}</span>
         </span>
         <span className="text-[12.5px] text-ok transition-opacity" style={{ opacity: L >= 19 ? 1 : 0 }}>
-          ✓ Ham kopya değiştirilemez olarak saklandı
+          {t.ingest.immutable}
         </span>
       </div>
     </div>
   );
 }
 
-function ChunkScene({ L }: { L: number }) {
+function ChunkScene({ L, t }: { L: number; t: Text }) {
   const chunks = [
     ['Belirsiz süreli iş sözleşmelerinin feshinden önce durumun diğer tarafa bildirilmesi gerekir.', 'md. 17/1'],
     ['d) İşi üç yıldan fazla sürmüş işçi için, bildirimin diğer tarafa yapılmasından başlayarak sekiz hafta sonra feshedilmiş sayılır.', 'md. 17/2-d'],
@@ -191,7 +185,7 @@ function ChunkScene({ L }: { L: number }) {
   return (
     <div className="flex grow flex-col gap-3">
       <span className="text-[13px] text-fg2">
-        <span className="font-semibold text-fg">4857 sayılı İş Kanunu</span> · Madde 17 · Süreli fesih
+        <span className="font-semibold text-fg">{t.chunk.heading}</span> · {t.chunk.article}
       </span>
       <div className="flex flex-col transition-[gap] duration-500" style={{ gap: split ? 10 : 0 }}>
         {chunks.map(([text, label], index) => (
@@ -200,7 +194,9 @@ function ChunkScene({ L }: { L: number }) {
             className="flex items-center gap-4 border bg-bg px-3.5 py-2.5 transition-all duration-500"
             style={{ borderColor: split ? 'var(--line)' : 'transparent', borderRadius: split ? 10 : 0 }}
           >
-            <span className="grow text-[13.5px] leading-normal text-fg2">{text}</span>
+            <span lang="tr" className="grow text-[13.5px] leading-normal text-fg2">
+              {text}
+            </span>
             <span
               className="flex h-[22px] shrink-0 items-center rounded-md bg-accent-bg px-2 font-mono text-[11px] text-accent transition-opacity"
               style={{ opacity: L >= 10 + index * 3 ? 1 : 0 }}
@@ -211,7 +207,7 @@ function ChunkScene({ L }: { L: number }) {
         ))}
       </div>
       <span className="font-mono text-[11.5px] text-fg3 transition-opacity" style={{ opacity: L >= 22 ? 1 : 0 }}>
-        4 parça · her biri künye, madde yolu ve sayfa bilgisini taşır
+        {t.chunk.note}
       </span>
     </div>
   );
@@ -226,11 +222,11 @@ const INDEXED = [
 // zorundadır." cut to the first five letters of each word, as the legislation index stores it.
 const TOKENS = ['bildi', 'şartı', 'uymay', 'taraf', 'süres', 'ilişk', 'ücret', 'tutar', 'tazmi', 'ödeme', 'zorun'];
 
-function IndexScene({ L }: { L: number }) {
+function IndexScene({ L, t }: { L: number; t: Text }) {
   return (
     <div className="grid grow grid-cols-1 items-center gap-4 md:grid-cols-[236px_40px_minmax(0,1fr)] md:gap-0">
       <div className="flex flex-col gap-2.5">
-        <span className="text-xs font-semibold text-fg2">Parçalar</span>
+        <span className="text-xs font-semibold text-fg2">{t.index.chunks}</span>
         {INDEXED.map((chunk, index) => (
           <div
             key={chunk.label}
@@ -238,7 +234,7 @@ function IndexScene({ L }: { L: number }) {
             style={fade(L >= 1 + index * 2)}
           >
             <span className="flex h-[22px] shrink-0 items-center whitespace-nowrap rounded-md bg-accent-bg px-2 font-mono text-[11px] text-accent">{chunk.label}</span>
-            <span className="truncate text-fg3">4857 · Madde 17</span>
+            <span className="truncate text-fg3">{t.index.chunkSource}</span>
           </div>
         ))}
       </div>
@@ -248,8 +244,8 @@ function IndexScene({ L }: { L: number }) {
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 rounded-[14px] border border-accent-line bg-bg p-4">
           <span className="flex items-center gap-2 text-xs font-semibold text-fg2">
-            Vektör dizini · Qdrant
-            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">BGE-M3 · 1024 boyut</span>
+            {t.index.vectors}
+            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">{t.index.vectorMeta}</span>
           </span>
           {INDEXED.map((chunk, index) => (
             <div key={chunk.label} className="flex items-center gap-3 transition-all duration-500" style={fade(L >= 8 + index * 3)}>
@@ -265,10 +261,10 @@ function IndexScene({ L }: { L: number }) {
         </div>
         <div className="flex flex-col gap-2 rounded-[14px] border border-line bg-bg p-4">
           <span className="flex items-center gap-2 text-xs font-semibold text-fg2">
-            Kelime dizini · BM25
-            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">md. 17/4 · ilk 5 harf</span>
+            {t.index.keywords}
+            <span className="ml-auto font-mono text-[11px] font-normal text-fg3">{t.index.keywordMeta}</span>
           </span>
-          <div className="flex flex-wrap gap-1.5">
+          <div lang="tr" className="flex flex-wrap gap-1.5">
             {TOKENS.map((token, index) => (
               <span
                 key={token}
@@ -281,17 +277,17 @@ function IndexScene({ L }: { L: number }) {
           </div>
         </div>
         <span className="font-mono text-[11.5px] text-fg3 transition-opacity" style={{ opacity: L >= 32 ? 1 : 0 }}>
-          Soru geldiğinde aynı model soruyu da vektöre çevirir; arama bu iki dizinde yapılır.
+          {t.index.note}
         </span>
       </div>
     </div>
   );
 }
 
-function SearchScene({ L }: { L: number }) {
+function SearchScene({ L, t }: { L: number; t: Text }) {
   const columns = [
-    { title: 'Anahtar kelime · BM25', items: [['1', 'İş K. md. 17/4 · tazminat', 3], ['2', 'İş K. md. 17/2 · bildirim süreleri', 5], ['3', 'Yargıtay · ihbar tazminatı', 7]] },
-    { title: 'Anlam · BGE-M3', items: [['1', 'Yargıtay · ihbar tazminatı', 4], ['2', 'İş K. md. 17/4 · tazminat', 6], ['3', 'İş K. md. 25 · haklı fesih', 8]] },
+    { title: t.search.keyword, items: [['1', 'İş K. md. 17/4 · tazminat', 3], ['2', 'İş K. md. 17/2 · bildirim süreleri', 5], ['3', 'Yargıtay · ihbar tazminatı', 7]] },
+    { title: t.search.meaning, items: [['1', 'Yargıtay · ihbar tazminatı', 4], ['2', 'İş K. md. 17/4 · tazminat', 6], ['3', 'İş K. md. 25 · haklı fesih', 8]] },
   ] as const;
   const fused = [
     ['1', 'İş K. md. 17/4 · tazminat', '0.0325'],
@@ -301,7 +297,7 @@ function SearchScene({ L }: { L: number }) {
   ];
   return (
     <div className="flex grow flex-col gap-4">
-      <div className="flex h-10 items-center gap-2.5 rounded-[10px] border border-line-strong bg-bg px-3.5 text-sm">
+      <div lang="tr" className="flex h-10 items-center gap-2.5 rounded-[10px] border border-line-strong bg-bg px-3.5 text-sm">
         <Icon name="search" size={15} className="text-fg3" />
         Bildirim süresi verilmeden çıkarıldım, ne alabilirim?
       </div>
@@ -325,7 +321,7 @@ function SearchScene({ L }: { L: number }) {
           <Icon name="arrowRight" size={20} strokeWidth={1.6} />
         </div>
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-semibold text-accent">Birleşik sıra · RRF</span>
+          <span className="text-xs font-semibold text-accent">{t.search.fused}</span>
           {fused.map(([rank, label, score], index) => (
             <div
               key={label}
@@ -340,13 +336,13 @@ function SearchScene({ L }: { L: number }) {
         </div>
       </div>
       <span className="font-mono text-[11.5px] text-fg3 transition-opacity" style={{ opacity: L >= 12 ? 1 : 0 }}>
-        RRF skoru = Σ 1 / (60 + sıra) · iki listede de üst sıralarda olan pasaj öne çıkar
+        {t.search.note}
       </span>
     </div>
   );
 }
 
-function RerankScene({ L }: { L: number }) {
+function RerankScene({ L, t }: { L: number; t: Text }) {
   const after = L >= 10;
   const rows: [string, number, number, number, number][] = [
     ['İş K. md. 17/4 · tazminat', 0, 0, 0.0325, 0.94],
@@ -358,8 +354,8 @@ function RerankScene({ L }: { L: number }) {
   return (
     <div className="flex grow flex-col gap-3.5">
       <div className="flex items-center gap-3 text-xs text-fg3">
-        <span className="font-semibold text-fg2">25 adaydan ilk 5</span>
-        <span className="ml-auto font-mono text-[11px]">{after ? 'cross-encoder skoru' : 'RRF skoru'}</span>
+        <span className="font-semibold text-fg2">{t.rerank.top}</span>
+        <span className="ml-auto font-mono text-[11px]">{after ? t.rerank.crossScore : t.rerank.rrfScore}</span>
       </div>
       <div className="relative h-[290px]">
         {rows.map(([label, rrfRank, rerankRank, rrfScore, rerankScore]) => {
@@ -376,7 +372,9 @@ function RerankScene({ L }: { L: number }) {
                 borderColor: picked ? 'var(--accent-line)' : 'var(--line)',
               }}
             >
-              <span className="w-[42%] shrink-0 truncate text-[13px] sm:w-60">{label}</span>
+              <span lang="tr" className="w-[42%] shrink-0 truncate text-[13px] sm:w-60">
+                {label}
+              </span>
               <span className="h-1.5 grow overflow-hidden rounded-full bg-muted">
                 <span
                   className="block h-full rounded-full transition-all duration-700"
@@ -393,7 +391,7 @@ function RerankScene({ L }: { L: number }) {
                 className="hidden h-[22px] w-24 shrink-0 items-center justify-center rounded-full bg-ok-bg text-[11px] font-medium text-ok transition-opacity sm:flex"
                 style={{ opacity: picked ? 1 : 0 }}
               >
-                Bağlama alındı
+                {t.rerank.picked}
               </span>
             </div>
           );
@@ -411,23 +409,23 @@ const WRITTEN_STARTS = WRITTEN.map((_, index) =>
   WRITTEN.slice(0, index).reduce((sum, line) => sum + line.text.length, 0),
 );
 
-function WriteScene({ L }: { L: number }) {
+function WriteScene({ L, t }: { L: number; t: Text }) {
   const typed = Math.max(0, (L - 2) * 9);
   return (
     <div className="grid grow grid-cols-1 gap-6 md:grid-cols-[250px_minmax(0,1fr)]">
       <div className="flex flex-col gap-2.5">
-        <span className="text-xs font-semibold text-fg2">Modele verilen bağlam</span>
+        <span className="text-xs font-semibold text-fg2">{t.write.context}</span>
         {[
           ['1', 'İş K. md. 17/4 · tazminat'],
           ['2', 'Yargıtay · ihbar tazminatı'],
           ['3', 'İş K. md. 17/2 · bildirim süreleri'],
         ].map(([n, label]) => (
-          <div key={n} className="flex items-center gap-2 rounded-[9px] border border-line bg-bg px-2.5 py-2 text-[12.5px]">
+          <div key={n} lang="tr" className="flex items-center gap-2 rounded-[9px] border border-line bg-bg px-2.5 py-2 text-[12.5px]">
             <span className="flex size-[18px] items-center justify-center rounded-[5px] bg-accent-bg font-mono text-[10.5px] text-accent">{n}</span>
             {label}
           </div>
         ))}
-        <span className="pt-1.5 text-[11.5px] text-fg3">Bağlam bütçesi · hedef 96k token</span>
+        <span className="pt-1.5 text-[11.5px] text-fg3">{t.write.budget}</span>
         <span className="h-1.5 overflow-hidden rounded-full bg-muted">
           <span className="block h-full rounded-full bg-accent transition-all duration-700" style={{ width: L >= 1 ? '22%' : 0 }} />
         </span>
@@ -437,7 +435,7 @@ function WriteScene({ L }: { L: number }) {
           const count = Math.max(0, Math.min(line.text.length, typed - WRITTEN_STARTS[index]));
           const complete = count >= line.text.length;
           return (
-            <p key={line.text} className="m-0 text-[15px] leading-relaxed">
+            <p key={line.text} lang="tr" className="m-0 text-[15px] leading-relaxed">
               {line.text.slice(0, count)}
               {count > 0 && !complete && <span className="ml-0.5 inline-block h-4 w-[7px] bg-accent align-[-2px]" />}
               {complete &&
@@ -463,7 +461,7 @@ function WriteScene({ L }: { L: number }) {
   );
 }
 
-function VerifyScene({ L }: { L: number }) {
+function VerifyScene({ L, t }: { L: number; t: Text }) {
   const checks = [
     ['İşi üç yıldan fazla sürmüş işçi için bildirim süresi sekiz haftadır.', '[3]', 'ok'],
     ['Bildirim şartına uymayan işveren, ihbar tazminatı ödemekle yükümlüdür.', '[1]', 'ok'],
@@ -482,6 +480,7 @@ function VerifyScene({ L }: { L: number }) {
             className="flex items-center gap-3.5 rounded-[10px] border border-line bg-bg px-3.5 py-3"
           >
             <span
+              lang="tr"
               className={`grow text-[13.5px] leading-normal text-fg ${flagged ? 'underline decoration-err/70 decoration-dashed decoration-1 underline-offset-[5px]' : ''}`}
             >
               {claim}
@@ -497,14 +496,14 @@ function VerifyScene({ L }: { L: number }) {
               }`}
               style={{ opacity: shown ? 1 : 0 }}
             >
-              {verdict === 'ok' ? '✓ Destekliyor' : verdict === 'partial' ? '◐ Kısmen' : '✕ Desteklemiyor'}
+              {verdict === 'ok' ? t.verify.supported : verdict === 'partial' ? t.verify.partial : t.verify.unsupported}
             </span>
           </div>
         );
       })}
       <div className="flex flex-wrap items-center gap-2.5 pt-2 text-[13px] text-fg2 transition-opacity duration-500" style={{ opacity: L >= 22 ? 1 : 0 }}>
-        <span className="flex h-6 items-center rounded-full bg-ok-bg px-2.5 text-xs font-medium text-ok">Doğrulandı</span>
-        3 atıf doğrulandı. Desteklenmeyen atıf kaldırıldı ve dayanağı kalmayan 1 iddia “doğrulanamadı” diye işaretlendi; kullanıcı ona güvenmemesi gerektiğini cevapta görür.
+        <span className="flex h-6 items-center rounded-full bg-ok-bg px-2.5 text-xs font-medium text-ok">{t.verify.verified}</span>
+        {t.verify.summary}
       </div>
     </div>
   );

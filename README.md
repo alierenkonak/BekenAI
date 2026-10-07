@@ -62,8 +62,8 @@ files, analyse a whole case, and run a multi-step research over the same sources
 
 > [!NOTE]
 > BekenAI is a portfolio project. It runs on free tiers and is not legal advice. The interface
-> and the answers are in Turkish; you can sign in with Google and try it with the fictional
-> sample case file on the site.
+> can be switched between Turkish and English; questions, sources and answers are in Turkish.
+> You can sign in with Google and try it with the fictional sample case file on the site.
 
 ## Features
 
@@ -139,7 +139,8 @@ Also:
 - **A workspace that stays out of the way.** Chats can be pinned, renamed and deleted from the
   sidebar. The sidebar and the source panel can be resized by dragging, or dragged shut, while
   the answer column keeps a readable width. The source panel explains the citation marks
-  (supports, partly supports, provision changed later). Light and dark themes.
+  (supports, partly supports, provision changed later). Light and dark themes, and a Turkish
+  or English interface.
 
 ## How an answer is built
 

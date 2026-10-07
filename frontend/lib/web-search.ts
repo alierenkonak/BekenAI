@@ -51,6 +51,3 @@ export function readWebSearch(conversationId: string): boolean {
     return false;
   }
 }
-
-export const WEB_SEARCH_HINT =
-  'Cevap yine kaynaklarla yazılır; web’de bulunanlar en alta ayrı ve etiketli bir bölüm olarak eklenir. Web sayfaları resmî kaynak değildir.';
