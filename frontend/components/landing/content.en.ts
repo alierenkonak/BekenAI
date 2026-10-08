@@ -1,11 +1,6 @@
 import type { LandingContent } from './content';
 
 export const LANDING_EN: LandingContent = {
-  demoBar: {
-    badge: 'Demo project',
-    text: 'BekenAI is a portfolio project; it does not give real legal advice.',
-    link: 'About the project →',
-  },
   nav: {
     label: 'Page sections',
     how: 'How it works',

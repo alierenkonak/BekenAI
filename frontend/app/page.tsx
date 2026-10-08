@@ -1,7 +1,6 @@
 import {
   Architecture,
   Coverage,
-  DemoBar,
   DemoNote,
   Faq,
   FinalCta,
@@ -19,7 +18,6 @@ export default async function LandingPage() {
   const c = LANDING[await getLocale()];
   return (
     <>
-      <DemoBar c={c} />
       <SiteHeader c={c} />
       <main>
         <Hero c={c} />

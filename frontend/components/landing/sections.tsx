@@ -36,18 +36,6 @@ function SectionHead({ label, title, lead }: { label: string; title: ReactNode; 
 
 type Section = { c: LandingContent };
 
-export function DemoBar({ c }: Section) {
-  return (
-    <div className="flex min-h-10 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 border-b border-line bg-side px-4 py-2 text-center text-[13px] text-fg2">
-      <span className="flex h-5 items-center rounded-full bg-doc-bg px-2 text-[11.5px] font-semibold text-doc">{c.demoBar.badge}</span>
-      <span>{c.demoBar.text}</span>
-      <a href="#demo" className="font-medium text-fg no-underline hover:underline">
-        {c.demoBar.link}
-      </a>
-    </div>
-  );
-}
-
 export function SiteHeader({ c }: Section) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
