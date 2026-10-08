@@ -7,11 +7,6 @@ import { LANDING_EN } from './content.en';
  * stay in Turkish in both languages: they are what BekenAI actually reads and writes.
  */
 export const LANDING_TR = {
-  demoBar: {
-    badge: 'Demo proje',
-    text: 'BekenAI bir portföy çalışmasıdır; gerçek hukuki danışmanlık sunmaz.',
-    link: 'Proje hakkında →',
-  },
   nav: {
     label: 'Sayfa bölümleri',
     how: 'Nasıl çalışır',
