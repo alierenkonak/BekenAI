@@ -24,7 +24,7 @@ from app.chat.grounded import GroundedChatService
 from app.chat.research import DeepResearchService
 from app.core.config import get_settings
 from app.core.database import get_database
-from app.core.repository import AppRepository, CitationIntegrityError, ConflictError
+from app.core.repository import AppRepository, CitationIntegrityError, ConflictError, ReadyJobProbe
 from app.core.storage import StorageError, SupabaseStorage
 from app.files.extraction import detect_media_type as detect_file
 from app.files.ingestion import FileIngestionService, RemotePassageEmbedder
@@ -44,6 +44,9 @@ logger = logging.getLogger("bekenai.worker")
 # Two lanes share one process: a long document never holds up a chat answer.
 INTERACTIVE_JOB_KINDS = ("chat_generation", "file_verification", "file_deletion")
 INGEST_JOB_KINDS = ("file_ingest",)
+# Stale-job recovery and the sweep of abandoned uploads; a job only counts as stale after
+# several minutes, so checking every five keeps recovery prompt without constant queries.
+HOUSEKEEPING_SECONDS = 300.0
 _SAFE_FILE_ERRORS = frozenset(
     {
         "invalid_pdf_signature",
@@ -68,6 +71,7 @@ class Worker:
     def __init__(self) -> None:
         self.settings = get_settings()
         self.repository = AppRepository(get_database())
+        self.job_probe = ReadyJobProbe(get_database())
         self.storage = SupabaseStorage(self.settings)
         self.worker_id = f"{socket.gethostname()}:{id(self)}"
         self.stopping = asyncio.Event()
@@ -130,10 +134,13 @@ class Worker:
                 logger.info("Queued %d unfinished file jobs", resumed)
         except Exception as exc:
             logger.warning("File job resume skipped (%s)", type(exc).__name__)
-        await asyncio.gather(
-            self._run_lane(INTERACTIVE_JOB_KINDS, recover_stale=True),
-            self._run_lane(INGEST_JOB_KINDS, recover_stale=False),
-        )
+        try:
+            await asyncio.gather(
+                self._run_lane(INTERACTIVE_JOB_KINDS, recover_stale=True),
+                self._run_lane(INGEST_JOB_KINDS, recover_stale=False),
+            )
+        finally:
+            await self.job_probe.close()
 
     async def _run_lane(self, kinds: Sequence[str], *, recover_stale: bool) -> None:
         next_recovery = 0.0
@@ -146,8 +153,10 @@ class Worker:
                 if recovered:
                     logger.info("Recovered %d stale jobs", recovered)
                 await self._expire_abandoned_uploads()
-                next_recovery = now + 60.0
-            job = await self.repository.claim_job(self.worker_id, kinds)
+                next_recovery = now + HOUSEKEEPING_SECONDS
+            # An idle worker only asks whether a job is ready; claiming opens a connection.
+            ready = await self.job_probe.ready(kinds)
+            job = await self.repository.claim_job(self.worker_id, kinds) if ready else None
             if job is None:
                 try:
                     await asyncio.wait_for(
