@@ -2,11 +2,12 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import psycopg
 import pytest
 from beken_retrieval.remote_inference import TransientInferenceError
 
 from app import worker as worker_module
-from app.core.repository import ConflictError
+from app.core.repository import ConflictError, ReadyJobProbe
 from app.files.extraction import ExtractionError
 from app.files.vectors import VectorStoreUnavailable
 from app.web.search import TransientWebSearchError, WebSearchError
@@ -23,7 +24,8 @@ async def test_worker_recovers_jobs_that_become_stale_after_start(monkeypatch):
         expire_abandoned_uploads=AsyncMock(side_effect=[RuntimeError("db hiccup"), 2]),
         claim_job=AsyncMock(return_value={"id": "fixture"}),
     )
-    clock = iter((1.0, 62.0))
+    worker.job_probe = SimpleNamespace(ready=AsyncMock(return_value=True))
+    clock = iter((1.0, 1.0 + worker_module.HOUSEKEEPING_SECONDS + 1))
     monkeypatch.setattr(worker_module, "time", SimpleNamespace(monotonic=lambda: next(clock)))
     calls = 0
 
@@ -62,6 +64,7 @@ async def test_worker_runs_a_separate_ingest_lane_after_resuming_file_work():
         recover_stale_jobs=AsyncMock(return_value=0),
         claim_job=claim_job,
     )
+    worker.job_probe = SimpleNamespace(ready=AsyncMock(return_value=True), close=AsyncMock())
 
     await worker.run()
 
@@ -72,6 +75,69 @@ async def test_worker_runs_a_separate_ingest_lane_after_resuming_file_work():
     }
     # Only the interactive lane recovers stale jobs, so recovery never races itself.
     assert worker.repository.recover_stale_jobs.await_count == 1
+    worker.job_probe.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_an_idle_worker_does_not_claim_until_a_job_is_ready():
+    worker = worker_module.Worker.__new__(worker_module.Worker)
+    worker.settings = SimpleNamespace(chat_worker_stale_minutes=10, chat_worker_poll_seconds=0.01)
+    worker.stopping = asyncio.Event()
+    worker.worker_id = "test-worker"
+    answers = iter((False, False, True))
+
+    async def ready(kinds):
+        return next(answers)
+
+    async def claim_job(worker_id, kinds):
+        worker.stopping.set()
+        return None
+
+    worker.job_probe = SimpleNamespace(ready=ready)
+    worker.repository = SimpleNamespace(claim_job=AsyncMock(side_effect=claim_job))
+
+    await worker._run_lane(worker_module.INGEST_JOB_KINDS, recover_stale=False)
+
+    # Two idle polls cost only the probe; the claim query runs once a job is ready.
+    worker.repository.claim_job.assert_awaited_once_with(
+        "test-worker", worker_module.INGEST_JOB_KINDS
+    )
+
+
+class _ProbeConnection:
+    def __init__(self, answers):
+        self.answers = list(answers)
+        self.closed = False
+
+    async def execute(self, query, params):
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return SimpleNamespace(fetchone=AsyncMock(return_value={"ready": answer}))
+
+    async def close(self):
+        self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_ready_job_probe_keeps_one_autocommit_connection_and_reconnects_after_errors():
+    first = _ProbeConnection([False, False, psycopg.OperationalError("server closed")])
+    second = _ProbeConnection([True])
+    connections = iter((first, second))
+    connect = AsyncMock(side_effect=lambda **kwargs: next(connections))
+    probe = ReadyJobProbe(SimpleNamespace(connect=connect))
+
+    assert await probe.ready(["chat_generation"]) is False
+    assert await probe.ready(["chat_generation"]) is False
+    # A broken connection lets the claim query decide, and the next poll reconnects.
+    assert await probe.ready(["chat_generation"]) is True
+    assert first.closed
+    assert await probe.ready(["chat_generation"]) is True
+    assert connect.await_count == 2
+    connect.assert_awaited_with(autocommit=True)
+
+    await probe.close()
+    assert second.closed
 
 
 def _file_worker(**repository) -> worker_module.Worker:

@@ -15,6 +15,7 @@ from app.core.repository import (
     CitationIntegrityError,
     ConflictError,
     NotFoundError,
+    ReadyJobProbe,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -425,6 +426,13 @@ async def test_generation_rejects_unresolvable_citation_before_persisting_answer
             retrieval_query="fesih bildirimi nasıl yapılır",
             requested_model="fixture-model",
         )
+        # The idle worker's probe sees the queued job; a kind nobody queues stays quiet.
+        probe = ReadyJobProbe(AppDatabase(database_url()))
+        try:
+            assert await probe.ready(["chat_generation"]) is True
+            assert await probe.ready(["no_such_kind"]) is False
+        finally:
+            await probe.close()
         job = await repository.claim_job("integration-worker")
         assert job and job["subject_id"] == queued["generation_id"]
         missing_document, missing_parse, missing_chunk = uuid4(), uuid4(), uuid4()

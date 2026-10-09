@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends
 from psycopg import AsyncConnection
+from psycopg import Error as DatabaseError
 from psycopg.types.json import Jsonb
 
 from app.chat.decision_refs import article_unit
@@ -1735,6 +1737,53 @@ class AppRepository:
         if len(rows) > limit and items:
             cursor = (items[-1]["created_at"], items[-1]["id"])
         return Page(items=items, next_cursor=cursor)
+
+
+class ReadyJobProbe:
+    """Tells an idle worker whether any job is ready, over one connection it keeps.
+
+    A new connection for every poll costs a TLS handshake, several kilobytes of database
+    egress, every couple of seconds; a kept connection and a one-boolean answer cost about a
+    hundred bytes. Claiming still opens its own connection, and only when there is work.
+    """
+
+    def __init__(self, database: AppDatabase) -> None:
+        self.database = database
+        self._conn: AsyncConnection | None = None
+        self._lock = asyncio.Lock()
+
+    async def ready(self, kinds: Sequence[str]) -> bool:
+        async with self._lock:
+            try:
+                if self._conn is None or self._conn.closed:
+                    # Autocommit, so the session never sits idle in a transaction.
+                    self._conn = await self.database.connect(autocommit=True)
+                row = await (
+                    await self._conn.execute(
+                        """select exists(
+                             select 1 from app_private.jobs
+                             where status='queued' and available_at<=now()
+                               and kind=any(%s::text[])) as ready""",
+                        (list(kinds),),
+                    )
+                ).fetchone()
+                return bool(row and row["ready"])
+            except DatabaseError:
+                # Reconnect on the next poll; until then the claim query decides.
+                await self._drop()
+                return True
+
+    async def close(self) -> None:
+        async with self._lock:
+            await self._drop()
+
+    async def _drop(self) -> None:
+        conn, self._conn = self._conn, None
+        if conn is not None and not conn.closed:
+            try:
+                await conn.close()
+            except DatabaseError:
+                pass
 
 
 def get_repository(database: Annotated[AppDatabase, Depends(get_database)]) -> AppRepository:

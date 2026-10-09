@@ -12,12 +12,13 @@ class AppDatabase:
     def __init__(self, database_url: str) -> None:
         self.database_url = database_url
 
-    async def connect(self) -> psycopg.AsyncConnection:
+    async def connect(self, *, autocommit: bool = False) -> psycopg.AsyncConnection:
         return await psycopg.AsyncConnection.connect(
             self.database_url,
             row_factory=dict_row,
             connect_timeout=10,
             prepare_threshold=None,
+            autocommit=autocommit,
         )
 
 
