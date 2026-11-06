@@ -14,7 +14,7 @@ dependencies = [
   "psycopg[binary]>=3.2,<4",
   "pydantic>=2.10,<3",
   "pydantic-settings>=2.7,<3",
-  "qdrant-client>=1.19,<1.20",
+  "qdrant-client>=1.20,<1.21",
 ]
 
 [project.optional-dependencies]
