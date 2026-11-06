@@ -3,8 +3,10 @@
 # (the server venv is built from deploy/oracle/*.lock and nothing else).
 set -euo pipefail
 
+# A finding in one lock must not stop the audit of the next, or CI's lock hides the server's.
+status=0
 audit() {
-  pip-audit --requirement "$1" --no-deps --disable-pip --progress-spinner off
+  pip-audit --requirement "$1" --no-deps --disable-pip --progress-spinner off || status=1
 }
 
 audit requirements/ci.lock
@@ -15,3 +17,4 @@ torch=$(mktemp)
 sed -n 's|^torch @ .*torch-\([^%]*\)%2Bcpu.*|torch==\1|p' deploy/oracle/requirements.in > "$torch"
 test -s "$torch"
 audit "$torch"
+exit "$status"
