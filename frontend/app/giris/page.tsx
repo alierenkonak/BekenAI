@@ -1,15 +1,14 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Logo } from '@/components/brand';
 import { Icon } from '@/components/icons';
 import { LocaleToggle } from '@/components/locale-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { rich } from '@/lib/i18n/rich';
 import { getI18n } from '@/lib/i18n/server';
-import { SignInPanel } from './sign-in-panel';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { m } = await getI18n();
-  return { title: m.meta.signIn };
+  return { title: 'Under maintenance' };
 }
 
 export default async function SignInPage() {
@@ -69,7 +68,34 @@ export default async function SignInPage() {
           <div className="lg:hidden">
             <Logo size={34} label={m.common.homeLabel} />
           </div>
-          <SignInPanel />
+          <div lang="en" className="flex flex-col gap-7">
+            <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-fg3">
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-doc" />
+              Temporarily unavailable
+            </div>
+            <div className="flex flex-col gap-3">
+              <h2 className="m-0 font-serif text-[38px] font-normal leading-tight tracking-[-0.02em]">
+                We’re under maintenance.
+              </h2>
+              <p className="m-0 text-[14.5px] leading-relaxed text-fg2">
+                BekenAI is temporarily offline while we work on restoring the service.
+                Sign-in and the live demo are unavailable during this time.
+              </p>
+            </div>
+            <div className="rounded-[12px] border border-line bg-side px-4 py-3.5">
+              <p className="m-0 text-xs font-medium text-fg3">Maintenance started</p>
+              <time dateTime="2026-11-15" className="mt-1 block text-[14.5px] font-medium text-fg">
+                15 November 2026
+              </time>
+            </div>
+            <p className="m-0 text-[13px] leading-relaxed text-fg3">
+              Thank you for your patience. Please check back later.
+            </p>
+            <Link href="/" className="flex h-[46px] items-center justify-center gap-2.5 rounded-[10px] border border-line-strong bg-surface text-[14.5px] font-medium text-fg shadow-soft transition-colors hover:bg-hover">
+              Back to home
+              <span aria-hidden="true">↗</span>
+            </Link>
+          </div>
         </div>
       </section>
     </div>
